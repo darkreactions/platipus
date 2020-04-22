@@ -7,7 +7,6 @@ python main.py --datasource=sine_line --k_shot=5 --n_way=1 --inner_lr=1e-3 --met
 '''
 
 import torch
-import torchvision
 import numpy as np
 import random
 import itertools
@@ -70,8 +69,8 @@ def initialize():
     params = {}
 
     # Set up training using either GPU or CPU
-    gpu_id = 'cuda:0'
-    device = torch.device(gpu_id if torch.cuda.is_available() else "cpu")
+    gpu_id = 0
+    device = torch.device('cuda:{0:d}'.format(gpu_id) if torch.cuda.is_available() else "cpu")
     print('Using device:', device)
     print()
 
@@ -100,12 +99,15 @@ def initialize():
     print(f'{args.n_way}-way')
     params['num_classes_per_task'] = args.n_way 
 
-
     # Initialize the datasource and learning rate
     print(f'Dataset = {args.datasource}')
     params['datasource'] = args.datasource
     print(f'Inner learning rate = {args.inner_lr}')
     params['inner_lr'] = args.inner_lr
+
+    # Set up the meta learning rate
+    print(f'Meta learning rate = {args.meta_lr}')
+    params['meta_lr'] = args.meta_lr
 
     # Reducing this to 25 like in Finn et al.
     # Tells us how many tasks are per epoch and after how many tasks we should save the values of the losses
@@ -117,17 +119,15 @@ def initialize():
     print(f'Number of inner updates = {args.num_inner_updates}')
     params['num_inner_updates'] = args.num_inner_updates
 
-    # Set up the meta learning rate
-    print(f'Meta learning rate = {args.meta_lr}')
-    params['meta_lr'] = args.meta_lr
+     # Dropout rate for the neural network
+    params['p_dropout_base'] = args.p_dropout_base
+    # Sine or line if we are dealing with the sine-line task
+    params['datasubset'] = args.datasubset
 
     # I think of L as how many models we sample in the inner update and K as how many models we sample in validation 
     print(f'L = {args.Lt}, K = {args.Lv}')
     params['L'] = args.Lt
     params['K'] = args.Lv
-
-    # Dropout rate for the neural network
-    params['p_dropout_base'] = args.p_dropout_base
 
     if params['datasource'] == 'sine_line':
         net = FCNet(
@@ -232,7 +232,6 @@ def initialize():
                                 params['num_classes_per_task'],
                                 params['num_training_samples_per_class'],
                                 params['resume_epoch'])
-
         checkpoint_file = os.path.join(dst_folder, checkpoint_filename)
         print('Start to load weights from')
         print('{0:s}'.format(checkpoint_file))
@@ -280,7 +279,6 @@ def initialize():
         # Set the meta learning rates appropriately
         op_Theta.param_groups[0]['lr'] = params['meta_lr']
         op_Theta.param_groups[1]['lr'] = params['meta_lr']
-        del saved_checkpoint
 
     params['op_Theta'] = op_Theta
     params['uncertainty_flag'] = args.uncertainty_flag
@@ -350,6 +348,7 @@ def meta_train(params):
 
     Theta = params['Theta']
     op_Theta = params['op_Theta']
+    
     # How often should we do a printout?
     num_meta_updates_print = 1
     # How often should we save?
