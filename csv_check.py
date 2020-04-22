@@ -1,19 +1,12 @@
 
 import pandas as pd
 
-
-# Set up various strings corresponding to headers
 distribution_header = '_raw_modelname'
 amine_header = '_rxn_organic-inchikey'
 score_header = '_out_crystalscore'
 name_header = 'name'
 to_exclude = [score_header, amine_header, name_header]
 path ='.\\data\\0050.perovskitedata_DRP.csv'
-
-# Successful reaction is defined as having a crystal score of...
-SUCCESS = 4
-
-# Get amine and distribution counts for the data 
 df = pd.read_csv(path)
 if True:
     print('---------- COUNT FOR AMINES ----------')
