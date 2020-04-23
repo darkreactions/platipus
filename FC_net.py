@@ -31,7 +31,7 @@ class FCNet(torch.nn.Module):
     def get_weight_shape(self):
         weight_shape = collections.OrderedDict()
 
-        weight_shape['w1'] = (self.num_hidden_units[0], 1)
+        weight_shape['w1'] = (self.num_hidden_units[0], self.dim_input)
         weight_shape['b1'] = weight_shape['w1'][0]
 
         for i in range(len(self.num_hidden_units) - 1):

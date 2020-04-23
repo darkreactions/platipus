@@ -4,12 +4,15 @@ python main.py --datasource=sine_line --k_shot=5 --n_way=1 --inner_lr=1e-3 --met
 
 python main.py --datasource=sine_line --k_shot=5 --n_way=1 --inner_lr=1e-3 --meta_lr=1e-3 --Lt=1 --Lv=10 --kl_reweight=1 --num_epochs=1000 --resume_epoch=25000 --test --num_val_tasks=0
 
+python main.py --datasource=drp_chem --k_shot=20 --n_way=2 --inner_lr=1e-3 --meta_lr=1e-3 --meta_batch_size=5 --Lt=1 --Lv=10 --kl_reweight=1 --num_epochs=10000 --resume_epoch=0 --verbose
+
 '''
 
 import torch
 import numpy as np
 import random
 import itertools
+import pickle
 
 import os
 import sys
@@ -147,10 +150,22 @@ def initialize():
 
     elif params['datasource'] == 'drp_chem':
 
-        training_batches, validation_batches, testing_batches, dataset_dimension = load_chem_dataset(k_shot=20, num_batches=250, verbose=args.verbose)
+        # TODO: This is hard coded, fix 
+        params['num_total_samples_per_class'] = 40
+        params['num_training_samples_per_class'] = 20
+
+        training_batches, validation_batches, testing_batches, dataset_dimension = load_chem_dataset(k_shot=20, meta_batch_size=args.meta_batch_size, num_batches=250, verbose=args.verbose)
         params['training_batches'] = training_batches
         params['validation_batches'] = validation_batches
         params['testing_batches'] = testing_batches
+
+        # Save for reproducibility
+        with open(os.path.join(".\\data","train_dump.pkl"), "wb") as f:
+            pickle.dump(training_batches, f)
+        with open(os.path.join(".\\data","val_dump.pkl"), "wb") as f:
+            pickle.dump(validation_batches, f)
+        with open(os.path.join(".\\data","test_dump.pkl"), "wb") as f:
+            pickle.dump(testing_batches, f)
 
         net = FCNet(
             dim_input=dataset_dimension,
@@ -290,6 +305,59 @@ def initialize():
     print()
     return params
 
+# Use this for cross validation
+def reinitialize_model_params(params):
+    Theta = {}
+    Theta['mean'] = {}
+    Theta['logSigma'] = {}
+    Theta['logSigma_q'] = {}
+    Theta['gamma_q'] = {}
+    Theta['gamma_p'] = {}
+    for key in params['w_shape'].keys():
+        if 'b' in key:
+            Theta['mean'][key] = torch.zeros(params['w_shape'][key], device=params['device'], requires_grad=True)
+        else:
+            Theta['mean'][key] = torch.empty(params['w_shape'][key], device=params['device'])
+            # Could also opt for Kaiming Normal here
+            torch.nn.init.xavier_normal_(tensor=Theta['mean'][key], gain=1.)
+            Theta['mean'][key].requires_grad_()
+
+        # Subtract 4 to get us into appropriate range for log variances
+        Theta['logSigma'][key] = torch.rand(params['w_shape'][key], device=params['device']) - 4
+        Theta['logSigma'][key].requires_grad_()
+
+        Theta['logSigma_q'][key] = torch.rand(params['w_shape'][key], device=params['device']) - 4
+        Theta['logSigma_q'][key].requires_grad_()
+
+        Theta['gamma_q'][key] = torch.tensor(1e-2, device=params['device'], requires_grad=True)
+        Theta['gamma_q'][key].requires_grad_()
+        Theta['gamma_p'][key] = torch.tensor(1e-2, device=params['device'], requires_grad=True)
+        Theta['gamma_p'][key].requires_grad_()
+
+    params['Theta'] = Theta
+
+    op_Theta = torch.optim.Adam(
+        [
+            {
+                'params': Theta['mean'].values()
+            },
+            {
+                'params': Theta['logSigma'].values()
+            },
+            {
+                'params': Theta['logSigma_q'].values()
+            },
+            {
+                'params': Theta['gamma_p'].values()
+            },
+            {
+                'params': Theta['gamma_q'].values()
+            }
+        ],
+        lr=params['meta_lr']
+    )
+    params['op_Theta'] = op_Theta
+
 # Main driver code
 def main():
 
@@ -298,7 +366,34 @@ def main():
     params = initialize()
 
     if params['train_flag']:
-        meta_train(params)
+        if params['datasource'] == 'sine_line':
+            meta_train(params)
+        elif params['datasource'] == 'drp_chem':
+            # TODO: This is going to be insanely nasty, basically reinitialize for each amine
+            for amine in params['training_batches']:
+                print("Starting training for amine", amine)
+                # Change the path to save models
+                dst_folder_root = '.'
+                dst_folder = '{0:s}/PLATIPUS_few_shot/PLATIPUS_{1:s}_{2:d}way_{3:d}shot_{4:s}'.format(
+                    dst_folder_root,
+                    params['datasource'],
+                    params['num_classes_per_task'],
+                    params['num_training_samples_per_class'],
+                    amine
+                )
+                if not os.path.exists(dst_folder):
+                    os.makedirs(dst_folder)
+                    print('No folder for storage found')
+                    print(f'Make folder to store meta-parameters at')
+                else:
+                    print('Found existing folder. Meta-parameters will be stored at')
+                print(dst_folder)
+                params['dst_folder'] = dst_folder
+
+                # Train the model then reinitialize a new one
+                meta_train(params, amine)
+                reinitialize_model_params(params)
+
     elif params['resume_epoch'] > 0:
         if params['datasource'] == 'sine_line':
             cal_data = meta_validation(datasubset=params['datasubset'], num_val_tasks=params['num_val_tasks'], params=params)
@@ -337,7 +432,7 @@ def main():
 
 # Run the actual meta training for PLATIPUS
 # Lots of cool stuff happening in this function
-def meta_train(params):
+def meta_train(params, amine=None):
     # Start by unpacking the params we need
     # Messy but it does eliminate global variables and make things easier to trace
     datasource = params['datasource']
@@ -363,29 +458,12 @@ def meta_train(params):
             num_samples=num_total_samples_per_class,
             device=device
         )
-        # create dummy sampler
-        all_class = [0]*100
-        sampler = torch.utils.data.sampler.RandomSampler(data_source=all_class)
-        train_loader = torch.utils.data.DataLoader(
-            dataset=all_class,
-            batch_size=num_classes_per_task,
-            sampler=sampler,
-            drop_last=True
-        )
-    else:
-        all_class = all_class_train
-        embedding = embedding_train
-        sampler = torch.utils.data.sampler.RandomSampler(
-            data_source=list(all_class.keys()),
-            replacement=False
-        )
-        train_loader = torch.utils.data.DataLoader(
-            dataset=list(all_class.keys()),
-            batch_size=num_classes_per_task,
-            sampler=sampler,
-            drop_last=True
-        )
-    #endregion
+    elif datasource == 'drp_chem':
+        training_batches = params['training_batches']
+        b_num = np.random.choice(len(training_batches[amine]))
+        batch = training_batches[amine][b_num]
+        x_train, y_train, x_val, y_val = torch.from_numpy(batch[0]).float().to(params['device']), torch.from_numpy(batch[1]).long().to(params['device']), \
+            torch.from_numpy(batch[2]).float().to(params['device']), torch.from_numpy(batch[3]).long().to(params['device'])
 
     for epoch in range(resume_epoch, resume_epoch + num_epochs):
         print(f"Starting epoch {epoch}")
@@ -408,102 +486,99 @@ def meta_train(params):
 
         task_count = 0 # a counter to decide when a minibatch of task is completed to perform meta update
 
+        # Treat batches as tasks for the chemistry data
         while (task_count < num_tasks_per_epoch):
-            for class_labels in train_loader:
-                if datasource == 'sine_line':
-                    p_sine = params['p_sine']
-                    x_t, y_t, x_v, y_v = get_task_sine_line_data(
-                        data_generator=data_generator,
-                        p_sine=p_sine,
-                        num_training_samples=num_training_samples_per_class,
-                        noise_flag=True
-                    )
-                elif datasource == 'drp_chem':
-                    pass
-                else:
-                    sys.exit('Unknown dataset')
+            if datasource == 'sine_line':
+                p_sine = params['p_sine']
+                x_t, y_t, x_v, y_v = get_task_sine_line_data(
+                    data_generator=data_generator,
+                    p_sine=p_sine,
+                    num_training_samples=num_training_samples_per_class,
+                    noise_flag=True
+                )
+            elif datasource == 'drp_chem':
+                x_t, y_t, x_v, y_v = x_train[task_count], y_train[task_count], x_val[task_count], y_val[task_count]
+            else:
+                sys.exit('Unknown dataset')
+            
+            loss_i, KL_q_p = get_training_loss(x_t, y_t, x_v, y_v, params)
+
+            if torch.isnan(loss_i).item():
+                sys.exit('NaN error')
+
+            # accumulate meta loss
+            meta_loss = meta_loss + loss_i + KL_q_p
+            kl_loss = kl_loss + KL_q_p
+
+            task_count = task_count + 1
+
+            if task_count % num_tasks_per_epoch == 0:
+                meta_loss = meta_loss/num_tasks_per_epoch
+                kl_loss /= num_tasks_per_epoch
+
+                # accumulate into different variables for printing purpose
+                meta_loss_avg_print += meta_loss.item()
+                kl_loss_avg_print += kl_loss.item()
+
+                op_Theta.zero_grad()
+                meta_loss.backward()
+                torch.nn.utils.clip_grad_norm_(
+                    parameters=Theta['mean'].values(),
+                    max_norm=3
+                )
+                torch.nn.utils.clip_grad_norm_(
+                    parameters=Theta['logSigma'].values(),
+                    max_norm=3
+                )
+                op_Theta.step()
+
+                # Printing losses
+                num_meta_updates_count += 1
+                if (num_meta_updates_count % num_meta_updates_print == 0):
+                    meta_loss_avg_save.append(meta_loss_avg_print/num_meta_updates_count)
+                    kl_loss_avg_save.append(kl_loss_avg_print/num_meta_updates_count)
+                    print('{0:d}, {1:2.4f}, {2:2.4f}'.format(
+                        task_count,
+                        meta_loss_avg_save[-1],
+                        kl_loss_avg_save[-1]
+                    ))
+
+                    num_meta_updates_count = 0
+                    meta_loss_avg_print = 0
+                    kl_loss_avg_print = 0
                 
-                loss_i, KL_q_p = get_training_loss(x_t, y_t, x_v, y_v, params)
+                if (task_count % num_tasks_save_loss == 0):
+                    meta_loss_saved.append(np.mean(meta_loss_avg_save))
+                    kl_loss_saved.append(np.mean(kl_loss_avg_save))
 
-                if torch.isnan(loss_i).item():
-                    sys.exit('NaN error')
+                    meta_loss_avg_save = []
+                    kl_loss_avg_save = []
 
-                # accumulate meta loss
-                meta_loss = meta_loss + loss_i + KL_q_p
-                kl_loss = kl_loss + KL_q_p
+                    # if datasource != 'sine_line':
+                    #     print('Saving loss...')
+                    #     val_accs, _ = meta_validation(
+                    #         datasubset='val',
+                    #         num_val_tasks=num_val_tasks,
+                    #         return_uncertainty=False)
+                    #     val_acc = np.mean(val_accs)
+                    #     val_ci95 = 1.96*np.std(val_accs)/np.sqrt(num_val_tasks)
+                    #     print('Validation accuracy = {0:2.4f} +/- {1:2.4f}'.format(val_acc, val_ci95))
+                    #     val_accuracies.append(val_acc)
 
-                task_count = task_count + 1
+                    #     train_accs, _ = meta_validation(
+                    #         datasubset= 'train',
+                    #         num_val_tasks=num_val_tasks,
+                    #         return_uncertainty=False)
+                    #     train_acc = np.mean(train_accs)
+                    #     train_ci95 = 1.96*np.std(train_accs)/np.sqrt(num_val_tasks)
+                    #     print('Train accuracy = {0:2.4f} +/- {1:2.4f}'.format(train_acc, train_ci95))
+                    #     train_accuracies.append(train_acc)
 
-                if task_count % num_tasks_per_epoch == 0:
-                    meta_loss = meta_loss/num_tasks_per_epoch
-                    kl_loss /= num_tasks_per_epoch
-
-                    # accumulate into different variables for printing purpose
-                    meta_loss_avg_print += meta_loss.item()
-                    kl_loss_avg_print += kl_loss.item()
-
-                    op_Theta.zero_grad()
-                    meta_loss.backward()
-                    torch.nn.utils.clip_grad_norm_(
-                        parameters=Theta['mean'].values(),
-                        max_norm=3
-                    )
-                    torch.nn.utils.clip_grad_norm_(
-                        parameters=Theta['logSigma'].values(),
-                        max_norm=3
-                    )
-                    op_Theta.step()
-
-                    # Printing losses
-                    num_meta_updates_count += 1
-                    if (num_meta_updates_count % num_meta_updates_print == 0):
-                        meta_loss_avg_save.append(meta_loss_avg_print/num_meta_updates_count)
-                        kl_loss_avg_save.append(kl_loss_avg_print/num_meta_updates_count)
-                        print('{0:d}, {1:2.4f}, {2:2.4f}'.format(
-                            task_count,
-                            meta_loss_avg_save[-1],
-                            kl_loss_avg_save[-1]
-                        ))
-
-                        num_meta_updates_count = 0
-                        meta_loss_avg_print = 0
-                        kl_loss_avg_print = 0
-                    
-                    if (task_count % num_tasks_save_loss == 0):
-                        meta_loss_saved.append(np.mean(meta_loss_avg_save))
-                        kl_loss_saved.append(np.mean(kl_loss_avg_save))
-
-                        meta_loss_avg_save = []
-                        kl_loss_avg_save = []
-
-                        # if datasource != 'sine_line':
-                        #     print('Saving loss...')
-                        #     val_accs, _ = meta_validation(
-                        #         datasubset='val',
-                        #         num_val_tasks=num_val_tasks,
-                        #         return_uncertainty=False)
-                        #     val_acc = np.mean(val_accs)
-                        #     val_ci95 = 1.96*np.std(val_accs)/np.sqrt(num_val_tasks)
-                        #     print('Validation accuracy = {0:2.4f} +/- {1:2.4f}'.format(val_acc, val_ci95))
-                        #     val_accuracies.append(val_acc)
-
-                        #     train_accs, _ = meta_validation(
-                        #         datasubset= 'train',
-                        #         num_val_tasks=num_val_tasks,
-                        #         return_uncertainty=False)
-                        #     train_acc = np.mean(train_accs)
-                        #     train_ci95 = 1.96*np.std(train_accs)/np.sqrt(num_val_tasks)
-                        #     print('Train accuracy = {0:2.4f} +/- {1:2.4f}'.format(train_acc, train_ci95))
-                        #     train_accuracies.append(train_acc)
-
-                        #     print()
-                    
-                    # reset meta loss
-                    meta_loss = 0
-                    kl_loss = 0
-
-                if (task_count >= num_tasks_per_epoch):
-                    break
+                    #     print()
+                
+                # reset meta loss
+                meta_loss = 0
+                kl_loss = 0
 
         if ((epoch + 1)% num_epochs_save == 0):
             checkpoint = {
@@ -515,6 +590,7 @@ def meta_train(params):
                 'op_Theta': op_Theta.state_dict()
             }
             print('SAVING WEIGHTS...')
+
             checkpoint_filename = ('{0:s}_{1:d}way_{2:d}shot_{3:d}.pt')\
                         .format(datasource,
                                 num_classes_per_task,

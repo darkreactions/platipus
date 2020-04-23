@@ -47,14 +47,6 @@ def load_chem_dataset(k_shot, meta_batch_size=32, num_batches=100, verbose=False
 
     # Get amine and distribution counts for the data 
     df = pd.read_csv(path)
-    if verbose:
-        print('---------- COUNT FOR AMINES ----------')
-        print(df[amine_header].value_counts())
-        print('---------- COUNT FOR DISTRIBUTIONS ----------')
-        print(df[distribution_header].value_counts())
-        print('---------- COUNT FOR UNIFORM AMINES ----------')
-        print(df[df[distribution_header].str.contains('Uniform')][amine_header].value_counts())
-
 
     # Set up the 0/1 labels and drop non-uniformly distributed reactions
  
@@ -78,6 +70,7 @@ def load_chem_dataset(k_shot, meta_batch_size=32, num_batches=100, verbose=False
 
     for amine in amines:
         # Since we are doing cross validation, create a training set without each amine
+        print("Generating batches for amine", amine)
         available_amines = [a for a in amines if a != amine]
         batches = []
         for _ in range(num_batches):
