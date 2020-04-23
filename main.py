@@ -16,7 +16,7 @@ import sys
 
 import argparse
 from utils import get_task_sine_line_data
-# from utils import load_chem_dataset
+from utils import load_chem_dataset
 from data_generator import DataGenerator
 from FC_net import FCNet
 
@@ -115,6 +115,10 @@ def initialize():
     params['num_tasks_save_loss'] = args.meta_batch_size 
     params['num_epochs'] = args.num_epochs
 
+    # How often should we save?
+    # TODO: Might add this to the parser later on 
+    params['num_epochs_save'] = 1000
+
     # How many gradient updates we run on the inner loop
     print(f'Number of inner updates = {args.num_inner_updates}')
     params['num_inner_updates'] = args.num_inner_updates
@@ -133,7 +137,7 @@ def initialize():
         net = FCNet(
             dim_input=1,
             dim_output=params['num_classes_per_task'],
-            num_hidden_units=(40, 40),
+            num_hidden_units=(100, 100, 100),
             device=device
         )
         # bernoulli probability to pick sine or (1-p_sine) for line
@@ -143,8 +147,9 @@ def initialize():
 
     elif params['datasource'] == 'drp_chem':
 
-        training_batches, testing_batches, dataset_dimension = load_chem_dataset(k_shot=20, num_batches=250, verbose=args.verbose)
+        training_batches, validation_batches, testing_batches, dataset_dimension = load_chem_dataset(k_shot=20, num_batches=250, verbose=args.verbose)
         params['training_batches'] = training_batches
+        params['validation_batches'] = validation_batches
         params['testing_batches'] = testing_batches
 
         net = FCNet(
@@ -348,11 +353,10 @@ def meta_train(params):
 
     Theta = params['Theta']
     op_Theta = params['op_Theta']
-    
+
+    num_epochs_save = params['num_epochs_save']
     # How often should we do a printout?
     num_meta_updates_print = 1
-    # How often should we save?
-    num_epochs_save = 1000
 
     if datasource == 'sine_line':
         data_generator = DataGenerator(
@@ -442,11 +446,11 @@ def meta_train(params):
                     meta_loss.backward()
                     torch.nn.utils.clip_grad_norm_(
                         parameters=Theta['mean'].values(),
-                        max_norm=10
+                        max_norm=3
                     )
                     torch.nn.utils.clip_grad_norm_(
                         parameters=Theta['logSigma'].values(),
-                        max_norm=10
+                        max_norm=3
                     )
                     op_Theta.step()
 
@@ -719,7 +723,7 @@ def meta_validation(datasubset, num_val_tasks, params, return_uncertainty=False)
                 num_samples=num_training_samples_per_class,
                 device=device
             )
-            if datasubset == 'line':
+            if datasubset == 'sine':
                 x_t, y_t, amp, phase = data_generator.generate_sinusoidal_data(noise_flag=True)
                 y0 = amp*torch.sin(x0 + phase)
             else:
@@ -777,7 +781,7 @@ def meta_validation(datasubset, num_val_tasks, params, return_uncertainty=False)
             plt.xticks([-5, -2.5, 0, 2.5, 5])
             plt.legend(loc='best')
             plt.show()
-            plt.savefig(fname='img/mixed_sine_temp.svg', format='svg')
+            plt.savefig(fname='img/mixed_sine_temp.png', format='png')
             return 0
         else:
             from scipy.special import erf

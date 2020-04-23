@@ -12,7 +12,7 @@ import os
 import sys
 
 from data_generator import DataGenerator
-from FC_Net import FCNet
+from FC_net import FCNet
 from utils import get_task_sine_line_data
 
 
@@ -120,7 +120,7 @@ def initialize():
         net = FCNet(
             dim_input=1,
             dim_output=params['num_classes_per_task'],
-            num_hidden_units=(40, 40),
+            num_hidden_units=(100, 100, 100),
             device=device
         )
         # bernoulli probability to pick sine or (1-p_sine) for line
@@ -234,7 +234,7 @@ def main():
 
     if params['train_flag']:
         meta_train(params)
-    elif resume_epoch > 0:
+    elif params['resume_epoch'] > 0:
         if datasource == 'sine_line':
             cal_data = meta_validation(datasubset=args.datasubset, num_val_tasks=num_val_tasks, params=params)
 
@@ -372,7 +372,7 @@ def meta_train(params):
                     # Clip gradients to prevent exploding gradient problem
                     torch.nn.utils.clip_grad_norm_(
                         parameters=theta.values(), 
-                        max_norm=10
+                        max_norm=3
                     )
 
                     op_theta.step()
