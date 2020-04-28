@@ -1,5 +1,7 @@
 '''
-python maml.py --datasource=sine_line --train --num_inner_updates=5 --k_shot=5 --n_way=1 --inner_lr=1e-3 --meta_lr=1e-3  --num_epochs=25000 --resume_epoch=0 
+python maml.py --datasource=sine_line --train --num_inner_updates=5 --k_shot=5 --n_way=1 --inner_lr=1e-3 --meta_lr=1e-3  --num_epochs=10000 --resume_epoch=0 
+
+python maml.py --datasource=drp_chem --k_shot=20 --n_way=2 --inner_lr=1e-3 --meta_lr=1e-3 --meta_batch_size=10 --num_epochs=3000 --cross_validate --resume_epoch=0 --verbose --p_dropout_base=0.4
 
 '''
 import torch
@@ -14,6 +16,8 @@ import sys
 from data_generator import DataGenerator
 from FC_net import FCNet
 from utils import get_task_sine_line_data
+
+import pickle
 
 
 import argparse
@@ -45,6 +49,8 @@ def parse_args():
 
     parser.add_argument('--p_dropout_base', type=float, default=0., help='Dropout rate for the base network')
     parser.add_argument('--datasubset', type=str, default='sine', help='sine or line')
+    parser.add_argument('--cross_validate', action='store_true')
+
 
     parser.add_argument('--verbose', action='store_true')
 
@@ -77,6 +83,7 @@ def initialize():
 
     # Set up MAML using user inputs
     params['train_flag'] = args.train_flag
+    params['cross_validate'] = args.cross_validate
     # Set up the value of k in k-shot learning
     print(f'{args.k_shot}-shot')
     params['num_training_samples_per_class'] = args.k_shot 
@@ -129,19 +136,34 @@ def initialize():
         params['loss_fn'] = torch.nn.MSELoss()
 
     elif params['datasource'] == 'drp_chem':
+        
+        # I am only running MAML to compare with PLATIPUS, thus assume this data already exists
+        if params['cross_validate']:
 
-        training_batches, testing_batches, dataset_dimension = load_chem_dataset(k_shot=20, num_batches=250, verbose=args.verbose)
-        params['training_batches'] = training_batches
-        params['testing_batches'] = testing_batches
+            with open(os.path.join(".\\data","train_dump.pkl"), "rb") as f:
+                params['training_batches'] = pickle.load(f)
+            with open(os.path.join(".\\data","val_dump.pkl"), "rb") as f:
+                params['validation_batches'] = pickle.load(f)
+            with open(os.path.join(".\\data","test_dump.pkl"), "rb") as f:
+                params['testing_batches'] = pickle.load(f)
+            with open(os.path.join(".\\data","counts_dump.pkl"), "rb") as f:
+                params['counts'] = pickle.load(f)
 
         net = FCNet(
-            dim_input=dataset_dimension,
+            dim_input= 51,
             dim_output=params['num_classes_per_task'],
-            num_hidden_units=(400, 300, 200),
+            num_hidden_units=(200, 100, 100),
             device=device
         )
         params['net'] = net 
-        params['loss_fn'] = torch.nn.CrossEntropyLoss()
+        # Try weighting positive reactions more heavily
+        # Majority class label count/ class label count for each weight
+        # See https://discuss.pytorch.org/t/what-is-the-weight-values-mean-in-torch-nn-crossentropyloss/11455/9
+        # Do this again just in case we are loading weights
+        counts = params['counts']
+        weights = [counts['total'][0]/counts['total'][0], counts['total'][0]/counts['total'][1]]
+        class_weights = torch.tensor(weights, device=device)
+        params['loss_fn'] = torch.nn.CrossEntropyLoss(class_weights)
         # Set up a softmax layer to handle losses later on 
         params['sm_loss'] = torch.nn.Softmax(dim=2)
     else:
@@ -224,6 +246,23 @@ def initialize():
     print()
     return params
 
+# Use this for cross validation, we need to set up a new loss function too
+def reinitialize_model_params(params):
+    # Initialise meta-parameters for MAML
+    theta = {}
+    for key in params['w_shape'].keys():
+        if 'b' in key:
+            theta[key] = torch.zeros(params['w_shape'][key], device=params['device'], requires_grad=True)      
+        else:
+            theta[key] = torch.empty(params['w_shape'][key], device=params['device'])
+            torch.nn.init.xavier_normal_(theta[key], gain=1.)
+            theta[key].requires_grad_()
+
+    params['theta'] = theta
+
+    op_theta = torch.optim.Adam(params=theta.values(), lr=params['meta_lr'])
+    params['op_theta'] = op_theta
+
 
 # Main driver code
 def main():
@@ -233,9 +272,45 @@ def main():
     params = initialize()
 
     if params['train_flag']:
-        meta_train(params)
+        if params['datasource'] == 'sine_line':
+            meta_train(params)
+        elif params['datasource'] == 'drp_chem':
+            if params['cross_validate']:
+                # TODO: This is going to be insanely nasty, basically reinitialize for each amine
+                for amine in params['training_batches']:
+                    print("Starting training for amine", amine)
+                    # Change the path to save models
+                    dst_folder_root = '.'
+                    dst_folder = '{0:s}/MAML_few_shot/MAML_{1:s}_{2:d}way_{3:d}shot_{4:s}'.format(
+                        dst_folder_root,
+                        params['datasource'],
+                        params['num_classes_per_task'],
+                        params['num_training_samples_per_class'],
+                        amine
+                    )
+                    if not os.path.exists(dst_folder):
+                        os.makedirs(dst_folder)
+                        print('No folder for storage found')
+                        print(f'Make folder to store meta-parameters at')
+                    else:
+                        print('Found existing folder. Meta-parameters will be stored at')
+                    print(dst_folder)
+                    params['dst_folder'] = dst_folder
+
+                    # Adjust the loss function for each amine
+                    amine_counts = params['counts'][amine]
+                    weights = [amine_counts[0]/amine_counts[0], amine_counts[0]/amine_counts[1]]
+                    print('Using the following weights for loss function:', weights)
+                    class_weights = torch.tensor(weights, device=params['device'])
+                    params['loss_fn'] = torch.nn.CrossEntropyLoss(class_weights)
+
+                    # Train the model then reinitialize a new one
+                    meta_train(params, amine)
+                    reinitialize_model_params(params)
+
+
     elif params['resume_epoch'] > 0:
-        if datasource == 'sine_line':
+        if params['datasource'] == 'sine_line':
             cal_data = meta_validation(datasubset=args.datasubset, num_val_tasks=num_val_tasks, params=params)
 
             if num_val_tasks > 0:
@@ -268,7 +343,7 @@ def main():
         sys.exit('Unknown action')
 
 # Run the actual meta training for MAML
-def meta_train(params):
+def meta_train(params, amine=None):
     # Start by unpacking the variables that we need
     datasource = params['datasource']
     num_total_samples_per_class = params['num_total_samples_per_class']
@@ -296,32 +371,21 @@ def meta_train(params):
             num_samples=num_total_samples_per_class,
             device=device
         )
-        # create dummy sampler
-        all_class = [0]*100
-        sampler = torch.utils.data.sampler.RandomSampler(data_source=all_class)
-        train_loader = torch.utils.data.DataLoader(
-            dataset=all_class,
-            batch_size=num_classes_per_task,
-            sampler=sampler,
-            drop_last=True
-        )
-    else:
-        all_class = all_class_train
-        embedding = embedding_train
-        sampler = torch.utils.data.sampler.RandomSampler(
-            data_source=list(all_class.keys()),
-            replacement=False
-        )
-        train_loader = torch.utils.data.DataLoader(
-            dataset=list(all_class.keys()),
-            batch_size=num_classes_per_task,
-            sampler=sampler,
-            drop_last=True
-        )
-    #endregion
 
     for epoch in range(resume_epoch, resume_epoch + num_epochs):
         print(f"Starting epoch {epoch}")
+
+        if datasource == 'drp_chem':
+            training_batches = params['training_batches']
+            if params['cross_validate']:
+                b_num = np.random.choice(len(training_batches[amine]))
+                batch = training_batches[amine][b_num]
+            else:
+                b_num = np.random.choice(len(training_batches))
+                batch = training_batches[b_num]
+            x_train, y_train, x_val, y_val = torch.from_numpy(batch[0]).float().to(params['device']), torch.from_numpy(batch[1]).long().to(params['device']), \
+                torch.from_numpy(batch[2]).float().to(params['device']), torch.from_numpy(batch[3]).long().to(params['device'])
+
         # variables used to store information of each epoch for monitoring purpose
         meta_loss_saved = [] # meta loss to save
         val_accuracies = []
@@ -336,89 +400,88 @@ def meta_train(params):
         meta_loss_avg_save = [] # meta loss to save
 
         while (task_count < num_tasks_per_epoch):
-            for class_labels in train_loader:
-                if datasource == 'sine_line':
-                    p_sine = params['p_sine']
-                    x_t, y_t, x_v, y_v = get_task_sine_line_data(
-                        data_generator=data_generator,
-                        p_sine=p_sine,
-                        num_training_samples=num_training_samples_per_class,
-                        noise_flag=True
-                    )
-                elif datasource == 'drp_chem':
-                    pass
-                else:
-                    sys.exit('Unknown dataset')
+            if datasource == 'sine_line':
+                p_sine = params['p_sine']
+                x_t, y_t, x_v, y_v = get_task_sine_line_data(
+                    data_generator=data_generator,
+                    p_sine=p_sine,
+                    num_training_samples=num_training_samples_per_class,
+                    noise_flag=True
+                )
+            elif datasource == 'drp_chem':
+                x_t, y_t, x_v, y_v = x_train[task_count], y_train[task_count], x_val[task_count], y_val[task_count]
+            else:
+                sys.exit('Unknown dataset')
+            
+            loss_NLL = get_task_prediction(x_t, y_t, x_v, params, y_v)
+
+            if torch.isnan(loss_NLL).item():
+                sys.exit('NaN error')
+
+            # accumulate meta loss
+            meta_loss = meta_loss + loss_NLL
+
+            task_count = task_count + 1
+
+            if task_count % num_tasks_per_epoch == 0:
+                meta_loss = meta_loss/num_tasks_per_epoch
+
+                # accumulate into different variables for printing purpose
+                meta_loss_avg_print += meta_loss.item()
+
+                op_theta.zero_grad()
+                meta_loss.backward()
+
+                # Clip gradients to prevent exploding gradient problem
+                torch.nn.utils.clip_grad_norm_(
+                    parameters=theta.values(), 
+                    max_norm=3
+                )
+
+                op_theta.step()
+
+                # Printing losses
+                num_meta_updates_count += 1
+                if (num_meta_updates_count % num_meta_updates_print == 0):
+                    meta_loss_avg_save.append(meta_loss_avg_print/num_meta_updates_count)
+                    print('{0:d}, {1:2.4f}'.format(
+                        task_count,
+                        meta_loss_avg_save[-1]
+                    ))
+
+                    num_meta_updates_count = 0
+                    meta_loss_avg_print = 0
                 
-                loss_NLL = get_task_prediction(x_t, y_t, x_v, params, y_v)
+                if (task_count % num_tasks_save_loss == 0):
+                    meta_loss_saved.append(np.mean(meta_loss_avg_save))
 
-                if torch.isnan(loss_NLL).item():
-                    sys.exit('NaN error')
+                    meta_loss_avg_save = []
 
-                # accumulate meta loss
-                meta_loss = meta_loss + loss_NLL
+                    # print('Saving loss...')
+                    # if datasource != 'sine_line':
+                    #     val_accs, _ = meta_validation(
+                    #         datasubset=val_set,
+                    #         num_val_tasks=num_val_tasks,
+                    #         return_uncertainty=False)
+                    #     val_acc = np.mean(val_accs)
+                    #     val_ci95 = 1.96*np.std(val_accs)/np.sqrt(num_val_tasks)
+                    #     print('Validation accuracy = {0:2.4f} +/- {1:2.4f}'.format(val_acc, val_ci95))
+                    #     val_accuracies.append(val_acc)
 
-                task_count = task_count + 1
+                    #     train_accs, _ = meta_validation(
+                    #         datasubset=train_set,
+                    #         num_val_tasks=num_val_tasks,
+                    #         return_uncertainty=False)
+                    #     train_acc = np.mean(train_accs)
+                    #     train_ci95 = 1.96*np.std(train_accs)/np.sqrt(num_val_tasks)
+                    #     print('Train accuracy = {0:2.4f} +/- {1:2.4f}\n'.format(train_acc, train_ci95))
+                    #     train_accuracies.append(train_acc)
+                
+                # Reset meta loss
+                meta_loss = 0
 
-                if task_count % num_tasks_per_epoch == 0:
-                    meta_loss = meta_loss/num_tasks_per_epoch
-
-                    # accumulate into different variables for printing purpose
-                    meta_loss_avg_print += meta_loss.item()
-
-                    op_theta.zero_grad()
-                    meta_loss.backward()
-
-                    # Clip gradients to prevent exploding gradient problem
-                    torch.nn.utils.clip_grad_norm_(
-                        parameters=theta.values(), 
-                        max_norm=3
-                    )
-
-                    op_theta.step()
-
-                    # Printing losses
-                    num_meta_updates_count += 1
-                    if (num_meta_updates_count % num_meta_updates_print == 0):
-                        meta_loss_avg_save.append(meta_loss_avg_print/num_meta_updates_count)
-                        print('{0:d}, {1:2.4f}'.format(
-                            task_count,
-                            meta_loss_avg_save[-1]
-                        ))
-
-                        num_meta_updates_count = 0
-                        meta_loss_avg_print = 0
-                    
-                    if (task_count % num_tasks_save_loss == 0):
-                        meta_loss_saved.append(np.mean(meta_loss_avg_save))
-
-                        meta_loss_avg_save = []
-
-                        # print('Saving loss...')
-                        # if datasource != 'sine_line':
-                        #     val_accs, _ = meta_validation(
-                        #         datasubset=val_set,
-                        #         num_val_tasks=num_val_tasks,
-                        #         return_uncertainty=False)
-                        #     val_acc = np.mean(val_accs)
-                        #     val_ci95 = 1.96*np.std(val_accs)/np.sqrt(num_val_tasks)
-                        #     print('Validation accuracy = {0:2.4f} +/- {1:2.4f}'.format(val_acc, val_ci95))
-                        #     val_accuracies.append(val_acc)
-
-                        #     train_accs, _ = meta_validation(
-                        #         datasubset=train_set,
-                        #         num_val_tasks=num_val_tasks,
-                        #         return_uncertainty=False)
-                        #     train_acc = np.mean(train_accs)
-                        #     train_ci95 = 1.96*np.std(train_accs)/np.sqrt(num_val_tasks)
-                        #     print('Train accuracy = {0:2.4f} +/- {1:2.4f}\n'.format(train_acc, train_ci95))
-                        #     train_accuracies.append(train_acc)
-                    
-                    # Reset meta loss
-                    meta_loss = 0
-
-                if (task_count >= num_tasks_per_epoch):
-                    break
+            if (task_count >= num_tasks_per_epoch):
+                break
 
         if ((epoch + 1)% num_epochs_save == 0):
             checkpoint = {
