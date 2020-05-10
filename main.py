@@ -2,7 +2,7 @@
 
 python main.py --datasource=sine_line --k_shot=5 --n_way=1 --inner_lr=1e-3 --meta_lr=1e-3 --Lt=1 --Lv=10 --kl_reweight=0.0005 --num_epochs=25000 --resume_epoch=0 --verbose
 
-python main.py --datasource=sine_line --k_shot=5 --n_way=1 --inner_lr=1e-3 --meta_lr=1e-3 --Lt=1 --Lv=10 --kl_reweight=1 --num_epochs=1000 --resume_epoch=25000 --test 
+python main.py --datasource=sine_line --k_shot=5 --n_way=1 --inner_lr=1e-3 --meta_lr=1e-3 --pred_lr=1e-3 --Lt=1 --Lv=100 --kl_reweight=1 --num_epochs=1000 --resume_epoch=10000 --test
 
 run me to train cross validation:
 python main.py --datasource=drp_chem --k_shot=20 --n_way=2 --inner_lr=1e-3 --meta_lr=1e-3 --meta_batch_size=10 --Lt=1 --num_inner_updates=10 --Lv=10 --kl_reweight=.0001 --num_epochs=3000 --cross_validate --resume_epoch=0 --verbose --p_dropout_base=0.4
@@ -24,6 +24,7 @@ import numpy as np
 import random
 import itertools
 import pickle
+import copy
 
 import os
 import sys
@@ -474,189 +475,192 @@ def main():
 
     elif params['resume_epoch'] > 0:
         if params['datasource'] == 'sine_line':   
-            # Start by unpacking any necessary parameters
-            device = params['device']
-            gpu_id = params['gpu_id']
-            num_training_samples_per_class = params['num_training_samples_per_class']
-            num_classes_per_task = params['num_classes_per_task']
-            # Assume root directory is current directory
-            dst_folder_root = '.'
-            num_epochs_save = params['num_epochs_save']
-            x0 = torch.linspace(start=-5, end=5, steps=100, device=device).view(-1, 1)
+            # # Start by unpacking any necessary parameters
+            # device = params['device']
+            # gpu_id = params['gpu_id']
+            # num_training_samples_per_class = params['num_training_samples_per_class']
+            # num_classes_per_task = params['num_classes_per_task']
+            # # Assume root directory is current directory
+            # dst_folder_root = '.'
+            # num_epochs_save = params['num_epochs_save']
+            # x0 = torch.linspace(start=-5, end=5, steps=100, device=device).view(-1, 1)
 
-            matplotlib.rcParams['xtick.labelsize'] = 16
-            matplotlib.rcParams['ytick.labelsize'] = 16
-            matplotlib.rcParams['axes.labelsize'] = 18
+            # matplotlib.rcParams['xtick.labelsize'] = 16
+            # matplotlib.rcParams['ytick.labelsize'] = 16
+            # matplotlib.rcParams['axes.labelsize'] = 18
 
-            num_stds = 2
-            data_generator = DataGenerator(
-                num_samples=num_training_samples_per_class,
-                device=device
-            )
-            if params['datasubset'] == 'sine':
-                x_t, y_t, amp, phase = data_generator.generate_sinusoidal_data(noise_flag=True)
-                y0 = amp*torch.sin(x0 + phase)
-            else:
-                x_t, y_t, slope, intercept = data_generator.generate_line_data(noise_flag=True)
-                y0 = slope*x0 + intercept
+            # num_stds = 2
+            # data_generator = DataGenerator(
+            #     num_samples=num_training_samples_per_class,
+            #     device=device
+            # )
+            # if params['datasubset'] == 'sine':
+            #     x_t, y_t, amp, phase = data_generator.generate_sinusoidal_data(noise_flag=True)
+            #     y0 = amp*torch.sin(x0 + phase)
+            # else:
+            #     x_t, y_t, slope, intercept = data_generator.generate_line_data(noise_flag=True)
+            #     y0 = slope*x0 + intercept
 
-            # These are the PLATIPUS predictions
-            y_preds = get_task_prediction(x_t=x_t, y_t=y_t, x_v=x0, params=params)
+            # # These are the PLATIPUS predictions
+            # y_preds = get_task_prediction(x_t=x_t, y_t=y_t, x_v=x0, params=params)
 
-            # Load MAML data for comparison
-            # This requires that we already trained a MAML model, see maml.py
-            maml_folder = '{0:s}/MAML_sine_line_1way_5shot'.format(dst_folder_root)
-            maml_filename = 'sine_line_{0:d}way_{1:d}shot_{2:s}.pt'.format(num_classes_per_task, num_training_samples_per_class, '{0:d}')
+            # # Load MAML data for comparison
+            # # This requires that we already trained a MAML model, see maml.py
+            # maml_folder = '{0:s}/MAML_sine_line_1way_5shot'.format(dst_folder_root)
+            # maml_filename = 'sine_line_{0:d}way_{1:d}shot_{2:s}.pt'.format(num_classes_per_task, num_training_samples_per_class, '{0:d}')
 
-            # Try to find the model that was training for the most epochs
-            # If you get an error here, your MAML model was not saved at epochs of increment num_epochs_save
-            # By default that value is 1000 and is set in initialize()
-            i = num_epochs_save
-            maml_checkpoint_filename = os.path.join(maml_folder, maml_filename.format(i))
-            while(os.path.exists(maml_checkpoint_filename)):
-                i = i + num_epochs_save
-                maml_checkpoint_filename = os.path.join(maml_folder, maml_filename.format(i))
+            # # Try to find the model that was training for the most epochs
+            # # If you get an error here, your MAML model was not saved at epochs of increment num_epochs_save
+            # # By default that value is 1000 and is set in initialize()
+            # i = num_epochs_save
+            # maml_checkpoint_filename = os.path.join(maml_folder, maml_filename.format(i))
+            # while(os.path.exists(maml_checkpoint_filename)):
+            #     i = i + num_epochs_save
+            #     maml_checkpoint_filename = os.path.join(maml_folder, maml_filename.format(i))
 
-            # We overshoot by one increment of num_epochs_save, so need to subtract
-            maml_checkpoint = torch.load(
-                os.path.join(maml_folder, maml_filename.format(i - num_epochs_save)),
-                map_location=lambda storage,
-                loc: storage.cuda(gpu_id)
-            )
+            # # We overshoot by one increment of num_epochs_save, so need to subtract
+            # maml_checkpoint = torch.load(
+            #     os.path.join(maml_folder, maml_filename.format(i - num_epochs_save)),
+            #     map_location=lambda storage,
+            #     loc: storage.cuda(gpu_id)
+            # )
 
-            # In the MAML model it is lower-case theta
-            # We obtain the MAML model's predictions here
-            Theta_maml = maml_checkpoint['theta']
-            y_pred_maml = get_task_prediction_maml(x_t=x_t, y_t=y_t, x_v=x0, meta_params=Theta_maml, params=params)
+            # # In the MAML model it is lower-case theta
+            # # We obtain the MAML model's predictions here
+            # Theta_maml = maml_checkpoint['theta']
+            # y_pred_maml = get_task_prediction_maml(x_t=x_t, y_t=y_t, x_v=x0, meta_params=Theta_maml, params=params)
 
-            # Now plot the results
-            # For PLATIPUS plot a range using the standard deviation across the K models
-            # Need to call torch.stack for this to work properly
-            _, ax = plt.subplots(figsize=(5, 5))
-            y_top = torch.squeeze(torch.mean(torch.stack(y_preds), dim=0) + num_stds*torch.std(torch.stack(y_preds), dim=0))
-            y_bottom = torch.squeeze(torch.mean(torch.stack(y_preds), dim=0) - num_stds*torch.std(torch.stack(y_preds), dim=0))
+            # # Now plot the results
+            # # For PLATIPUS plot a range using the standard deviation across the K models
+            # # Need to call torch.stack for this to work properly
+            # _, ax = plt.subplots(figsize=(5, 5))
+            # y_top = torch.squeeze(torch.mean(torch.stack(y_preds), dim=0) + num_stds*torch.std(torch.stack(y_preds), dim=0))
+            # y_bottom = torch.squeeze(torch.mean(torch.stack(y_preds), dim=0) - num_stds*torch.std(torch.stack(y_preds), dim=0))
 
-            ax.fill_between(
-                x=torch.squeeze(x0).cpu().numpy(),
-                y1=y_bottom.cpu().detach().numpy(),
-                y2=y_top.cpu().detach().numpy(),
-                alpha=0.25,
-                color='C3',
-                zorder=0,
-                label='PLATIPUS'
-            )
-            ax.plot(x0.cpu().numpy(), y0.cpu().numpy(), color='C7', linestyle='-', linewidth=3, zorder=1, label='Ground truth')
-            ax.plot(x0.cpu().numpy(), y_pred_maml.cpu().detach().numpy(), color='C2', linestyle='--', linewidth=3, zorder=2, label='MAML')
-            ax.scatter(x=x_t.cpu().numpy(), y=y_t.cpu().numpy(), color='C0', marker='^', s=300, zorder=3, label='Data')
-            plt.xticks([-5, -2.5, 0, 2.5, 5])
-            plt.legend(loc='best')
-            plt.show()
-            plt.savefig(fname='img/mixed_sine_temp.png', format='png')
+            # ax.fill_between(
+            #     x=torch.squeeze(x0).cpu().numpy(),
+            #     y1=y_bottom.cpu().detach().numpy(),
+            #     y2=y_top.cpu().detach().numpy(),
+            #     alpha=0.25,
+            #     color='m',
+            #     zorder=0,
+            #     label='PLATIPUS'
+            # )
+            # ax.plot(x0.cpu().numpy(), y0.cpu().numpy(), color='C7', linestyle='-', linewidth=3, zorder=1, label='Ground truth')
+            # ax.plot(x0.cpu().numpy(), y_pred_maml.cpu().detach().numpy(), color='b', linestyle='--', linewidth=3, zorder=2, label='MAML')
+            # ax.scatter(x=x_t.cpu().numpy(), y=y_t.cpu().numpy(), color='C0', marker='^', s=300, zorder=3, label='Data')
+            # plt.xticks([-5, -2.5, 0, 2.5, 5])
+            # plt.xlabel('x-values')
+            # plt.ylabel('y-values')
+            # plt.legend(loc='best')
+            # plt.savefig(fname='img/mixed_sine_temp.png', format='png')
+            # plt.show()
+
 
             test_model_actively(params)
 
         elif params['datasource'] == 'drp_chem' and params['cross_validate']:
-            # # I am saving this dictionary in case things go wrong
-            # # It will get added to in the active learning code
-            # stats_dict = {}
-            # stats_dict['accuracies'] = []
-            # stats_dict['confusion_matrices'] = []
-            # stats_dict['precisions'] = []
-            # stats_dict['recalls'] = []
-            # stats_dict['balanced_classification_rates'] = []
-            # stats_dict['accuracies_MAML'] = []
-            # stats_dict['confusion_matrices_MAML'] = []
-            # stats_dict['precisions_MAML'] = []
-            # stats_dict['recalls_MAML'] = []
-            # stats_dict['balanced_classification_rates_MAML'] = []
-            # params['cv_statistics'] = stats_dict
-            # # Test performance of each individual cross validation model 
-            # for amine in params['validation_batches']:
-            #     print("Starting validation for amine", amine)
-            #     # Change the path to save models
-            #     dst_folder_root = '.'
-            #     dst_folder = '{0:s}/PLATIPUS_few_shot/PLATIPUS_{1:s}_{2:d}way_{3:d}shot_{4:s}'.format(
-            #         dst_folder_root,
-            #         params['datasource'],
-            #         params['num_classes_per_task'],
-            #         params['num_training_samples_per_class'],
-            #         amine
-            #     )
-            #     params['dst_folder'] = dst_folder
+            # I am saving this dictionary in case things go wrong
+            # It will get added to in the active learning code
+            stats_dict = {}
+            stats_dict['accuracies'] = []
+            stats_dict['confusion_matrices'] = []
+            stats_dict['precisions'] = []
+            stats_dict['recalls'] = []
+            stats_dict['balanced_classification_rates'] = []
+            stats_dict['accuracies_MAML'] = []
+            stats_dict['confusion_matrices_MAML'] = []
+            stats_dict['precisions_MAML'] = []
+            stats_dict['recalls_MAML'] = []
+            stats_dict['balanced_classification_rates_MAML'] = []
+            params['cv_statistics'] = stats_dict
+            # Test performance of each individual cross validation model 
+            for amine in params['validation_batches']:
+                print("Starting validation for amine", amine)
+                # Change the path to save models
+                dst_folder_root = '.'
+                dst_folder = '{0:s}/PLATIPUS_few_shot/PLATIPUS_{1:s}_{2:d}way_{3:d}shot_{4:s}'.format(
+                    dst_folder_root,
+                    params['datasource'],
+                    params['num_classes_per_task'],
+                    params['num_training_samples_per_class'],
+                    amine
+                )
+                params['dst_folder'] = dst_folder
 
-            #     # Here we are loading a previously trained model
-            #     print('Restore previous Theta...')
-            #     print('Resume epoch {0:d}'.format(params['resume_epoch']))
-            #     checkpoint_filename = ('{0:s}_{1:d}way_{2:d}shot_{3:d}.pt')\
-            #                     .format(params['datasource'],
-            #                             params['num_classes_per_task'],
-            #                             params['num_training_samples_per_class'],
-            #                             params['resume_epoch'])
-            #     checkpoint_file = os.path.join(dst_folder, checkpoint_filename)
-            #     print('Start to load weights from')
-            #     print('{0:s}'.format(checkpoint_file))
-            #     if torch.cuda.is_available():
-            #         saved_checkpoint = torch.load(
-            #             checkpoint_file,
-            #             map_location=lambda storage,
-            #             loc: storage.cuda(params['gpu_id'])
-            #         )
-            #     else:
-            #         saved_checkpoint = torch.load(
-            #             checkpoint_file,
-            #             map_location=lambda storage,
-            #             loc: storage
-            #         )
+                # Here we are loading a previously trained model
+                print('Restore previous Theta...')
+                print('Resume epoch {0:d}'.format(params['resume_epoch']))
+                checkpoint_filename = ('{0:s}_{1:d}way_{2:d}shot_{3:d}.pt')\
+                                .format(params['datasource'],
+                                        params['num_classes_per_task'],
+                                        params['num_training_samples_per_class'],
+                                        params['resume_epoch'])
+                checkpoint_file = os.path.join(dst_folder, checkpoint_filename)
+                print('Start to load weights from')
+                print('{0:s}'.format(checkpoint_file))
+                if torch.cuda.is_available():
+                    saved_checkpoint = torch.load(
+                        checkpoint_file,
+                        map_location=lambda storage,
+                        loc: storage.cuda(params['gpu_id'])
+                    )
+                else:
+                    saved_checkpoint = torch.load(
+                        checkpoint_file,
+                        map_location=lambda storage,
+                        loc: storage
+                    )
 
-            #     Theta = saved_checkpoint['Theta']
-            #     params['Theta'] = Theta
+                Theta = saved_checkpoint['Theta']
+                params['Theta'] = Theta
 
-            #     # Adjust the loss function for each amine
-            #     amine_counts = params['counts'][amine]
-            #     weights = [amine_counts[0]/amine_counts[0], amine_counts[0]/amine_counts[1]]
-            #     print('Using the following weights for loss function:', weights)
-            #     class_weights = torch.tensor(weights, device=params['device'])
-            #     params['loss_fn'] = torch.nn.CrossEntropyLoss(class_weights)
+                # Adjust the loss function for each amine
+                amine_counts = params['counts'][amine]
+                weights = [amine_counts[0]/amine_counts[0], amine_counts[0]/amine_counts[1]]
+                print('Using the following weights for loss function:', weights)
+                class_weights = torch.tensor(weights, device=params['device'])
+                params['loss_fn'] = torch.nn.CrossEntropyLoss(class_weights)
 
 
-            #     # Run forward pass on the validation data 
-            #     validation_batches = params['validation_batches']
-            #     val_batch = validation_batches[amine]
-            #     x_t, y_t, x_v, y_v = torch.from_numpy(val_batch[0]).float().to(params['device']), torch.from_numpy(val_batch[1]).long().to(params['device']), \
-            #         torch.from_numpy(val_batch[2]).float().to(params['device']), torch.from_numpy(val_batch[3]).long().to(params['device'])
+                # Run forward pass on the validation data 
+                validation_batches = params['validation_batches']
+                val_batch = validation_batches[amine]
+                x_t, y_t, x_v, y_v = torch.from_numpy(val_batch[0]).float().to(params['device']), torch.from_numpy(val_batch[1]).long().to(params['device']), \
+                    torch.from_numpy(val_batch[2]).float().to(params['device']), torch.from_numpy(val_batch[3]).long().to(params['device'])
 
-            #     accuracies = []
-            #     corrects = []
-            #     probability_pred = []
-            #     sm_loss = params['sm_loss']
-            #     preds = get_task_prediction(x_t, y_t, x_v, params)
-            #     # print('raw task predictions', preds)
-            #     y_pred_v = sm_loss(torch.stack(preds))
-            #     # print('after applying softmax', y_pred_v)
-            #     y_pred = torch.mean(input=y_pred_v, dim=0, keepdim=False)
-            #     # print('after calling torch mean', y_pred)
+                accuracies = []
+                corrects = []
+                probability_pred = []
+                sm_loss = params['sm_loss']
+                preds = get_task_prediction(x_t, y_t, x_v, params)
+                # print('raw task predictions', preds)
+                y_pred_v = sm_loss(torch.stack(preds))
+                # print('after applying softmax', y_pred_v)
+                y_pred = torch.mean(input=y_pred_v, dim=0, keepdim=False)
+                # print('after calling torch mean', y_pred)
 
-            #     prob_pred, labels_pred = torch.max(input=y_pred, dim=1)
-            #     # print('print training labels', y_t)
-            #     print('print labels predicted', labels_pred)
-            #     print('print true labels', y_v)
-            #     # print('print probability of prediction', prob_pred)
-            #     correct = (labels_pred == y_v)
-            #     corrects.extend(correct.detach().cpu().numpy())
+                prob_pred, labels_pred = torch.max(input=y_pred, dim=1)
+                # print('print training labels', y_t)
+                print('print labels predicted', labels_pred)
+                print('print true labels', y_v)
+                # print('print probability of prediction', prob_pred)
+                correct = (labels_pred == y_v)
+                corrects.extend(correct.detach().cpu().numpy())
 
-            #     # print('length of validation set', len(y_v))
-            #     accuracy = torch.sum(correct, dim=0).item() / len(y_v)
-            #     accuracies.append(accuracy)
+                # print('length of validation set', len(y_v))
+                accuracy = torch.sum(correct, dim=0).item() / len(y_v)
+                accuracies.append(accuracy)
 
-            #     probability_pred.extend(prob_pred.detach().cpu().numpy())
+                probability_pred.extend(prob_pred.detach().cpu().numpy())
 
-            #     print('accuracy for model is', accuracies)
-            #     # print('probabilities for predictions are', probability_pred)
-            #     # test_model_actively(params, amine)
+                print('accuracy for model is', accuracies)
+                print('probabilities for predictions are', probability_pred)
+                test_model_actively(params, amine)
 
-            # # Save this dictionary in case we need it later
-            # # with open(os.path.join(".\\data","cv_statistics.pkl"), "wb") as f:
-            # #     pickle.dump(params['cv_statistics'], f)
+            # Save this dictionary in case we need it later
+            with open(os.path.join(".\\data","cv_statistics.pkl"), "wb") as f:
+                pickle.dump(params['cv_statistics'], f)
 
             with open(os.path.join(".\\data","cv_statistics.pkl"), "rb") as f:
                 params['cv_statistics'] = pickle.load(f)
@@ -667,6 +671,16 @@ def main():
             for key in stats_dict.keys():
                 del stats_dict[key][10]
                 del stats_dict[key][11]
+
+            for key in ['precisions', 'precisions_MAML']:
+                for stat_list in stats_dict[key]:
+                    print(stat_list[0])
+                    if np.isnan(stat_list[0]):
+                        stat_list[0] = 0
+
+            # for key in stats_dict.keys():
+            #     for stat_list in stats_dict[key]:
+            #         del stat_list[0]        
 
             min_length = len(min(stats_dict['accuracies'], key=len))
             print(f'Minimum number of points we have to work with is {min_length}')
@@ -987,10 +1001,10 @@ def test_model_actively(params, amine=None):
             device=device
         )
         if params['datasubset'] == 'sine':
-            x_t, y_t, amp, phase = data_generator.generate_sinusoidal_data(noise_flag=True)
+            x_t, y_t, amp, phase = data_generator.generate_sinusoidal_data(noise_flag=False)
             y0 = amp*torch.sin(x0 + phase)
         else:
-            x_t, y_t, slope, intercept = data_generator.generate_line_data(noise_flag=True)
+            x_t, y_t, slope, intercept = data_generator.generate_line_data(noise_flag=False)
             y0 = slope*x0 + intercept
 
         # Load MAML data for comparison
@@ -1014,25 +1028,95 @@ def test_model_actively(params, amine=None):
             loc: storage.cuda(gpu_id)
         )
 
-        all_labels = torch.cat((y_t, y_v))
-        all_data = torch.cat((x_t, x_v))
+        # Store a copy of the training data for MAML
+        x_t_maml = copy.deepcopy(x_t)
+        y_t_maml = copy.deepcopy(y_t)
 
-        iters = len(x_v)
-        for i in range(iters):
-            pass
         # These are the PLATIPUS predictions
-        y_preds = get_task_prediction(x_t=x_t, y_t=y_t, x_v=x0, params=params)
-
-
+        y_preds_base = get_task_prediction(x_t=x_t, y_t=y_t, x_v=x0, params=params)
 
         # In the MAML model it is lower-case theta
         # We obtain the MAML model's predictions here
         Theta_maml = maml_checkpoint['theta']
-        y_pred_maml = get_task_prediction_maml(x_t=x_t, y_t=y_t, x_v=x0, meta_params=Theta_maml, params=params)
+        y_pred_maml_base = get_task_prediction_maml(x_t=x_t, y_t=y_t, x_v=x0, meta_params=Theta_maml, params=params)
 
-        # Now plot the results
+        # Now plot the base results
         # For PLATIPUS plot a range using the standard deviation across the K models
         # Need to call torch.stack for this to work properly
+        _, ax = plt.subplots(figsize=(5, 5))
+        y_top = torch.squeeze(torch.mean(torch.stack(y_preds_base), dim=0) + num_stds*torch.std(torch.stack(y_preds_base), dim=0))
+        y_bottom = torch.squeeze(torch.mean(torch.stack(y_preds_base), dim=0) - num_stds*torch.std(torch.stack(y_preds_base), dim=0))
+
+        ax.fill_between(
+            x=torch.squeeze(x0).cpu().numpy(),
+            y1=y_bottom.cpu().detach().numpy(),
+            y2=y_top.cpu().detach().numpy(),
+            alpha=0.25,
+            color='m',
+            zorder=0,
+            label='PLATIPUS'
+        )
+        ax.plot(x0.cpu().numpy(), y0.cpu().numpy(), color='C7', linestyle='-', linewidth=3, zorder=1, label='Ground truth')
+        ax.plot(x0.cpu().numpy(), y_pred_maml_base.cpu().detach().numpy(), color='b', linestyle='--', linewidth=3, zorder=2, label='MAML')
+        ax.scatter(x=x_t.cpu().numpy(), y=y_t.cpu().numpy(), color='C0', marker='^', s=300, zorder=3, label='Data')
+        plt.xticks([-5, -2.5, 0, 2.5, 5])
+        plt.xlabel('x-values')
+        plt.ylabel('y-values')
+        plt.legend(loc='best')
+        plt.savefig(fname='img/before_loop.png', format='png')
+        plt.show()
+
+
+        iters = 5
+        mse_losses = []
+        x_axis = [i for i in range(iters + 1)]
+
+
+        for i in range(iters + 1):
+            print(f'Doing active learning with {i} examples')
+            preds = get_task_prediction(x_t, y_t, x0, params)
+            all_outputs = torch.stack(preds)
+            y_stds = torch.std(all_outputs, dim=0)
+            y_means = torch.mean(all_outputs, dim=0)
+
+            # print('Mean predictions', y_means)
+            # print('Standard deviations', y_stds)  
+            mse_loss = params['loss_fn'](y_means, y0)
+            mse_losses.append(mse_loss)
+
+            if i != iters:
+                value, index = y_stds.max(0)
+                print(f'Highest standard deviation of {value} at index {index}')
+                print(x_t)
+                # Add to the training data 
+                x_t = torch.cat((x_t, x0[index].view(1, 1)))
+                y_t = torch.cat((y_t, y0[index].view(1, 1)))         
+                print('length of x_t is now', len(x_t))
+
+        mse_losses_maml = []
+        used = []
+        # MAML chooses random points
+        for i in range(iters + 1):
+            y_pred_maml = get_task_prediction_maml(x_t=x_t_maml, y_t=y_t_maml, x_v=x0, meta_params=Theta_maml, params=params)
+            mse_loss = params['loss_fn'](y_pred_maml, y0)
+            mse_losses_maml.append(mse_loss)
+
+            if i != iters:
+                print(f'Selecting random point number {i} for MAML')
+                index = np.random.choice(len(x0))
+                # Don't give the same point more than once
+                while index in used:
+                    index = np.random.choice(len(x0))  
+                used.append(index)       
+
+                # Add to the training data 
+                x_t_maml = torch.cat((x_t_maml, x0[index].view(1, 1)))
+                y_t_maml = torch.cat((y_t_maml, y0[index].view(1, 1)))         
+
+        # Now plot the results updated
+        y_preds = get_task_prediction(x_t=x_t, y_t=y_t, x_v=x0, params=params)
+        y_pred_maml = get_task_prediction_maml(x_t=x_t_maml, y_t=y_t_maml, x_v=x0, meta_params=Theta_maml, params=params)
+
         _, ax = plt.subplots(figsize=(5, 5))
         y_top = torch.squeeze(torch.mean(torch.stack(y_preds), dim=0) + num_stds*torch.std(torch.stack(y_preds), dim=0))
         y_bottom = torch.squeeze(torch.mean(torch.stack(y_preds), dim=0) - num_stds*torch.std(torch.stack(y_preds), dim=0))
@@ -1042,17 +1126,29 @@ def test_model_actively(params, amine=None):
             y1=y_bottom.cpu().detach().numpy(),
             y2=y_top.cpu().detach().numpy(),
             alpha=0.25,
-            color='C3',
+            color='m',
             zorder=0,
             label='PLATIPUS'
         )
         ax.plot(x0.cpu().numpy(), y0.cpu().numpy(), color='C7', linestyle='-', linewidth=3, zorder=1, label='Ground truth')
-        ax.plot(x0.cpu().numpy(), y_pred_maml.cpu().detach().numpy(), color='C2', linestyle='--', linewidth=3, zorder=2, label='MAML')
+        ax.plot(x0.cpu().numpy(), y_pred_maml.cpu().detach().numpy(), color='b', linestyle='--', linewidth=3, zorder=2, label='MAML')
         ax.scatter(x=x_t.cpu().numpy(), y=y_t.cpu().numpy(), color='C0', marker='^', s=300, zorder=3, label='Data')
         plt.xticks([-5, -2.5, 0, 2.5, 5])
         plt.legend(loc='best')
+        plt.xlabel('x-values')
+        plt.ylabel('y-values')
+        plt.savefig(fname='img/after_loop.png', format='png')
         plt.show()
-        plt.savefig(fname='img/mixed_sine_temp.png', format='png')
+
+        plt.ylabel('Mean squared error')
+        plt.xlabel('Additional points given')
+        plt.title(f'Active Learning Comparison for Sine/Line')
+        plt.plot(x_axis, mse_losses, 'ro-', label='PLATIPUS')
+        plt.plot(x_axis, mse_losses_maml, 'bo-', label='MAML')
+        plt.legend()
+        plt.savefig(fname='img/mse_comparison.png', format='png')
+        plt.show()
+
 
     # Then we are running for a specific amine
     if params['cross_validate']:
