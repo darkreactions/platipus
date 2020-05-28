@@ -64,10 +64,6 @@ def parse_args():
 
     parser.add_argument('--Lt', type=int, default=1, help='Number of ensemble networks to train task specific parameters')
     parser.add_argument('--Lv', type=int, default=1, help='Number of ensemble networks to validate meta-parameters')
-    
-    parser.add_argument('--uncertainty', dest='uncertainty_flag', action='store_true')
-    parser.add_argument('--no_uncertainty', dest='uncertainty_flag', action='store_false')
-    parser.set_defaults(uncertainty_flag=True)
 
     parser.add_argument('--p_dropout_base', type=float, default=0., help='Dropout rate for the base network')
     parser.add_argument('--datasubset', type=str, default='sine', help='sine or line')
@@ -370,7 +366,6 @@ def initialize():
 
         params['op_Theta'] = op_Theta
 
-    params['uncertainty_flag'] = args.uncertainty_flag
     print()
     return params
 
