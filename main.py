@@ -457,7 +457,11 @@ def main():
 
                     # Adjust the loss function for each amine
                     amine_counts = params['counts'][amine]
-                    weights = [amine_counts[0]/amine_counts[0], amine_counts[0]/amine_counts[1]]
+                    if amine_counts[0] >= amine_counts[1]:
+                        weights = [amine_counts[0]/amine_counts[0], amine_counts[0]/amine_counts[1]]
+                    else:
+                         weights = [amine_counts[1]/amine_counts[0], amine_counts[1]/amine_counts[1]]   
+
                     print('Using the following weights for loss function:', weights)
                     class_weights = torch.tensor(weights, device=params['device'])
                     params['loss_fn'] = torch.nn.CrossEntropyLoss(class_weights)
@@ -612,7 +616,10 @@ def main():
 
                 # Adjust the loss function for each amine
                 amine_counts = params['counts'][amine]
-                weights = [amine_counts[0]/amine_counts[0], amine_counts[0]/amine_counts[1]]
+                if amine_counts[0] >= amine_counts[1]:
+                    weights = [amine_counts[0]/amine_counts[0], amine_counts[0]/amine_counts[1]]
+                else:
+                    weights = [amine_counts[1]/amine_counts[0], amine_counts[1]/amine_counts[1]]   
                 print('Using the following weights for loss function:', weights)
                 class_weights = torch.tensor(weights, device=params['device'])
                 params['loss_fn'] = torch.nn.CrossEntropyLoss(class_weights)
