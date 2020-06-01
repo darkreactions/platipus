@@ -73,7 +73,8 @@ def load_chem_dataset(k_shot, meta_batch_size=32, num_batches=100, verbose=False
     all_train_success = all_train[all_train[score_header] == 1]
     print('Number of successful reactions in the training set', all_train_success.shape[0])
 
-    counts['total'] = [all_train.shape[0], all_train_success.shape[0]]
+    # [Number of failed reactions, number of successful reactions]
+    counts['total'] = [all_train.shape[0] - all_train_success.shape[0], all_train_success.shape[0]]
 
     amine_left_out_batches = {}
     amine_cross_validate_samples = {}
@@ -89,7 +90,7 @@ def load_chem_dataset(k_shot, meta_batch_size=32, num_batches=100, verbose=False
         all_train_success = all_train[all_train[score_header] == 1]
         print(f'Number of successful reactions in training set holding out {amine}', all_train_success.shape[0])
 
-        counts[amine] = [all_train.shape[0], all_train_success.shape[0]]
+        counts[amine] = [all_train.shape[0] - all_train_success.shape[0], all_train_success.shape[0]]
         batches = []
         for _ in range(num_batches):
             # t for train, v for validate (but validate is outer loop, trying to be consistent with the PLATIPUS code)
@@ -247,7 +248,7 @@ def load_chem_dataset_testing(k_shot, meta_batch_size=32, num_batches=100, verbo
     all_train_success = all_train[all_train[score_header] == 1]
     print('Number of successful reactions in the training set', all_train_success.shape[0])
 
-    counts['total'] = [all_train.shape[0], all_train_success.shape[0]]
+    counts['total'] = [all_train.shape[0] -  all_train_success.shape[0], all_train_success.shape[0]]
 
     batches = []
     print('Generating training batches')
