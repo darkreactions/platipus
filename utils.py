@@ -1,11 +1,10 @@
-
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 
+
 # Load in the chemistry data, it is harder than it sounds
 def load_chem_dataset(k_shot, meta_batch_size=32, num_batches=100, verbose=False):
-
     # "I'm limited by the technology of my time."
     # Ideally the model would choose from a Uniformly distributed pool of unlabeled reactions
     # Then we would run that reaction in the lab and give it back to the model
@@ -14,33 +13,33 @@ def load_chem_dataset(k_shot, meta_batch_size=32, num_batches=100, verbose=False
     # The list below is a list of inchi keys for amines that have a reaction drawn from a uniform 
     # distribution with a successful outcome (no point in amines that have no successful reaction)
     viable_amines = ['ZEVRFFCPALTVDN-UHFFFAOYSA-N',
-    'KFQARYBEAKAXIC-UHFFFAOYSA-N',
-    'NLJDBTZLVTWXRG-UHFFFAOYSA-N',
-    'LCTUISCIGMWMAT-UHFFFAOYSA-N',
-    'JERSPYRKVMAEJY-UHFFFAOYSA-N',
-    'JMXLWMIFDJCGBV-UHFFFAOYSA-N',
-    'VAWHFUNJDMQUSB-UHFFFAOYSA-N',
-    'WGYRINYTHSORGH-UHFFFAOYSA-N',
-    'FCTHQYIDLRRROX-UHFFFAOYSA-N',
-    'VNAAUNTYIONOHR-UHFFFAOYSA-N',
-    'KOAGKPNEVYEZDU-UHFFFAOYSA-N',
-    'FJFIJIDZQADKEE-UHFFFAOYSA-N',
-    'XFYICZOIWSBQSK-UHFFFAOYSA-N',
-    'UMDDLGMCNFAZDX-UHFFFAOYSA-O',
-    'HBPSMMXRESDUSG-UHFFFAOYSA-N',
-    'NXRUEVJQMBGVAT-UHFFFAOYSA-N',
-    'CALQKRVFTWDYDG-UHFFFAOYSA-N',
-    'LLWRXQXPJMPHLR-UHFFFAOYSA-N',
-    'BAMDIFIROXTEEM-UHFFFAOYSA-N',
-    'XZUCBFLUEBDNSJ-UHFFFAOYSA-N']
-   
+                     'KFQARYBEAKAXIC-UHFFFAOYSA-N',
+                     'NLJDBTZLVTWXRG-UHFFFAOYSA-N',
+                     'LCTUISCIGMWMAT-UHFFFAOYSA-N',
+                     'JERSPYRKVMAEJY-UHFFFAOYSA-N',
+                     'JMXLWMIFDJCGBV-UHFFFAOYSA-N',
+                     'VAWHFUNJDMQUSB-UHFFFAOYSA-N',
+                     'WGYRINYTHSORGH-UHFFFAOYSA-N',
+                     'FCTHQYIDLRRROX-UHFFFAOYSA-N',
+                     'VNAAUNTYIONOHR-UHFFFAOYSA-N',
+                     'KOAGKPNEVYEZDU-UHFFFAOYSA-N',
+                     'FJFIJIDZQADKEE-UHFFFAOYSA-N',
+                     'XFYICZOIWSBQSK-UHFFFAOYSA-N',
+                     'UMDDLGMCNFAZDX-UHFFFAOYSA-O',
+                     'HBPSMMXRESDUSG-UHFFFAOYSA-N',
+                     'NXRUEVJQMBGVAT-UHFFFAOYSA-N',
+                     'CALQKRVFTWDYDG-UHFFFAOYSA-N',
+                     'LLWRXQXPJMPHLR-UHFFFAOYSA-N',
+                     'BAMDIFIROXTEEM-UHFFFAOYSA-N',
+                     'XZUCBFLUEBDNSJ-UHFFFAOYSA-N']
+
     # Set up various strings corresponding to headers
     distribution_header = '_raw_modelname'
     amine_header = '_rxn_organic-inchikey'
     score_header = '_out_crystalscore'
     name_header = 'name'
     to_exclude = [score_header, amine_header, name_header, distribution_header]
-    path ='.\\data\\0050.perovskitedata_DRP.csv'
+    path = './data/0050.perovskitedata_DRP.csv'
 
     # Successful reaction is defined as having a crystal score of...
     SUCCESS = 4
@@ -49,7 +48,7 @@ def load_chem_dataset(k_shot, meta_batch_size=32, num_batches=100, verbose=False
     df = pd.read_csv(path)
 
     # Set up the 0/1 labels and drop non-uniformly distributed reactions
- 
+
     df = df[df[distribution_header].str.contains('Uniform')]
     df = df[df[amine_header].isin(viable_amines)]
 
@@ -60,10 +59,10 @@ def load_chem_dataset(k_shot, meta_batch_size=32, num_batches=100, verbose=False
 
     # Hold out 4 amines for testing, the other 16 are fair game for the cross validation
     # I basically picked these randomly since I have no idea which inchi key corresponds to what
-    hold_out_amines = ['CALQKRVFTWDYDG-UHFFFAOYSA-N', 
-        'KOAGKPNEVYEZDU-UHFFFAOYSA-N', 
-        'FCTHQYIDLRRROX-UHFFFAOYSA-N',
-        'JMXLWMIFDJCGBV-UHFFFAOYSA-N']
+    hold_out_amines = ['CALQKRVFTWDYDG-UHFFFAOYSA-N',
+                       'KOAGKPNEVYEZDU-UHFFFAOYSA-N',
+                       'FCTHQYIDLRRROX-UHFFFAOYSA-N',
+                       'JMXLWMIFDJCGBV-UHFFFAOYSA-N']
     amines = [a for a in amines if a not in hold_out_amines]
 
     # Used to set up our weighted loss function
@@ -78,7 +77,6 @@ def load_chem_dataset(k_shot, meta_batch_size=32, num_batches=100, verbose=False
 
     amine_left_out_batches = {}
     amine_cross_validate_samples = {}
-
 
     for amine in amines:
         # Since we are doing cross validation, create a training set without each amine
@@ -118,7 +116,7 @@ def load_chem_dataset(k_shot, meta_batch_size=32, num_batches=100, verbose=False
                 x_v.append(X[qry])
                 y_v.append(y[qry])
 
-            batches.append([np.array(x_t),np.array(y_t),np.array(x_v),np.array(y_v)])
+            batches.append([np.array(x_t), np.array(y_t), np.array(x_v), np.array(y_v)])
 
         amine_left_out_batches[amine] = batches
 
@@ -129,7 +127,7 @@ def load_chem_dataset(k_shot, meta_batch_size=32, num_batches=100, verbose=False
         spt = np.random.choice(X.shape[0], size=k_shot, replace=False)
         qry = [i for i in range(len(X)) if i not in spt]
         if len(qry) <= 5:
-            print ("Warning: minimal testing data for meta-learn assessment")
+            print("Warning: minimal testing data for meta-learn assessment")
 
         x_s = X[spt]
         y_s = y[spt]
@@ -155,7 +153,7 @@ def load_chem_dataset(k_shot, meta_batch_size=32, num_batches=100, verbose=False
         spt = np.random.choice(X.shape[0], size=k_shot, replace=False)
         qry = [i for i in range(len(X)) if i not in spt]
         if len(qry) <= 5:
-            print ("Warning: minimal testing data for meta-learn assessment")
+            print("Warning: minimal testing data for meta-learn assessment")
 
         x_s = X[spt]
         y_s = y[spt]
@@ -184,39 +182,38 @@ def load_chem_dataset(k_shot, meta_batch_size=32, num_batches=100, verbose=False
         print('Number of features to train on is', len(df.columns) - len(to_exclude))
 
     return amine_left_out_batches, amine_cross_validate_samples, amine_test_samples, counts
-    
+
 
 # Do not use any data for model validation this time
 def load_chem_dataset_testing(k_shot, meta_batch_size=32, num_batches=100, verbose=False):
-
     viable_amines = ['ZEVRFFCPALTVDN-UHFFFAOYSA-N',
-    'KFQARYBEAKAXIC-UHFFFAOYSA-N',
-    'NLJDBTZLVTWXRG-UHFFFAOYSA-N',
-    'LCTUISCIGMWMAT-UHFFFAOYSA-N',
-    'JERSPYRKVMAEJY-UHFFFAOYSA-N',
-    'JMXLWMIFDJCGBV-UHFFFAOYSA-N',
-    'VAWHFUNJDMQUSB-UHFFFAOYSA-N',
-    'WGYRINYTHSORGH-UHFFFAOYSA-N',
-    'FCTHQYIDLRRROX-UHFFFAOYSA-N',
-    'VNAAUNTYIONOHR-UHFFFAOYSA-N',
-    'KOAGKPNEVYEZDU-UHFFFAOYSA-N',
-    'FJFIJIDZQADKEE-UHFFFAOYSA-N',
-    'XFYICZOIWSBQSK-UHFFFAOYSA-N',
-    'UMDDLGMCNFAZDX-UHFFFAOYSA-O',
-    'HBPSMMXRESDUSG-UHFFFAOYSA-N',
-    'NXRUEVJQMBGVAT-UHFFFAOYSA-N',
-    'CALQKRVFTWDYDG-UHFFFAOYSA-N',
-    'LLWRXQXPJMPHLR-UHFFFAOYSA-N',
-    'BAMDIFIROXTEEM-UHFFFAOYSA-N',
-    'XZUCBFLUEBDNSJ-UHFFFAOYSA-N']
-   
+                     'KFQARYBEAKAXIC-UHFFFAOYSA-N',
+                     'NLJDBTZLVTWXRG-UHFFFAOYSA-N',
+                     'LCTUISCIGMWMAT-UHFFFAOYSA-N',
+                     'JERSPYRKVMAEJY-UHFFFAOYSA-N',
+                     'JMXLWMIFDJCGBV-UHFFFAOYSA-N',
+                     'VAWHFUNJDMQUSB-UHFFFAOYSA-N',
+                     'WGYRINYTHSORGH-UHFFFAOYSA-N',
+                     'FCTHQYIDLRRROX-UHFFFAOYSA-N',
+                     'VNAAUNTYIONOHR-UHFFFAOYSA-N',
+                     'KOAGKPNEVYEZDU-UHFFFAOYSA-N',
+                     'FJFIJIDZQADKEE-UHFFFAOYSA-N',
+                     'XFYICZOIWSBQSK-UHFFFAOYSA-N',
+                     'UMDDLGMCNFAZDX-UHFFFAOYSA-O',
+                     'HBPSMMXRESDUSG-UHFFFAOYSA-N',
+                     'NXRUEVJQMBGVAT-UHFFFAOYSA-N',
+                     'CALQKRVFTWDYDG-UHFFFAOYSA-N',
+                     'LLWRXQXPJMPHLR-UHFFFAOYSA-N',
+                     'BAMDIFIROXTEEM-UHFFFAOYSA-N',
+                     'XZUCBFLUEBDNSJ-UHFFFAOYSA-N']
+
     # Set up various strings corresponding to headers
     distribution_header = '_raw_modelname'
     amine_header = '_rxn_organic-inchikey'
     score_header = '_out_crystalscore'
     name_header = 'name'
     to_exclude = [score_header, amine_header, name_header, distribution_header]
-    path ='.\\data\\0050.perovskitedata_DRP.csv'
+    path = '.\\data\\0050.perovskitedata_DRP.csv'
 
     # Successful reaction is defined as having a crystal score of...
     SUCCESS = 4
@@ -225,7 +222,7 @@ def load_chem_dataset_testing(k_shot, meta_batch_size=32, num_batches=100, verbo
     df = pd.read_csv(path)
 
     # Set up the 0/1 labels and drop non-uniformly distributed reactions
- 
+
     df = df[df[distribution_header].str.contains('Uniform')]
     df = df[df[amine_header].isin(viable_amines)]
     if verbose:
@@ -233,12 +230,11 @@ def load_chem_dataset_testing(k_shot, meta_batch_size=32, num_batches=100, verbo
     df[score_header] = [1 if val == SUCCESS else 0 for val in df[score_header].values]
     amines = df[amine_header].unique().tolist()
 
-    hold_out_amines = ['CALQKRVFTWDYDG-UHFFFAOYSA-N', 
-        'KOAGKPNEVYEZDU-UHFFFAOYSA-N', 
-        'FCTHQYIDLRRROX-UHFFFAOYSA-N',
-        'JMXLWMIFDJCGBV-UHFFFAOYSA-N']
+    hold_out_amines = ['CALQKRVFTWDYDG-UHFFFAOYSA-N',
+                       'KOAGKPNEVYEZDU-UHFFFAOYSA-N',
+                       'FCTHQYIDLRRROX-UHFFFAOYSA-N',
+                       'JMXLWMIFDJCGBV-UHFFFAOYSA-N']
     print('Holding out', hold_out_amines)
-
 
     available_amines = [a for a in amines if a not in hold_out_amines]
     # Used to set up our weighted loss function
@@ -248,7 +244,7 @@ def load_chem_dataset_testing(k_shot, meta_batch_size=32, num_batches=100, verbo
     all_train_success = all_train[all_train[score_header] == 1]
     print('Number of successful reactions in the training set', all_train_success.shape[0])
 
-    counts['total'] = [all_train.shape[0] -  all_train_success.shape[0], all_train_success.shape[0]]
+    counts['total'] = [all_train.shape[0] - all_train_success.shape[0], all_train_success.shape[0]]
 
     batches = []
     print('Generating training batches')
@@ -278,7 +274,7 @@ def load_chem_dataset_testing(k_shot, meta_batch_size=32, num_batches=100, verbo
             x_v.append(X[qry])
             y_v.append(y[qry])
 
-        batches.append([np.array(x_t),np.array(y_t),np.array(x_v),np.array(y_v)])
+        batches.append([np.array(x_t), np.array(y_t), np.array(x_v), np.array(y_v)])
 
     amine_test_samples = {}
 
@@ -292,7 +288,7 @@ def load_chem_dataset_testing(k_shot, meta_batch_size=32, num_batches=100, verbo
         spt = np.random.choice(X.shape[0], size=k_shot, replace=False)
         qry = [i for i in range(len(X)) if i not in spt]
         if len(qry) <= 5:
-            print ("Warning: minimal testing data for meta-learn assessment")
+            print("Warning: minimal testing data for meta-learn assessment")
 
         x_s = X[spt]
         y_s = y[spt]
@@ -320,30 +316,6 @@ def load_chem_dataset_testing(k_shot, meta_batch_size=32, num_batches=100, verbo
 
     return batches, amine_test_samples, counts
 
-# Use the data generator to get points for one task (either a sinusoid OR a line)
-def get_task_sine_line_data(data_generator, p_sine, num_training_samples, noise_flag=True):
-    if (np.random.binomial(n=1, p=p_sine) == 0):
-        # Generate sinusoidal data
-        # Discard true amplitude and phase
-        x, y, _, _ = data_generator.generate_sinusoidal_data(noise_flag=noise_flag)
-    else:
-        # Generate line data
-        # Discard true slope and intercept
-        x, y, _, _ = data_generator.generate_line_data(noise_flag=noise_flag)
-    
-    # Training data and labels
-    x_t = x[:num_training_samples]
-    y_t = y[:num_training_samples]
-    
-    # Validation data and labels
-    x_v = x[num_training_samples:]
-    y_v = y[num_training_samples:]
-
-    return x_t, y_t, x_v, y_v
 
 if __name__ == "__main__":
- load_chem_dataset(5, meta_batch_size=32, num_batches=100, verbose=True)
-
-
-
-
+    load_chem_dataset(5, meta_batch_size=32, num_batches=100, verbose=True)
