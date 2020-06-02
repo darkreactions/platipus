@@ -13,9 +13,7 @@ import itertools
 import os
 import sys
 
-from data_generator import DataGenerator
 from FC_net import FCNet
-from utils import get_task_sine_line_data
 
 import pickle
 
@@ -27,7 +25,7 @@ import argparse
 def parse_args():
     parser = argparse.ArgumentParser(description='Setup variables for MAML.')
 
-    parser.add_argument('--datasource', type=str, default='sine_line', help='datasource to be used, sine_line or drp_chem')
+    parser.add_argument('--datasource', type=str, default='drp_chem', help='datasource to be used, default is drp_chem')
     parser.add_argument('--k_shot', type=int, default=5, help='Number of training samples per class or k-shot')
     parser.add_argument('--n_way', type=int, default=1, help='Number of classes per task, this is 2 for the chemistry data')
     parser.add_argument('--resume_epoch', type=int, default=0, help='Epoch id to resume learning or perform testing')
@@ -48,7 +46,6 @@ def parse_args():
     parser.set_defaults(uncertainty_flag=True)
 
     parser.add_argument('--p_dropout_base', type=float, default=0., help='Dropout rate for the base network')
-    parser.add_argument('--datasubset', type=str, default='sine', help='sine or line')
     parser.add_argument('--cross_validate', action='store_true')
 
 
@@ -120,26 +117,11 @@ def initialize():
 
     # Dropout rate for the neural network
     params['p_dropout_base'] = args.p_dropout_base
-    # Sine or line if we are dealing with the sine-line task
-    params['datasubset'] = args.datasubset
 
-    if params['datasource'] == 'sine_line':
-        net = FCNet(
-            dim_input=1,
-            dim_output=params['num_classes_per_task'],
-            num_hidden_units=(100, 100, 100),
-            device=device
-        )
-        # bernoulli probability to pick sine or (1-p_sine) for line
-        params['p_sine'] = 0.5
-        params['net'] = net 
-        params['loss_fn'] = torch.nn.MSELoss()
-
-    elif params['datasource'] == 'drp_chem':
+    if params['datasource'] == 'drp_chem':
         
         # I am only running MAML to compare with PLATIPUS, thus assume this data already exists
         if params['cross_validate']:
-
             with open(os.path.join(".\\data","train_dump.pkl"), "rb") as f:
                 params['training_batches'] = pickle.load(f)
             with open(os.path.join(".\\data","val_dump.pkl"), "rb") as f:
@@ -272,9 +254,7 @@ def main():
     params = initialize()
 
     if params['train_flag']:
-        if params['datasource'] == 'sine_line':
-            meta_train(params)
-        elif params['datasource'] == 'drp_chem':
+        if params['datasource'] == 'drp_chem':
             if params['cross_validate']:
                 # TODO: This is going to be insanely nasty, basically reinitialize for each amine
                 for amine in params['training_batches']:
@@ -310,35 +290,29 @@ def main():
 
 
     elif params['resume_epoch'] > 0:
-        if params['datasource'] == 'sine_line':
-            cal_data = meta_validation(datasubset=args.datasubset, num_val_tasks=num_val_tasks, params=params)
 
-            if num_val_tasks > 0:
-                cal_data = np.array(cal_data)
-                np.savetxt(fname='maml_{0:s}_calibration.csv'.format(datasource), X=cal_data, delimiter=',')
+        if not uncertainty_flag:
+            accs, all_task_names = meta_validation(
+                datasubset=test_set,
+                num_val_tasks=num_val_tasks,
+                return_uncertainty=uncertainty_flag
+            )
+            with open(file='maml_{0:s}_{1:d}_{2:d}_accuracies.csv'.format(datasource, num_classes_per_task, num_training_samples_per_class), mode='w') as result_file:
+                for acc, classes_in_task in zip(accs, all_task_names):
+                    row_str = ''
+                    for class_in_task in classes_in_task:
+                        row_str = '{0}{1},'.format(row_str, class_in_task)
+                    result_file.write('{0}{1}\n'.format(row_str, acc))
         else:
-            if not uncertainty_flag:
-                accs, all_task_names = meta_validation(
-                    datasubset=test_set,
-                    num_val_tasks=num_val_tasks,
-                    return_uncertainty=uncertainty_flag
-                )
-                with open(file='maml_{0:s}_{1:d}_{2:d}_accuracies.csv'.format(datasource, num_classes_per_task, num_training_samples_per_class), mode='w') as result_file:
-                    for acc, classes_in_task in zip(accs, all_task_names):
-                        row_str = ''
-                        for class_in_task in classes_in_task:
-                            row_str = '{0}{1},'.format(row_str, class_in_task)
-                        result_file.write('{0}{1}\n'.format(row_str, acc))
-            else:
-                corrects, probs = meta_validation(
-                    datasubset=test_set,
-                    num_val_tasks=num_val_tasks,
-                    return_uncertainty=uncertainty_flag
-                )
-                with open(file='maml_{0:s}_correct_prob.csv'.format(datasource), mode='w') as result_file:
-                    for correct, prob in zip(corrects, probs):
-                        result_file.write('{0}, {1}\n'.format(correct, prob))
-                        # print(correct, prob)
+            corrects, probs = meta_validation(
+                datasubset=test_set,
+                num_val_tasks=num_val_tasks,
+                return_uncertainty=uncertainty_flag
+            )
+            with open(file='maml_{0:s}_correct_prob.csv'.format(datasource), mode='w') as result_file:
+                for correct, prob in zip(corrects, probs):
+                    result_file.write('{0}, {1}\n'.format(correct, prob))
+                    # print(correct, prob)
     else:
         sys.exit('Unknown action')
 
@@ -366,11 +340,6 @@ def meta_train(params, amine=None):
     # How often should we save?
     num_epochs_save = 1000
 
-    if datasource == 'sine_line':
-        data_generator = DataGenerator(
-            num_samples=num_total_samples_per_class,
-            device=device
-        )
 
     for epoch in range(resume_epoch, resume_epoch + num_epochs):
         print(f"Starting epoch {epoch}")
@@ -400,15 +369,7 @@ def meta_train(params, amine=None):
         meta_loss_avg_save = [] # meta loss to save
 
         while (task_count < num_tasks_per_epoch):
-            if datasource == 'sine_line':
-                p_sine = params['p_sine']
-                x_t, y_t, x_v, y_v = get_task_sine_line_data(
-                    data_generator=data_generator,
-                    p_sine=p_sine,
-                    num_training_samples=num_training_samples_per_class,
-                    noise_flag=True
-                )
-            elif datasource == 'drp_chem':
+            if datasource == 'drp_chem':
                 x_t, y_t, x_v, y_v = x_train[task_count], y_train[task_count], x_val[task_count], y_val[task_count]
             else:
                 sys.exit('Unknown dataset')
@@ -563,93 +524,61 @@ def get_task_prediction(x_t, y_t, x_v, params, y_v=None):
 # This method is used for testing, we call it after we have trained a model using the 
 # methods above
 def meta_validation(datasubset, num_val_tasks, params, return_uncertainty=False):
-    if datasource == 'sine_line':
-        from scipy.special import erf
-        
-        x0 = torch.linspace(start=-5, end=5, steps=100, device=device).view(-1, 1)
+    accuracies = []
+    corrects = []
+    probability_pred = []
 
-        cal_avg = 0
+    total_validation_samples = (num_total_samples_per_class - num_training_samples_per_class)*num_classes_per_task
 
-        data_generator = DataGenerator(num_samples=num_training_samples_per_class, device=device)
-        for _ in range(num_val_tasks):
-            binary_flag = np.random.binomial(n=1, p=p_sine)
-            if (binary_flag == 0):
-                # generate sinusoidal data
-                x_t, y_t, amp, phase = data_generator.generate_sinusoidal_data(noise_flag=True)
-                y0 = amp*torch.sin(x0 + phase)
-            else:
-                # generate line data
-                x_t, y_t, slope, intercept = data_generator.generate_line_data(noise_flag=True)
-                y0 = slope*x0 + intercept
-            y0 = y0.view(1, -1).cpu().numpy()
-            
-            y_preds = get_task_prediction(x_t=x_t, y_t=y_t, x_v=x0)
-
-            y_preds_np = torch.squeeze(y_preds, dim=-1).detach().cpu().numpy()
-
-            # ground truth cdf
-            std = data_generator.noise_std
-            cal_temp = (1 + erf((y_preds_np - y0)/(np.sqrt(2)*std)))/2
-            cal_temp_avg = np.mean(a=cal_temp, axis=1)
-            cal_avg = cal_avg + cal_temp_avg
-        cal_avg = cal_avg / num_val_tasks
-        return cal_avg
+    if datasubset == 'train':
+        all_class_data = all_class_train
+        embedding_data = embedding_train
+    elif datasubset == 'val':
+        all_class_data = all_class_val
+        embedding_data = embedding_val
+    elif datasubset == 'test':
+        all_class_data = all_class_test
+        embedding_data = embedding_test
     else:
-        accuracies = []
-        corrects = []
-        probability_pred = []
+        sys.exit('Unknown datasubset for validation')
 
-        total_validation_samples = (num_total_samples_per_class - num_training_samples_per_class)*num_classes_per_task
-        
-        if datasubset == 'train':
-            all_class_data = all_class_train
-            embedding_data = embedding_train
-        elif datasubset == 'val':
-            all_class_data = all_class_val
-            embedding_data = embedding_val
-        elif datasubset == 'test':
-            all_class_data = all_class_test
-            embedding_data = embedding_test
-        else:
-            sys.exit('Unknown datasubset for validation')
-        
-        all_class_names = list(all_class_data.keys())
-        all_task_names = list(itertools.combinations(all_class_names, r=num_classes_per_task))
+    all_class_names = list(all_class_data.keys())
+    all_task_names = list(itertools.combinations(all_class_names, r=num_classes_per_task))
 
-        if train_flag:
-            random.shuffle(all_task_names)
+    if train_flag:
+        random.shuffle(all_task_names)
 
-        task_count = 0
-        for class_labels in all_task_names:
-            x_t, y_t, x_v, y_v = get_task_image_data(
-                all_class_data,
-                embedding_data,
-                class_labels,
-                num_total_samples_per_class,
-                num_training_samples_per_class,
-                device)
-            
-            y_pred_v = get_task_prediction(x_t, y_t, x_v, y_v=None)
-            y_pred = sm_loss(y_pred_v)
+    task_count = 0
+    for class_labels in all_task_names:
+        x_t, y_t, x_v, y_v = get_task_image_data(
+            all_class_data,
+            embedding_data,
+            class_labels,
+            num_total_samples_per_class,
+            num_training_samples_per_class,
+            device)
 
-            prob_pred, labels_pred = torch.max(input=y_pred, dim=1)
-            correct = (labels_pred == y_v)
-            corrects.extend(correct.detach().cpu().numpy())
+        y_pred_v = get_task_prediction(x_t, y_t, x_v, y_v=None)
+        y_pred = sm_loss(y_pred_v)
 
-            accuracy = torch.sum(correct, dim=0).item()/total_validation_samples
-            accuracies.append(accuracy)
+        prob_pred, labels_pred = torch.max(input=y_pred, dim=1)
+        correct = (labels_pred == y_v)
+        corrects.extend(correct.detach().cpu().numpy())
 
-            probability_pred.extend(prob_pred.detach().cpu().numpy())
+        accuracy = torch.sum(correct, dim=0).item()/total_validation_samples
+        accuracies.append(accuracy)
 
-            task_count += 1
-            if not train_flag:
-                print(task_count)
-            if task_count >= num_val_tasks:
-                break
-        if not return_uncertainty:
-            return accuracies, all_task_names
-        else:
-            return corrects, probability_pred
+        probability_pred.extend(prob_pred.detach().cpu().numpy())
+
+        task_count += 1
+        if not train_flag:
+            print(task_count)
+        if task_count >= num_val_tasks:
+            break
+    if not return_uncertainty:
+        return accuracies, all_task_names
+    else:
+        return corrects, probability_pred
 
 if __name__ == "__main__":
     main()
