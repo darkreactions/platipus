@@ -1,9 +1,4 @@
 '''
-
-python main.py --datasource=sine_line --k_shot=5 --n_way=1 --inner_lr=1e-3 --meta_lr=1e-3 --Lt=1 --Lv=10 --kl_reweight=0.0005 --num_epochs=25000 --resume_epoch=0 --verbose
-
-python main.py --datasource=sine_line --k_shot=5 --n_way=1 --inner_lr=1e-3 --meta_lr=1e-3 --pred_lr=1e-3 --Lt=1 --Lv=100 --kl_reweight=1 --num_epochs=1000 --resume_epoch=10000 --test
-
 run me to train cross validation:
 python main.py --datasource=drp_chem --k_shot=20 --n_way=2 --inner_lr=1e-3 --meta_lr=1e-3 --meta_batch_size=10 --Lt=1 --num_inner_updates=10 --Lv=10 --kl_reweight=.0001 --num_epochs=3000 --cross_validate --resume_epoch=0 --verbose --p_dropout_base=0.4
 
@@ -30,10 +25,8 @@ import os
 import sys
 
 import argparse
-from utils import get_task_sine_line_data
 from utils import load_chem_dataset
 from utils import load_chem_dataset_testing
-from data_generator import DataGenerator
 from FC_net import FCNet
 
 import matplotlib
@@ -44,9 +37,11 @@ from matplotlib import pyplot as plt
 # Set up the initial variables for running PLATIPUS
 def parse_args():
     parser = argparse.ArgumentParser(description='Setup variables for PLATIPUS.')
-    parser.add_argument('--datasource', type=str, default='sine_line', help='datasource to be used, sine_line or drp_chem')
+    parser.add_argument('--datasource', type=str, default='drp_chem',
+                        help='datasource to be used, defaults to drp_chem')
     parser.add_argument('--k_shot', type=int, default=1, help='Number of training samples per class')
-    parser.add_argument('--n_way', type=int, default=1, help='Number of classes per task, this is 2 for the chemistry data')
+    parser.add_argument('--n_way', type=int, default=1,
+                        help='Number of classes per task, this is 2 for the chemistry data')
     parser.add_argument('--resume_epoch', type=int, default=0, help='Epoch id to resume learning or perform testing')
 
     parser.add_argument('--train', dest='train_flag', action='store_true')
@@ -54,31 +49,34 @@ def parse_args():
     parser.set_defaults(train_flag=True)
 
     parser.add_argument('--inner_lr', type=float, default=1e-3, help='Learning rate for task-specific parameters')
-    parser.add_argument('--pred_lr', type=float, default=1e-1, help='Learning rate for task-specific parameters during prediction (rather than training)')
-    parser.add_argument('--num_inner_updates', type=int, default=5, help='Number of gradient updates for task-specific parameters')
+    parser.add_argument('--pred_lr', type=float, default=1e-1,
+                        help='Learning rate for task-specific parameters during prediction (rather than training)')
+    parser.add_argument('--num_inner_updates', type=int, default=5,
+                        help='Number of gradient updates for task-specific parameters')
     parser.add_argument('--meta_lr', type=float, default=1e-3, help='Learning rate of meta-parameters')
-    parser.add_argument('--meta_batch_size', type=int, default=25, help= 'Number of tasks sampled per outer loop')
+    parser.add_argument('--meta_batch_size', type=int, default=25, help='Number of tasks sampled per outer loop')
     parser.add_argument('--num_epochs', type=int, default=50000, help='How many outer loops are used to train')
 
-    parser.add_argument('--kl_reweight', type=float, default=1, help='Reweight factor of the KL divergence between variational posterior q and prior p')
+    parser.add_argument('--kl_reweight', type=float, default=1,
+                        help='Reweight factor of the KL divergence between variational posterior q and prior p')
 
-    parser.add_argument('--Lt', type=int, default=1, help='Number of ensemble networks to train task specific parameters')
+    parser.add_argument('--Lt', type=int, default=1,
+                        help='Number of ensemble networks to train task specific parameters')
     parser.add_argument('--Lv', type=int, default=1, help='Number of ensemble networks to validate meta-parameters')
 
     parser.add_argument('--p_dropout_base', type=float, default=0., help='Dropout rate for the base network')
-    parser.add_argument('--datasubset', type=str, default='sine', help='sine or line')
     parser.add_argument('--cross_validate', action='store_true')
 
     parser.add_argument('--verbose', action='store_true')
 
     args = parser.parse_args()
-    return args 
+    return args
+
 
 # Do all of the initialization that we need for the rest of the code to run...
 # It had a bunch of global variables before, so trying to use a parameters dictionary to circumvent that
 # without blowing up the number of parameters in each function
 def initialize():
-
     args = parse_args()
     params = {}
 
@@ -91,28 +89,28 @@ def initialize():
     if device.type == 'cuda' and args.verbose:
         print(torch.cuda.get_device_name(0))
         print('Memory Usage:')
-        print('Allocated:', round(torch.cuda.memory_allocated(0)/1024**3,1), 'GB')
-        print('Cached:   ', round(torch.cuda.memory_cached(0)/1024**3,1), 'GB')
+        print('Allocated:', round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1), 'GB')
+        print('Cached:   ', round(torch.cuda.memory_cached(0) / 1024 ** 3, 1), 'GB')
 
     params['device'] = device
-    params['gpu_id'] = gpu_id    
+    params['gpu_id'] = gpu_id
 
     # Set up PLATIPUS using user inputs
     params['train_flag'] = args.train_flag
     params['cross_validate'] = args.cross_validate
     # Set up the value of k in k-shot learning
     print(f'{args.k_shot}-shot')
-    params['num_training_samples_per_class'] = args.k_shot 
+    params['num_training_samples_per_class'] = args.k_shot
 
     # Total number of samples per class, need some extra for the outer loop update as well 
     if params['train_flag']:
-        params['num_total_samples_per_class'] = params['num_training_samples_per_class'] + 15 
+        params['num_total_samples_per_class'] = params['num_training_samples_per_class'] + 15
     else:
         params['num_total_samples_per_class'] = params['num_training_samples_per_class'] + 20
 
-    # n-way: 1 for the sine-line data and 2 for the chemistry data
+    # n-way: 2 for the chemistry data
     print(f'{args.n_way}-way')
-    params['num_classes_per_task'] = args.n_way 
+    params['num_classes_per_task'] = args.n_way
 
     # Initialize the datasource and learning rate
     print(f'Dataset = {args.datasource}')
@@ -128,7 +126,7 @@ def initialize():
     # Reducing this to 25 like in Finn et al.
     # Tells us how many tasks are per epoch and after how many tasks we should save the values of the losses
     params['num_tasks_per_epoch'] = args.meta_batch_size
-    params['num_tasks_save_loss'] = args.meta_batch_size 
+    params['num_tasks_save_loss'] = args.meta_batch_size
     params['num_epochs'] = args.num_epochs
 
     # How often should we save?
@@ -139,29 +137,15 @@ def initialize():
     print(f'Number of inner updates = {args.num_inner_updates}')
     params['num_inner_updates'] = args.num_inner_updates
 
-     # Dropout rate for the neural network
+    # Dropout rate for the neural network
     params['p_dropout_base'] = args.p_dropout_base
-    # Sine or line if we are dealing with the sine-line task
-    params['datasubset'] = args.datasubset
 
     # I think of L as how many models we sample in the inner update and K as how many models we sample in validation 
     print(f'L = {args.Lt}, K = {args.Lv}')
     params['L'] = args.Lt
     params['K'] = args.Lv
 
-    if params['datasource'] == 'sine_line':
-        net = FCNet(
-            dim_input=1,
-            dim_output=params['num_classes_per_task'],
-            num_hidden_units=(100, 100, 100),
-            device=device
-        )
-        # bernoulli probability to pick sine or (1-p_sine) for line
-        params['p_sine'] = 0.5
-        params['net'] = net 
-        params['loss_fn'] = torch.nn.MSELoss()
-
-    elif params['datasource'] == 'drp_chem':
+    if params['datasource'] == 'drp_chem':
 
         # TODO: This is hard coded, fix 
         params['num_total_samples_per_class'] = 40
@@ -171,55 +155,61 @@ def initialize():
 
             if params['cross_validate']:
 
-                training_batches, validation_batches, testing_batches, counts = load_chem_dataset(k_shot=20, meta_batch_size=args.meta_batch_size, num_batches=250, verbose=args.verbose)
+                training_batches, validation_batches, testing_batches, counts = load_chem_dataset(k_shot=20,
+                                                                                                  meta_batch_size=args.meta_batch_size,
+                                                                                                  num_batches=250,
+                                                                                                  verbose=args.verbose)
                 params['training_batches'] = training_batches
                 params['validation_batches'] = validation_batches
                 params['testing_batches'] = testing_batches
                 params['counts'] = counts
 
                 # Save for reproducibility
-                with open(os.path.join(".\\data","train_dump.pkl"), "wb") as f:
+                with open(os.path.join(".\\data", "train_dump.pkl"), "wb") as f:
                     pickle.dump(training_batches, f)
-                with open(os.path.join(".\\data","val_dump.pkl"), "wb") as f:
+                with open(os.path.join(".\\data", "val_dump.pkl"), "wb") as f:
                     pickle.dump(validation_batches, f)
-                with open(os.path.join(".\\data","test_dump.pkl"), "wb") as f:
+                with open(os.path.join(".\\data", "test_dump.pkl"), "wb") as f:
                     pickle.dump(testing_batches, f)
-                with open(os.path.join(".\\data","counts_dump.pkl"), "wb") as f:
+                with open(os.path.join(".\\data", "counts_dump.pkl"), "wb") as f:
                     pickle.dump(counts, f)
 
             else:
-                training_batches, testing_batches, counts = load_chem_dataset_testing(k_shot=20, meta_batch_size=args.meta_batch_size, num_batches=250, verbose=args.verbose)
+                training_batches, testing_batches, counts = load_chem_dataset_testing(k_shot=20,
+                                                                                      meta_batch_size=args.meta_batch_size,
+                                                                                      num_batches=250,
+                                                                                      verbose=args.verbose)
                 params['training_batches'] = training_batches
                 params['testing_batches'] = testing_batches
                 params['counts'] = counts
 
                 # Save for reproducibility
-                with open(os.path.join(".\\data","train_dump_nocv.pkl"), "wb") as f:
-                    pickle.dump({'training_data' : training_batches}, f)
-                with open(os.path.join(".\\data","test_dump_nocv.pkl"), "wb") as f:
+                with open(os.path.join(".\\data", "train_dump_nocv.pkl"), "wb") as f:
+                    pickle.dump({'training_data': training_batches}, f)
+                with open(os.path.join(".\\data", "test_dump_nocv.pkl"), "wb") as f:
                     pickle.dump(testing_batches, f)
-                with open(os.path.join(".\\data","counts_dump_nocv.pkl"), "wb") as f:
+                with open(os.path.join(".\\data", "counts_dump_nocv.pkl"), "wb") as f:
                     pickle.dump(counts, f)
 
 
         # Make sure we don't overwrite our batches if we are validating and testing
         else:
             if params['cross_validate']:
-                with open(os.path.join(".\\data","train_dump.pkl"), "rb") as f:
+                with open(os.path.join(".\\data", "train_dump.pkl"), "rb") as f:
                     params['training_batches'] = pickle.load(f)
-                with open(os.path.join(".\\data","val_dump.pkl"), "rb") as f:
+                with open(os.path.join(".\\data", "val_dump.pkl"), "rb") as f:
                     params['validation_batches'] = pickle.load(f)
-                with open(os.path.join(".\\data","test_dump.pkl"), "rb") as f:
+                with open(os.path.join(".\\data", "test_dump.pkl"), "rb") as f:
                     params['testing_batches'] = pickle.load(f)
-                with open(os.path.join(".\\data","counts_dump.pkl"), "rb") as f:
+                with open(os.path.join(".\\data", "counts_dump.pkl"), "rb") as f:
                     params['counts'] = pickle.load(f)
 
             else:
-                with open(os.path.join(".\\data","train_dump_nocv.pkl"), "rb") as f:
+                with open(os.path.join(".\\data", "train_dump_nocv.pkl"), "rb") as f:
                     params['training_batches'] = pickle.load(f)['training_data']
-                with open(os.path.join(".\\data","test_dump_nocv.pkl"), "rb") as f:
+                with open(os.path.join(".\\data", "test_dump_nocv.pkl"), "rb") as f:
                     params['testing_batches'] = pickle.load(f)
-                with open(os.path.join(".\\data","counts_dump_nocv.pkl"), "rb") as f:
+                with open(os.path.join(".\\data", "counts_dump_nocv.pkl"), "rb") as f:
                     params['counts'] = pickle.load(f)
 
         net = FCNet(
@@ -228,13 +218,13 @@ def initialize():
             num_hidden_units=(200, 100, 100),
             device=device
         )
-        params['net'] = net 
+        params['net'] = net
         # Try weighting positive reactions more heavily
         # Majority class label count/ class label count for each weight
         # See https://discuss.pytorch.org/t/what-is-the-weight-values-mean-in-torch-nn-crossentropyloss/11455/9
         # Do this again just in case we are loading weights
         counts = params['counts']
-        weights = [counts['total'][0]/counts['total'][0], counts['total'][0]/counts['total'][1]]
+        weights = [counts['total'][0] / counts['total'][0], counts['total'][0] / counts['total'][1]]
         class_weights = torch.tensor(weights, device=device)
         params['loss_fn'] = torch.nn.CrossEntropyLoss(class_weights)
         # Set up a softmax layer to handle losses later on 
@@ -309,11 +299,11 @@ def initialize():
             # Here we are loading a previously trained model
             print('Restore previous Theta...')
             print('Resume epoch {0:d}'.format(params['resume_epoch']))
-            checkpoint_filename = ('{0:s}_{1:d}way_{2:d}shot_{3:d}.pt')\
-                            .format(params['datasource'],
-                                    params['num_classes_per_task'],
-                                    params['num_training_samples_per_class'],
-                                    params['resume_epoch'])
+            checkpoint_filename = ('{0:s}_{1:d}way_{2:d}shot_{3:d}.pt') \
+                .format(params['datasource'],
+                        params['num_classes_per_task'],
+                        params['num_training_samples_per_class'],
+                        params['resume_epoch'])
             checkpoint_file = os.path.join(dst_folder, checkpoint_filename)
             print('Start to load weights from')
             print('{0:s}'.format(checkpoint_file))
@@ -321,13 +311,13 @@ def initialize():
                 saved_checkpoint = torch.load(
                     checkpoint_file,
                     map_location=lambda storage,
-                    loc: storage.cuda(gpu_id)
+                                        loc: storage.cuda(gpu_id)
                 )
             else:
                 saved_checkpoint = torch.load(
                     checkpoint_file,
                     map_location=lambda storage,
-                    loc: storage
+                                        loc: storage
                 )
 
             Theta = saved_checkpoint['Theta']
@@ -335,7 +325,7 @@ def initialize():
     if not params['cross_validate'] or params['train_flag']:
         params['Theta'] = Theta
 
-    if not params['cross_validate'] or params['train_flag']:   
+    if not params['cross_validate'] or params['train_flag']:
         # Now we need to set up the optimizer for Theta, PyTorch makes this very easy for us, phew.
         op_Theta = torch.optim.Adam(
             [
@@ -368,6 +358,7 @@ def initialize():
 
     print()
     return params
+
 
 # Use this for cross validation, we need to set up a new loss function too
 def reinitialize_model_params(params):
@@ -422,17 +413,14 @@ def reinitialize_model_params(params):
     )
     params['op_Theta'] = op_Theta
 
+
 # Main driver code
 def main():
-
-    # Do the massive initialization and get back a dictionary instead of using 
-    # global variables
+    # Do the massive initialization and get back a dictionary instead of using global variables
     params = initialize()
 
     if params['train_flag']:
-        if params['datasource'] == 'sine_line':
-            meta_train(params)
-        elif params['datasource'] == 'drp_chem':
+        if params['datasource'] == 'drp_chem':
             if params['cross_validate']:
                 # TODO: This is going to be insanely nasty, basically reinitialize for each amine
                 for amine in params['training_batches']:
@@ -458,9 +446,9 @@ def main():
                     # Adjust the loss function for each amine
                     amine_counts = params['counts'][amine]
                     if amine_counts[0] >= amine_counts[1]:
-                        weights = [amine_counts[0]/amine_counts[0], amine_counts[0]/amine_counts[1]]
+                        weights = [amine_counts[0] / amine_counts[0], amine_counts[0] / amine_counts[1]]
                     else:
-                         weights = [amine_counts[1]/amine_counts[0], amine_counts[1]/amine_counts[1]]   
+                        weights = [amine_counts[1] / amine_counts[0], amine_counts[1] / amine_counts[1]]
 
                     print('Using the following weights for loss function:', weights)
                     class_weights = torch.tensor(weights, device=params['device'])
@@ -473,92 +461,7 @@ def main():
                 meta_train(params)
 
     elif params['resume_epoch'] > 0:
-        if params['datasource'] == 'sine_line':   
-            # # Start by unpacking any necessary parameters
-            # device = params['device']
-            # gpu_id = params['gpu_id']
-            # num_training_samples_per_class = params['num_training_samples_per_class']
-            # num_classes_per_task = params['num_classes_per_task']
-            # # Assume root directory is current directory
-            # dst_folder_root = '.'
-            # num_epochs_save = params['num_epochs_save']
-            # x0 = torch.linspace(start=-5, end=5, steps=100, device=device).view(-1, 1)
-
-            # matplotlib.rcParams['xtick.labelsize'] = 16
-            # matplotlib.rcParams['ytick.labelsize'] = 16
-            # matplotlib.rcParams['axes.labelsize'] = 18
-
-            # num_stds = 2
-            # data_generator = DataGenerator(
-            #     num_samples=num_training_samples_per_class,
-            #     device=device
-            # )
-            # if params['datasubset'] == 'sine':
-            #     x_t, y_t, amp, phase = data_generator.generate_sinusoidal_data(noise_flag=True)
-            #     y0 = amp*torch.sin(x0 + phase)
-            # else:
-            #     x_t, y_t, slope, intercept = data_generator.generate_line_data(noise_flag=True)
-            #     y0 = slope*x0 + intercept
-
-            # # These are the PLATIPUS predictions
-            # y_preds = get_task_prediction(x_t=x_t, y_t=y_t, x_v=x0, params=params)
-
-            # # Load MAML data for comparison
-            # # This requires that we already trained a MAML model, see maml.py
-            # maml_folder = '{0:s}/MAML_sine_line_1way_5shot'.format(dst_folder_root)
-            # maml_filename = 'sine_line_{0:d}way_{1:d}shot_{2:s}.pt'.format(num_classes_per_task, num_training_samples_per_class, '{0:d}')
-
-            # # Try to find the model that was training for the most epochs
-            # # If you get an error here, your MAML model was not saved at epochs of increment num_epochs_save
-            # # By default that value is 1000 and is set in initialize()
-            # i = num_epochs_save
-            # maml_checkpoint_filename = os.path.join(maml_folder, maml_filename.format(i))
-            # while(os.path.exists(maml_checkpoint_filename)):
-            #     i = i + num_epochs_save
-            #     maml_checkpoint_filename = os.path.join(maml_folder, maml_filename.format(i))
-
-            # # We overshoot by one increment of num_epochs_save, so need to subtract
-            # maml_checkpoint = torch.load(
-            #     os.path.join(maml_folder, maml_filename.format(i - num_epochs_save)),
-            #     map_location=lambda storage,
-            #     loc: storage.cuda(gpu_id)
-            # )
-
-            # # In the MAML model it is lower-case theta
-            # # We obtain the MAML model's predictions here
-            # Theta_maml = maml_checkpoint['theta']
-            # y_pred_maml = get_task_prediction_maml(x_t=x_t, y_t=y_t, x_v=x0, meta_params=Theta_maml, params=params)
-
-            # # Now plot the results
-            # # For PLATIPUS plot a range using the standard deviation across the K models
-            # # Need to call torch.stack for this to work properly
-            # _, ax = plt.subplots(figsize=(5, 5))
-            # y_top = torch.squeeze(torch.mean(torch.stack(y_preds), dim=0) + num_stds*torch.std(torch.stack(y_preds), dim=0))
-            # y_bottom = torch.squeeze(torch.mean(torch.stack(y_preds), dim=0) - num_stds*torch.std(torch.stack(y_preds), dim=0))
-
-            # ax.fill_between(
-            #     x=torch.squeeze(x0).cpu().numpy(),
-            #     y1=y_bottom.cpu().detach().numpy(),
-            #     y2=y_top.cpu().detach().numpy(),
-            #     alpha=0.25,
-            #     color='m',
-            #     zorder=0,
-            #     label='PLATIPUS'
-            # )
-            # ax.plot(x0.cpu().numpy(), y0.cpu().numpy(), color='C7', linestyle='-', linewidth=3, zorder=1, label='Ground truth')
-            # ax.plot(x0.cpu().numpy(), y_pred_maml.cpu().detach().numpy(), color='b', linestyle='--', linewidth=3, zorder=2, label='MAML')
-            # ax.scatter(x=x_t.cpu().numpy(), y=y_t.cpu().numpy(), color='C0', marker='^', s=300, zorder=3, label='Data')
-            # plt.xticks([-5, -2.5, 0, 2.5, 5])
-            # plt.xlabel('x-values')
-            # plt.ylabel('y-values')
-            # plt.legend(loc='best')
-            # plt.savefig(fname='img/mixed_sine_temp.png', format='png')
-            # plt.show()
-
-
-            test_model_actively(params)
-
-        elif params['datasource'] == 'drp_chem' and params['cross_validate']:
+        if params['datasource'] == 'drp_chem' and params['cross_validate']:
             # I am saving this dictionary in case things go wrong
             # It will get added to in the active learning code
             stats_dict = {}
@@ -590,11 +493,11 @@ def main():
                 # Here we are loading a previously trained model
                 print('Restore previous Theta...')
                 print('Resume epoch {0:d}'.format(params['resume_epoch']))
-                checkpoint_filename = ('{0:s}_{1:d}way_{2:d}shot_{3:d}.pt')\
-                                .format(params['datasource'],
-                                        params['num_classes_per_task'],
-                                        params['num_training_samples_per_class'],
-                                        params['resume_epoch'])
+                checkpoint_filename = ('{0:s}_{1:d}way_{2:d}shot_{3:d}.pt') \
+                    .format(params['datasource'],
+                            params['num_classes_per_task'],
+                            params['num_training_samples_per_class'],
+                            params['resume_epoch'])
                 checkpoint_file = os.path.join(dst_folder, checkpoint_filename)
                 print('Start to load weights from')
                 print('{0:s}'.format(checkpoint_file))
@@ -602,13 +505,13 @@ def main():
                     saved_checkpoint = torch.load(
                         checkpoint_file,
                         map_location=lambda storage,
-                        loc: storage.cuda(params['gpu_id'])
+                                            loc: storage.cuda(params['gpu_id'])
                     )
                 else:
                     saved_checkpoint = torch.load(
                         checkpoint_file,
                         map_location=lambda storage,
-                        loc: storage
+                                            loc: storage
                     )
 
                 Theta = saved_checkpoint['Theta']
@@ -617,19 +520,20 @@ def main():
                 # Adjust the loss function for each amine
                 amine_counts = params['counts'][amine]
                 if amine_counts[0] >= amine_counts[1]:
-                    weights = [amine_counts[0]/amine_counts[0], amine_counts[0]/amine_counts[1]]
+                    weights = [amine_counts[0] / amine_counts[0], amine_counts[0] / amine_counts[1]]
                 else:
-                    weights = [amine_counts[1]/amine_counts[0], amine_counts[1]/amine_counts[1]]   
+                    weights = [amine_counts[1] / amine_counts[0], amine_counts[1] / amine_counts[1]]
                 print('Using the following weights for loss function:', weights)
                 class_weights = torch.tensor(weights, device=params['device'])
                 params['loss_fn'] = torch.nn.CrossEntropyLoss(class_weights)
 
-
-                # Run forward pass on the validation data 
+                # Run forward pass on the validation data
                 validation_batches = params['validation_batches']
                 val_batch = validation_batches[amine]
-                x_t, y_t, x_v, y_v = torch.from_numpy(val_batch[0]).float().to(params['device']), torch.from_numpy(val_batch[1]).long().to(params['device']), \
-                    torch.from_numpy(val_batch[2]).float().to(params['device']), torch.from_numpy(val_batch[3]).long().to(params['device'])
+                x_t, y_t, x_v, y_v = torch.from_numpy(val_batch[0]).float().to(params['device']), torch.from_numpy(
+                    val_batch[1]).long().to(params['device']), \
+                                     torch.from_numpy(val_batch[2]).float().to(params['device']), torch.from_numpy(
+                    val_batch[3]).long().to(params['device'])
 
                 accuracies = []
                 corrects = []
@@ -661,10 +565,10 @@ def main():
                 test_model_actively(params, amine)
 
             # Save this dictionary in case we need it later
-            with open(os.path.join(".\\data","cv_statistics.pkl"), "wb") as f:
+            with open(os.path.join(".\\data", "cv_statistics.pkl"), "wb") as f:
                 pickle.dump(params['cv_statistics'], f)
 
-            with open(os.path.join(".\\data","cv_statistics.pkl"), "rb") as f:
+            with open(os.path.join(".\\data", "cv_statistics.pkl"), "rb") as f:
                 params['cv_statistics'] = pickle.load(f)
             # Now plot the big graph
             stats_dict = params['cv_statistics']
@@ -696,7 +600,7 @@ def main():
             MAML_average_recalls = []
             MAML_average_bcrs = []
 
-            num_examples = []       
+            num_examples = []
 
             print('Minimum length is', min_length)
             for i in range(min_length):
@@ -745,7 +649,6 @@ def main():
                     total += bcr_list_maml[i]
                 MAML_average_bcrs.append(total / len(stats_dict['balanced_classification_rates_MAML']))
 
-
             fig = plt.figure()
             plt.subplot(2, 2, 1)
             plt.ylabel('Accuracy')
@@ -777,7 +680,7 @@ def main():
             plt.plot(num_examples, MAML_average_bcrs, 'bo-', label='MAML')
             plt.legend()
 
-            fig.text(0.5,0.04, "Number of samples given", ha="center", va="center")
+            fig.text(0.5, 0.04, "Number of samples given", ha="center", va="center")
             plt.show()
 
         # TEST CODE, SHOULD NOT BE RUN
@@ -787,8 +690,10 @@ def main():
             for amine in test_batches:
                 print("Checking for amine", amine)
                 val_batch = test_batches[amine]
-                x_t, y_t, x_v, y_v = torch.from_numpy(val_batch[0]).float().to(params['device']), torch.from_numpy(val_batch[1]).long().to(params['device']), \
-                    torch.from_numpy(val_batch[2]).float().to(params['device']), torch.from_numpy(val_batch[3]).long().to(params['device'])
+                x_t, y_t, x_v, y_v = torch.from_numpy(val_batch[0]).float().to(params['device']), torch.from_numpy(
+                    val_batch[1]).long().to(params['device']), \
+                                     torch.from_numpy(val_batch[2]).float().to(params['device']), torch.from_numpy(
+                    val_batch[3]).long().to(params['device'])
 
                 accuracies = []
                 corrects = []
@@ -822,6 +727,7 @@ def main():
     else:
         sys.exit('Unknown action')
 
+
 # Run the actual meta training for PLATIPUS
 # Lots of cool stuff happening in this function
 def meta_train(params, amine=None):
@@ -846,12 +752,6 @@ def meta_train(params, amine=None):
     # How often should we do a printout?
     num_meta_updates_print = 1
 
-    if datasource == 'sine_line':
-        data_generator = DataGenerator(
-            num_samples=num_total_samples_per_class,
-            device=device
-        )
-
     for epoch in range(resume_epoch, resume_epoch + num_epochs):
         print(f"Starting epoch {epoch}")
 
@@ -864,42 +764,36 @@ def meta_train(params, amine=None):
             else:
                 b_num = np.random.choice(len(training_batches))
                 batch = training_batches[b_num]
-            x_train, y_train, x_val, y_val = torch.from_numpy(batch[0]).float().to(params['device']), torch.from_numpy(batch[1]).long().to(params['device']), \
-                torch.from_numpy(batch[2]).float().to(params['device']), torch.from_numpy(batch[3]).long().to(params['device'])
+            x_train, y_train, x_val, y_val = torch.from_numpy(batch[0]).float().to(params['device']), torch.from_numpy(
+                batch[1]).long().to(params['device']), \
+                                             torch.from_numpy(batch[2]).float().to(params['device']), torch.from_numpy(
+                batch[3]).long().to(params['device'])
         # variables used to store information of each epoch for monitoring purpose
-        meta_loss_saved = [] # meta loss to save
+        meta_loss_saved = []  # meta loss to save
         kl_loss_saved = []
         val_accuracies = []
         train_accuracies = []
 
-        meta_loss = 0 # accumulate the loss of many ensambling networks to descent gradient for meta update
+        meta_loss = 0  # accumulate the loss of many ensambling networks to descent gradient for meta update
         num_meta_updates_count = 0
 
-        meta_loss_avg_print = 0 # compute loss average to print
+        meta_loss_avg_print = 0  # compute loss average to print
 
         kl_loss = 0
         kl_loss_avg_print = 0
 
-        meta_loss_avg_save = [] # meta loss to save
+        meta_loss_avg_save = []  # meta loss to save
         kl_loss_avg_save = []
 
-        task_count = 0 # a counter to decide when a minibatch of task is completed to perform meta update
+        task_count = 0  # a counter to decide when a minibatch of task is completed to perform meta update
 
         # Treat batches as tasks for the chemistry data
-        while (task_count < num_tasks_per_epoch):
-            if datasource == 'sine_line':
-                p_sine = params['p_sine']
-                x_t, y_t, x_v, y_v = get_task_sine_line_data(
-                    data_generator=data_generator,
-                    p_sine=p_sine,
-                    num_training_samples=num_training_samples_per_class,
-                    noise_flag=True
-                )
-            elif datasource == 'drp_chem':
+        while task_count < num_tasks_per_epoch:
+            if datasource == 'drp_chem':
                 x_t, y_t, x_v, y_v = x_train[task_count], y_train[task_count], x_val[task_count], y_val[task_count]
             else:
                 sys.exit('Unknown dataset')
-            
+
             loss_i, KL_q_p = get_training_loss(x_t, y_t, x_v, y_v, params)
             KL_q_p = KL_q_p * KL_reweight
 
@@ -913,7 +807,7 @@ def meta_train(params, amine=None):
             task_count = task_count + 1
 
             if task_count % num_tasks_per_epoch == 0:
-                meta_loss = meta_loss/num_tasks_per_epoch
+                meta_loss = meta_loss / num_tasks_per_epoch
                 kl_loss /= num_tasks_per_epoch
 
                 # accumulate into different variables for printing purpose
@@ -935,8 +829,8 @@ def meta_train(params, amine=None):
                 # Printing losses
                 num_meta_updates_count += 1
                 if (num_meta_updates_count % num_meta_updates_print == 0):
-                    meta_loss_avg_save.append(meta_loss_avg_print/num_meta_updates_count)
-                    kl_loss_avg_save.append(kl_loss_avg_print/num_meta_updates_count)
+                    meta_loss_avg_save.append(meta_loss_avg_print / num_meta_updates_count)
+                    kl_loss_avg_save.append(kl_loss_avg_print / num_meta_updates_count)
                     print('{0:d}, {1:2.4f}, {2:2.4f}'.format(
                         task_count,
                         meta_loss_avg_save[-1],
@@ -946,19 +840,19 @@ def meta_train(params, amine=None):
                     num_meta_updates_count = 0
                     meta_loss_avg_print = 0
                     kl_loss_avg_print = 0
-                
+
                 if (task_count % num_tasks_save_loss == 0):
                     meta_loss_saved.append(np.mean(meta_loss_avg_save))
                     kl_loss_saved.append(np.mean(kl_loss_avg_save))
 
                     meta_loss_avg_save = []
                     kl_loss_avg_save = []
-                
+
                 # reset meta loss
                 meta_loss = 0
                 kl_loss = 0
 
-        if ((epoch + 1)% num_epochs_save == 0):
+        if ((epoch + 1) % num_epochs_save == 0):
             checkpoint = {
                 'Theta': Theta,
                 'kl_loss': kl_loss_saved,
@@ -969,15 +863,16 @@ def meta_train(params, amine=None):
             }
             print('SAVING WEIGHTS...')
 
-            checkpoint_filename = ('{0:s}_{1:d}way_{2:d}shot_{3:d}.pt')\
-                        .format(datasource,
-                                num_classes_per_task,
-                                num_training_samples_per_class,
-                                epoch + 1)
+            checkpoint_filename = ('{0:s}_{1:d}way_{2:d}shot_{3:d}.pt') \
+                .format(datasource,
+                        num_classes_per_task,
+                        num_training_samples_per_class,
+                        epoch + 1)
             print(checkpoint_filename)
             dst_folder = params['dst_folder']
             torch.save(checkpoint, os.path.join(dst_folder, checkpoint_filename))
         print()
+
 
 def test_model_actively(params, amine=None):
     # Start by unpacking any necessary parameters
@@ -989,170 +884,7 @@ def test_model_actively(params, amine=None):
     dst_folder_root = '.'
     num_epochs_save = params['num_epochs_save']
 
-
-    if params['datasource'] == 'sine_line':
-        x0 = torch.linspace(start=-5, end=5, steps=100, device=device).view(-1, 1)
-
-        matplotlib.rcParams['xtick.labelsize'] = 16
-        matplotlib.rcParams['ytick.labelsize'] = 16
-        matplotlib.rcParams['axes.labelsize'] = 18
-
-        num_stds = 2
-        data_generator = DataGenerator(
-            num_samples=num_training_samples_per_class,
-            device=device
-        )
-        if params['datasubset'] == 'sine':
-            x_t, y_t, amp, phase = data_generator.generate_sinusoidal_data(noise_flag=False)
-            y0 = amp*torch.sin(x0 + phase)
-        else:
-            x_t, y_t, slope, intercept = data_generator.generate_line_data(noise_flag=False)
-            y0 = slope*x0 + intercept
-
-        # Load MAML data for comparison
-        # This requires that we already trained a MAML model, see maml.py
-        maml_folder = '{0:s}/MAML_sine_line_1way_5shot'.format(dst_folder_root)
-        maml_filename = 'sine_line_{0:d}way_{1:d}shot_{2:s}.pt'.format(num_classes_per_task, num_training_samples_per_class, '{0:d}')
-
-        # Try to find the model that was training for the most epochs
-        # If you get an error here, your MAML model was not saved at epochs of increment num_epochs_save
-        # By default that value is 1000 and is set in initialize()
-        i = num_epochs_save
-        maml_checkpoint_filename = os.path.join(maml_folder, maml_filename.format(i))
-        while(os.path.exists(maml_checkpoint_filename)):
-            i = i + num_epochs_save
-            maml_checkpoint_filename = os.path.join(maml_folder, maml_filename.format(i))
-
-        # We overshoot by one increment of num_epochs_save, so need to subtract
-        maml_checkpoint = torch.load(
-            os.path.join(maml_folder, maml_filename.format(i - num_epochs_save)),
-            map_location=lambda storage,
-            loc: storage.cuda(gpu_id)
-        )
-
-        # Store a copy of the training data for MAML
-        x_t_maml = copy.deepcopy(x_t)
-        y_t_maml = copy.deepcopy(y_t)
-
-        # These are the PLATIPUS predictions
-        y_preds_base = get_task_prediction(x_t=x_t, y_t=y_t, x_v=x0, params=params)
-
-        # In the MAML model it is lower-case theta
-        # We obtain the MAML model's predictions here
-        Theta_maml = maml_checkpoint['theta']
-        y_pred_maml_base = get_task_prediction_maml(x_t=x_t, y_t=y_t, x_v=x0, meta_params=Theta_maml, params=params)
-
-        # Now plot the base results
-        # For PLATIPUS plot a range using the standard deviation across the K models
-        # Need to call torch.stack for this to work properly
-        _, ax = plt.subplots(figsize=(5, 5))
-        y_top = torch.squeeze(torch.mean(torch.stack(y_preds_base), dim=0) + num_stds*torch.std(torch.stack(y_preds_base), dim=0))
-        y_bottom = torch.squeeze(torch.mean(torch.stack(y_preds_base), dim=0) - num_stds*torch.std(torch.stack(y_preds_base), dim=0))
-
-        ax.fill_between(
-            x=torch.squeeze(x0).cpu().numpy(),
-            y1=y_bottom.cpu().detach().numpy(),
-            y2=y_top.cpu().detach().numpy(),
-            alpha=0.25,
-            color='m',
-            zorder=0,
-            label='PLATIPUS'
-        )
-        ax.plot(x0.cpu().numpy(), y0.cpu().numpy(), color='C7', linestyle='-', linewidth=3, zorder=1, label='Ground truth')
-        ax.plot(x0.cpu().numpy(), y_pred_maml_base.cpu().detach().numpy(), color='b', linestyle='--', linewidth=3, zorder=2, label='MAML')
-        ax.scatter(x=x_t.cpu().numpy(), y=y_t.cpu().numpy(), color='C0', marker='^', s=300, zorder=3, label='Data')
-        plt.xticks([-5, -2.5, 0, 2.5, 5])
-        plt.xlabel('x-values')
-        plt.ylabel('y-values')
-        plt.legend(loc='best')
-        plt.savefig(fname='img/before_loop.png', format='png')
-        plt.show()
-
-
-        iters = 5
-        mse_losses = []
-        x_axis = [i for i in range(iters + 1)]
-
-
-        for i in range(iters + 1):
-            print(f'Doing active learning with {i} examples')
-            preds = get_task_prediction(x_t, y_t, x0, params)
-            all_outputs = torch.stack(preds)
-            y_stds = torch.std(all_outputs, dim=0)
-            y_means = torch.mean(all_outputs, dim=0)
-
-            # print('Mean predictions', y_means)
-            # print('Standard deviations', y_stds)  
-            mse_loss = params['loss_fn'](y_means, y0)
-            mse_losses.append(mse_loss)
-
-            if i != iters:
-                value, index = y_stds.max(0)
-                print(f'Highest standard deviation of {value} at index {index}')
-                print(x_t)
-                # Add to the training data 
-                x_t = torch.cat((x_t, x0[index].view(1, 1)))
-                y_t = torch.cat((y_t, y0[index].view(1, 1)))         
-                print('length of x_t is now', len(x_t))
-
-        mse_losses_maml = []
-        used = []
-        # MAML chooses random points
-        for i in range(iters + 1):
-            y_pred_maml = get_task_prediction_maml(x_t=x_t_maml, y_t=y_t_maml, x_v=x0, meta_params=Theta_maml, params=params)
-            mse_loss = params['loss_fn'](y_pred_maml, y0)
-            mse_losses_maml.append(mse_loss)
-
-            if i != iters:
-                print(f'Selecting random point number {i} for MAML')
-                index = np.random.choice(len(x0))
-                # Don't give the same point more than once
-                while index in used:
-                    index = np.random.choice(len(x0))  
-                used.append(index)       
-
-                # Add to the training data 
-                x_t_maml = torch.cat((x_t_maml, x0[index].view(1, 1)))
-                y_t_maml = torch.cat((y_t_maml, y0[index].view(1, 1)))         
-
-        # Now plot the results updated
-        y_preds = get_task_prediction(x_t=x_t, y_t=y_t, x_v=x0, params=params)
-        y_pred_maml = get_task_prediction_maml(x_t=x_t_maml, y_t=y_t_maml, x_v=x0, meta_params=Theta_maml, params=params)
-
-        _, ax = plt.subplots(figsize=(5, 5))
-        y_top = torch.squeeze(torch.mean(torch.stack(y_preds), dim=0) + num_stds*torch.std(torch.stack(y_preds), dim=0))
-        y_bottom = torch.squeeze(torch.mean(torch.stack(y_preds), dim=0) - num_stds*torch.std(torch.stack(y_preds), dim=0))
-
-        ax.fill_between(
-            x=torch.squeeze(x0).cpu().numpy(),
-            y1=y_bottom.cpu().detach().numpy(),
-            y2=y_top.cpu().detach().numpy(),
-            alpha=0.25,
-            color='m',
-            zorder=0,
-            label='PLATIPUS'
-        )
-        ax.plot(x0.cpu().numpy(), y0.cpu().numpy(), color='C7', linestyle='-', linewidth=3, zorder=1, label='Ground truth')
-        ax.plot(x0.cpu().numpy(), y_pred_maml.cpu().detach().numpy(), color='b', linestyle='--', linewidth=3, zorder=2, label='MAML')
-        ax.scatter(x=x_t.cpu().numpy(), y=y_t.cpu().numpy(), color='C0', marker='^', s=300, zorder=3, label='Data')
-        plt.xticks([-5, -2.5, 0, 2.5, 5])
-        plt.legend(loc='best')
-        plt.xlabel('x-values')
-        plt.ylabel('y-values')
-        plt.savefig(fname='img/after_loop.png', format='png')
-        plt.show()
-
-        plt.ylabel('Mean squared error')
-        plt.xlabel('Additional points given')
-        plt.title(f'Active Learning Comparison for Sine/Line')
-        plt.plot(x_axis, mse_losses, 'ro-', label='PLATIPUS')
-        plt.plot(x_axis, mse_losses_maml, 'bo-', label='MAML')
-        plt.legend()
-        plt.savefig(fname='img/mse_comparison.png', format='png')
-        plt.show()
-
-
-    # Then we are running for a specific amine
+    # Running for a specific amine
     if params['cross_validate']:
         dst_folder_root = '.'
         sm_loss = params['sm_loss']
@@ -1160,20 +892,21 @@ def test_model_actively(params, amine=None):
         # Load MAML data for comparison
         # This requires that we already trained a MAML model, see maml.py
         maml_folder = '{0:s}/MAML_few_shot/MAML_{1:s}_{2:d}way_{3:d}shot_{4:s}'.format(
-                        dst_folder_root,
-                        params['datasource'],
-                        params['num_classes_per_task'],
-                        params['num_training_samples_per_class'],
-                        amine
-                    )
-        maml_filename = 'drp_chem_{0:d}way_{1:d}shot_{2:s}.pt'.format(num_classes_per_task, num_training_samples_per_class, '{0:d}')
+            dst_folder_root,
+            params['datasource'],
+            params['num_classes_per_task'],
+            params['num_training_samples_per_class'],
+            amine
+        )
+        maml_filename = 'drp_chem_{0:d}way_{1:d}shot_{2:s}.pt'.format(num_classes_per_task,
+                                                                      num_training_samples_per_class, '{0:d}')
 
         # Try to find the model that was training for the most epochs
         # If you get an error here, your MAML model was not saved at epochs of increment num_epochs_save
         # By default that value is 1000 and is set in initialize()
         i = num_epochs_save
         maml_checkpoint_filename = os.path.join(maml_folder, maml_filename.format(i))
-        while(os.path.exists(maml_checkpoint_filename)):
+        while (os.path.exists(maml_checkpoint_filename)):
             i = i + num_epochs_save
             maml_checkpoint_filename = os.path.join(maml_folder, maml_filename.format(i))
 
@@ -1183,16 +916,17 @@ def test_model_actively(params, amine=None):
         maml_checkpoint = torch.load(
             os.path.join(maml_folder, maml_filename.format(i - num_epochs_save)),
             map_location=lambda storage,
-            loc: storage.cuda(gpu_id)
+                                loc: storage.cuda(gpu_id)
         )
 
         Theta_maml = maml_checkpoint['theta']
 
         validation_batches = params['validation_batches']
         val_batch = validation_batches[amine]
-        x_t, y_t, x_v, y_v = torch.from_numpy(val_batch[0]).float().to(params['device']), torch.from_numpy(val_batch[1]).long().to(params['device']), \
-            torch.from_numpy(val_batch[2]).float().to(params['device']), torch.from_numpy(val_batch[3]).long().to(params['device'])
-    
+        x_t, y_t, x_v, y_v = torch.from_numpy(val_batch[0]).float().to(params['device']), torch.from_numpy(
+            val_batch[1]).long().to(params['device']), \
+                             torch.from_numpy(val_batch[2]).float().to(params['device']), torch.from_numpy(
+            val_batch[3]).long().to(params['device'])
 
         all_labels = torch.cat((y_t, y_v))
         all_data = torch.cat((x_t, x_v))
@@ -1277,10 +1011,10 @@ def test_model_actively(params, amine=None):
             print(f'Minimum confidence {value}')
             # Add to the training data 
             x_t = torch.cat((x_t, x_v[index].view(1, 51)))
-            y_t = torch.cat((y_t, y_v[index].view(1)))         
+            y_t = torch.cat((y_t, y_v[index].view(1)))
             # Remove from pool, there is probably a less clunky way to do this
-            x_v = torch.cat([x_v[0:index], x_v[index+1:]])
-            y_v = torch.cat([y_v[0:index], y_v[index+1:]])
+            x_v = torch.cat([x_v[0:index], x_v[index + 1:]])
+            y_v = torch.cat([y_v[0:index], y_v[index + 1:]])
             print('length of x_v is now', len(x_v))
 
             cm = confusion_matrix(all_labels.detach().cpu().numpy(), labels_pred.detach().cpu().numpy())
@@ -1304,9 +1038,10 @@ def test_model_actively(params, amine=None):
         # Start by resetting the data
         validation_batches = params['validation_batches']
         val_batch = validation_batches[amine]
-        x_t, y_t, x_v, y_v = torch.from_numpy(val_batch[0]).float().to(params['device']), torch.from_numpy(val_batch[1]).long().to(params['device']), \
-            torch.from_numpy(val_batch[2]).float().to(params['device']), torch.from_numpy(val_batch[3]).long().to(params['device'])
-
+        x_t, y_t, x_v, y_v = torch.from_numpy(val_batch[0]).float().to(params['device']), torch.from_numpy(
+            val_batch[1]).long().to(params['device']), \
+                             torch.from_numpy(val_batch[2]).float().to(params['device']), torch.from_numpy(
+            val_batch[3]).long().to(params['device'])
 
         accuracies_MAML = []
         corrects_MAML = []
@@ -1368,10 +1103,10 @@ def test_model_actively(params, amine=None):
             index = np.random.choice(len(x_v))
             # Add to the training data 
             x_t = torch.cat((x_t, x_v[index].view(1, 51)))
-            y_t = torch.cat((y_t, y_v[index].view(1)))         
+            y_t = torch.cat((y_t, y_v[index].view(1)))
             # Remove from pool, there is probably a less clunky way to do this
-            x_v = torch.cat([x_v[0:index], x_v[index+1:]])
-            y_v = torch.cat([y_v[0:index], y_v[index+1:]])
+            x_v = torch.cat([x_v[0:index], x_v[index + 1:]])
+            y_v = torch.cat([y_v[0:index], y_v[index + 1:]])
             print('length of x_v is now', len(x_v))
 
             cm = confusion_matrix(all_labels.detach().cpu().numpy(), labels_pred.detach().cpu().numpy())
@@ -1389,8 +1124,8 @@ def test_model_actively(params, amine=None):
 
             precisions_MAML.append(precision)
             recalls_MAML.append(recall)
-            balanced_classification_rates_MAML.append(bcr) 
-        
+            balanced_classification_rates_MAML.append(bcr)
+
         fig = plt.figure()
         plt.subplot(2, 2, 1)
         plt.ylabel('Accuracy')
@@ -1420,27 +1155,29 @@ def test_model_actively(params, amine=None):
         plt.plot(num_examples, balanced_classification_rates_MAML, 'bo-', label='MAML')
         plt.legend()
 
-        fig.text(0.5,0.04, "Number of samples given", ha="center", va="center")
+        fig.text(0.5, 0.04, "Number of samples given", ha="center", va="center")
         plt.show()
 
         params['cv_statistics']['accuracies'].append(accuracies)
-        params['cv_statistics']['confusion_matrices'].append(confusion_matrices)  
+        params['cv_statistics']['confusion_matrices'].append(confusion_matrices)
         params['cv_statistics']['precisions'].append(precisions)
-        params['cv_statistics']['recalls'].append(recalls)  
-        params['cv_statistics']['balanced_classification_rates'].append(balanced_classification_rates)  
+        params['cv_statistics']['recalls'].append(recalls)
+        params['cv_statistics']['balanced_classification_rates'].append(balanced_classification_rates)
         params['cv_statistics']['accuracies_MAML'].append(accuracies_MAML)
-        params['cv_statistics']['confusion_matrices_MAML'].append(confusion_matrices_MAML)  
+        params['cv_statistics']['confusion_matrices_MAML'].append(confusion_matrices_MAML)
         params['cv_statistics']['precisions_MAML'].append(precisions_MAML)
-        params['cv_statistics']['recalls_MAML'].append(recalls_MAML)  
-        params['cv_statistics']['balanced_classification_rates_MAML'].append(balanced_classification_rates_MAML)  
+        params['cv_statistics']['recalls_MAML'].append(recalls_MAML)
+        params['cv_statistics']['balanced_classification_rates_MAML'].append(balanced_classification_rates_MAML)
 
-    # Here we are testing, this code should NOT be run yet
+        # Here we are testing, this code should NOT be run yet
     elif params['datasource'] == 'drp_chem' and not params['cross_validate']:
         testing_batches = params['testing_batches']
         test_batch = testing_batches[amine]
-        x_t, y_t, x_v, y_v = torch.from_numpy(test_batch[0]).float().to(params['device']), torch.from_numpy(test_batch[1]).long().to(params['device']), \
-            torch.from_numpy(test_batch[2]).float().to(params['device']), torch.from_numpy(test_batch[3]).long().to(params['device'])
-    
+        x_t, y_t, x_v, y_v = torch.from_numpy(test_batch[0]).float().to(params['device']), torch.from_numpy(
+            test_batch[1]).long().to(params['device']), \
+                             torch.from_numpy(test_batch[2]).float().to(params['device']), torch.from_numpy(
+            test_batch[3]).long().to(params['device'])
+
         all_labels = torch.cat((y_t, y_v))
         all_data = torch.cat((x_t, x_v))
 
@@ -1477,7 +1214,6 @@ def test_model_actively(params, amine=None):
             # Now add the most uncertain point to the training data 
             preds_update = get_task_prediction(x_t, y_t, x_v, params)
 
-            
             y_pred_v_update = sm_loss(torch.stack(preds_update))
             y_pred_update = torch.mean(input=y_pred_v_update, dim=0, keepdim=False)
 
@@ -1491,10 +1227,10 @@ def test_model_actively(params, amine=None):
             print(f'Minimum confidence {value}')
             # Add to the training data 
             x_t = torch.cat((x_t, x_v[index].view(1, 51)))
-            y_t = torch.cat((y_t, y_v[index].view(1)))         
+            y_t = torch.cat((y_t, y_v[index].view(1)))
             # Remove from pool, there is probably a less clunky way to do this
-            x_v = torch.cat([x_v[0:index], x_v[index+1:]])
-            y_v = torch.cat([y_v[0:index], y_v[index+1:]])
+            x_v = torch.cat([x_v[0:index], x_v[index + 1:]])
+            y_v = torch.cat([y_v[0:index], y_v[index + 1:]])
             print('length of x_v is now', len(x_v))
 
             cm = confusion_matrix(all_labels.detach().cpu().numpy(), labels_pred.detach().cpu().numpy())
@@ -1538,8 +1274,9 @@ def test_model_actively(params, amine=None):
         plt.plot(num_examples, balanced_classification_rates, 'mo-', label='PLATIPUS')
         plt.legend()
 
-        fig.text(0.5,0.04, "Number of samples given", ha="center", va="center")
+        fig.text(0.5, 0.04, "Number of samples given", ha="center", va="center")
         plt.show()
+
 
 # Determines the KL and Meta Objectlive loss on a set of training
 # and validation data 
@@ -1573,7 +1310,7 @@ def get_training_loss(x_t, y_t, x_v, y_v, params):
 
     # step 7 - Update parameters of the variational distribution
     for key in Theta['mean'].keys():
-        q['mean'][key] = Theta['mean'][key] - Theta['gamma_q'][key]*loss_query_gradients[key]
+        q['mean'][key] = Theta['mean'][key] - Theta['gamma_q'][key] * loss_query_gradients[key]
         q['logSigma'][key] = Theta['logSigma_q'][key]
 
     # step 8 - Update L sampled models on the training data x_t using gradient descient
@@ -1582,7 +1319,7 @@ def get_training_loss(x_t, y_t, x_v, y_v, params):
         w = generate_weights(meta_params=Theta, params=params)
         y_pred_t = net.forward(x=x_t, w=w, p_dropout=p_dropout_base)
         loss_vfe = loss_fn(y_pred_t, y_t)
-        
+
         loss_vfe_grads = torch.autograd.grad(
             outputs=loss_vfe,
             inputs=w.values(),
@@ -1593,7 +1330,7 @@ def get_training_loss(x_t, y_t, x_v, y_v, params):
         # step 9 - Compute updated parameters phi_i using the gradients
         phi_i = {}
         for key in w.keys():
-            phi_i[key] = w[key] - inner_lr*loss_vfe_gradients[key]
+            phi_i[key] = w[key] - inner_lr * loss_vfe_gradients[key]
         phi.append(phi_i)
 
     # Repeat step 9 so we do num_inner_updates number of gradient descent steps
@@ -1609,7 +1346,7 @@ def get_training_loss(x_t, y_t, x_v, y_v, params):
             )
             loss_vfe_gradients = dict(zip(phi_i.keys(), loss_vfe_grads))
             for key in phi_i.keys():
-                phi_i[key] = phi_i[key] - inner_lr*loss_vfe_gradients[key]
+                phi_i[key] = phi_i[key] - inner_lr * loss_vfe_gradients[key]
 
     # step 10 - Set up probability distribution given the training data
     p = initialise_dict_of_dict(key_list=Theta['mean'][key])
@@ -1622,9 +1359,9 @@ def get_training_loss(x_t, y_t, x_v, y_v, params):
     )
     loss_train_gradients = dict(zip(Theta['mean'].keys(), loss_train_grads))
     for key in Theta['mean'].keys():
-        p['mean'][key] = Theta['mean'][key] - Theta['gamma_p'][key]*loss_train_gradients[key]
+        p['mean'][key] = Theta['mean'][key] - Theta['gamma_p'][key] * loss_train_gradients[key]
         p['logSigma'][key] = Theta['logSigma'][key]
-    
+
     # step 11 - Compute Meta Objective and KL loss
     loss_query = 0
     # Note: We can have multiple models here by adjusting the --Lt flag, but it will 
@@ -1636,10 +1373,10 @@ def get_training_loss(x_t, y_t, x_v, y_v, params):
     KL_q_p = 0
     for key in q['mean'].keys():
         # I am so glad somebody has a formula for this... You rock Cuong
-        KL_q_p += torch.sum(torch.exp(2*(q['logSigma'][key] - p['logSigma'][key])) \
-                + (p['mean'][key] - q['mean'][key])**2/torch.exp(2*p['logSigma'][key]))\
-                    + torch.sum(2*(p['logSigma'][key] - q['logSigma'][key]))
-    KL_q_p = (KL_q_p - num_weights)/2
+        KL_q_p += torch.sum(torch.exp(2 * (q['logSigma'][key] - p['logSigma'][key])) \
+                            + (p['mean'][key] - q['mean'][key]) ** 2 / torch.exp(2 * p['logSigma'][key])) \
+                  + torch.sum(2 * (p['logSigma'][key] - q['logSigma'][key]))
+    KL_q_p = (KL_q_p - num_weights) / 2
     return loss_query, KL_q_p
 
 
@@ -1669,7 +1406,7 @@ def get_task_prediction(x_t, y_t, x_v, params):
     )
     loss_train_gradients = dict(zip(Theta['mean'].keys(), loss_train_grads))
     for key in Theta['mean'].keys():
-        p['mean'][key] = Theta['mean'][key] - Theta['gamma_p'][key]*loss_train_gradients[key]
+        p['mean'][key] = Theta['mean'][key] - Theta['gamma_p'][key] * loss_train_gradients[key]
         p['logSigma'][key] = Theta['logSigma'][key]
 
     # step 2 - Sample K models and update determine the gradient of the loss function
@@ -1687,9 +1424,9 @@ def get_task_prediction(x_t, y_t, x_v, params):
         # step 3 - Compute adapted parameters using gradient descent
         phi_i = {}
         for key in w.keys():
-            phi_i[key] = w[key] - pred_lr*loss_train_gradients[key]
+            phi_i[key] = w[key] - pred_lr * loss_train_gradients[key]
         phi.append(phi_i)
-    
+
     # Repeat step 3 as many times as specified
     for _ in range(num_inner_updates - 1):
         for phi_i in phi:
@@ -1702,7 +1439,7 @@ def get_task_prediction(x_t, y_t, x_v, params):
             loss_train_gradients = dict(zip(w.keys(), loss_train_grads))
 
             for key in w.keys():
-                phi_i[key] = phi_i[key] - pred_lr*loss_train_gradients[key]
+                phi_i[key] = phi_i[key] - pred_lr * loss_train_gradients[key]
 
     y_pred_v = []
     # Now get the model predictions on the validation/test data x_v by calling the forward method
@@ -1713,10 +1450,11 @@ def get_task_prediction(x_t, y_t, x_v, params):
         y_pred_v.append(y_pred_temp)
     return y_pred_v
 
+
 # Get naive predictions from the model without doing any update steps
 # This is used to get the zero point for the model for drp_chem
 def get_naive_prediction(x_vals, params):
-     # As usual, begin by unpacking the parameters we need
+    # As usual, begin by unpacking the parameters we need
     Theta = params['Theta']
     net = params['net']
     K = params['K']
@@ -1736,6 +1474,7 @@ def get_naive_task_prediction_maml(x_vals, meta_params, params):
     net = params['net']
     y_pred_v = net.forward(x=x_vals, w=meta_params)
     return y_pred_v
+
 
 # Run a forward pass to obtain predictions given a MAML model
 # It is required that a MAML model has already been trained
@@ -1763,7 +1502,7 @@ def get_task_prediction_maml(x_t, y_t, x_v, meta_params, params):
     gradients = dict(zip(meta_params.keys(), grads))
 
     for key in meta_params.keys():
-        q[key] = meta_params[key] - inner_lr*gradients[key]
+        q[key] = meta_params[key] - inner_lr * gradients[key]
 
     # Similar to PLATIPUS, we can perform more gradient updates if we wish to
     for _ in range(num_inner_updates - 1):
@@ -1778,11 +1517,12 @@ def get_task_prediction_maml(x_t, y_t, x_v, meta_params, params):
         gradients = dict(zip(q.keys(), grads))
 
         for key in q.keys():
-            q[key] = q[key] - inner_lr*gradients[key]
-    
+            q[key] = q[key] - inner_lr * gradients[key]
+
     # Finally call the forward function
     y_pred_v = net.forward(x=x_v, w=q)
     return y_pred_v
+
 
 # Use the PLATIPUS means and variances to actually generate a set of weights
 # ie a plausible model 
@@ -1792,8 +1532,9 @@ def generate_weights(meta_params, params):
     for key in meta_params['mean'].keys():
         eps_sampled = torch.randn(meta_params['mean'][key].shape, device=device)
         # Use the epsilon reparameterization trick in VI
-        w[key] = meta_params['mean'][key] + eps_sampled*torch.exp(meta_params['logSigma'][key])
+        w[key] = meta_params['mean'][key] + eps_sampled * torch.exp(meta_params['logSigma'][key])
     return w
+
 
 # Helps us create a data structure to store model weights during gradient updates
 def initialise_dict_of_dict(key_list):
@@ -1803,6 +1544,7 @@ def initialise_dict_of_dict(key_list):
         for key in key_list:
             q[para][key] = 0
     return q
+
 
 if __name__ == "__main__":
     main()
