@@ -39,7 +39,7 @@ def load_chem_dataset(k_shot, meta_batch_size=32, num_batches=100, verbose=False
     score_header = '_out_crystalscore'
     name_header = 'name'
     to_exclude = [score_header, amine_header, name_header, distribution_header]
-    path = '.\\data\\0050.perovskitedata_DRP.csv'
+    path = './data/0050.perovskitedata_DRP.csv'
 
     # Successful reaction is defined as having a crystal score of...
     SUCCESS = 4
