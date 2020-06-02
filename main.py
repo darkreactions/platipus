@@ -5,7 +5,7 @@ run me to train cross validation:
 python main.py --datasource=drp_chem --k_shot=20 --n_way=2 --inner_lr=1e-3 --meta_lr=1e-3 --meta_batch_size=10 --Lt=1 --num_inner_updates=10 --Lv=10 --kl_reweight=.0001 --num_epochs=3000 --num_epochs_save=1000 --cross_validate --resume_epoch=0 --verbose --p_dropout_base=0.4
 
 run me for cross validation results:
-python main.py --datasource=drp_chem --k_shot=20 --n_way=2 --inner_lr=1e-3 --meta_lr=1e-3 --meta_batch_size=10 --Lt=1 --Lv=100 --num_inner_updates=10 --kl_reweight=.0001 --num_epochs=0 --resume_epoch=3000 --cross_validate --verbose --p_dropout_base=0.4 --test
+python main.py --datasource=drp_chem --k_shot=20 --n_way=2 --inner_lr=1e-3 --meta_lr=1e-3 --meta_batch_size=10 --Lt=1 --Lv=100 --num_inner_updates=10 --kl_reweight=.0001 --num_epochs=0 --num_epochs_save=1000 --resume_epoch=3000 --cross_validate --verbose --p_dropout_base=0.4 --test
 
 
 DON'T TOUCH ME YET
