@@ -165,13 +165,13 @@ def initialize():
                 params['counts'] = counts
 
                 # Save for reproducibility
-                with open(os.path.join(".\\data", "train_dump.pkl"), "wb") as f:
+                with open(os.path.join("./data", "train_dump.pkl"), "wb") as f:
                     pickle.dump(training_batches, f)
-                with open(os.path.join(".\\data", "val_dump.pkl"), "wb") as f:
+                with open(os.path.join("./data", "val_dump.pkl"), "wb") as f:
                     pickle.dump(validation_batches, f)
-                with open(os.path.join(".\\data", "test_dump.pkl"), "wb") as f:
+                with open(os.path.join("./data", "test_dump.pkl"), "wb") as f:
                     pickle.dump(testing_batches, f)
-                with open(os.path.join(".\\data", "counts_dump.pkl"), "wb") as f:
+                with open(os.path.join("./data", "counts_dump.pkl"), "wb") as f:
                     pickle.dump(counts, f)
 
             else:
@@ -184,32 +184,32 @@ def initialize():
                 params['counts'] = counts
 
                 # Save for reproducibility
-                with open(os.path.join(".\\data", "train_dump_nocv.pkl"), "wb") as f:
+                with open(os.path.join("./data", "train_dump_nocv.pkl"), "wb") as f:
                     pickle.dump({'training_data': training_batches}, f)
-                with open(os.path.join(".\\data", "test_dump_nocv.pkl"), "wb") as f:
+                with open(os.path.join("./data", "test_dump_nocv.pkl"), "wb") as f:
                     pickle.dump(testing_batches, f)
-                with open(os.path.join(".\\data", "counts_dump_nocv.pkl"), "wb") as f:
+                with open(os.path.join("./data", "counts_dump_nocv.pkl"), "wb") as f:
                     pickle.dump(counts, f)
 
 
         # Make sure we don't overwrite our batches if we are validating and testing
         else:
             if params['cross_validate']:
-                with open(os.path.join(".\\data", "train_dump.pkl"), "rb") as f:
+                with open(os.path.join("./data", "train_dump.pkl"), "rb") as f:
                     params['training_batches'] = pickle.load(f)
-                with open(os.path.join(".\\data", "val_dump.pkl"), "rb") as f:
+                with open(os.path.join("./data", "val_dump.pkl"), "rb") as f:
                     params['validation_batches'] = pickle.load(f)
-                with open(os.path.join(".\\data", "test_dump.pkl"), "rb") as f:
+                with open(os.path.join("./data", "test_dump.pkl"), "rb") as f:
                     params['testing_batches'] = pickle.load(f)
-                with open(os.path.join(".\\data", "counts_dump.pkl"), "rb") as f:
+                with open(os.path.join("./data", "counts_dump.pkl"), "rb") as f:
                     params['counts'] = pickle.load(f)
 
             else:
-                with open(os.path.join(".\\data", "train_dump_nocv.pkl"), "rb") as f:
+                with open(os.path.join("./data", "train_dump_nocv.pkl"), "rb") as f:
                     params['training_batches'] = pickle.load(f)['training_data']
-                with open(os.path.join(".\\data", "test_dump_nocv.pkl"), "rb") as f:
+                with open(os.path.join("./data", "test_dump_nocv.pkl"), "rb") as f:
                     params['testing_batches'] = pickle.load(f)
-                with open(os.path.join(".\\data", "counts_dump_nocv.pkl"), "rb") as f:
+                with open(os.path.join("./data", "counts_dump_nocv.pkl"), "rb") as f:
                     params['counts'] = pickle.load(f)
 
         net = FCNet(
@@ -565,10 +565,10 @@ def main():
                 test_model_actively(params, amine)
 
             # Save this dictionary in case we need it later
-            with open(os.path.join(".\\data", "cv_statistics.pkl"), "wb") as f:
+            with open(os.path.join("./data", "cv_statistics.pkl"), "wb") as f:
                 pickle.dump(params['cv_statistics'], f)
 
-            with open(os.path.join(".\\data", "cv_statistics.pkl"), "rb") as f:
+            with open(os.path.join("./data", "cv_statistics.pkl"), "rb") as f:
                 params['cv_statistics'] = pickle.load(f)
             # Now plot the big graph
             stats_dict = params['cv_statistics']
