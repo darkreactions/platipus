@@ -13,9 +13,7 @@ import itertools
 import os
 import sys
 
-from data_generator import DataGenerator
 from FC_net import FCNet
-from utils import get_task_sine_line_data
 
 import pickle
 
@@ -27,7 +25,7 @@ import argparse
 def parse_args():
     parser = argparse.ArgumentParser(description='Setup variables for MAML.')
 
-    parser.add_argument('--datasource', type=str, default='drp_chem', help='datasource to be used, sine_line or drp_chem')
+    parser.add_argument('--datasource', type=str, default='drp_chem', help='datasource to be used, default is drp_chem')
     parser.add_argument('--k_shot', type=int, default=5, help='Number of training samples per class or k-shot')
     parser.add_argument('--n_way', type=int, default=1, help='Number of classes per task, this is 2 for the chemistry data')
     parser.add_argument('--resume_epoch', type=int, default=0, help='Epoch id to resume learning or perform testing')
@@ -48,7 +46,6 @@ def parse_args():
     parser.set_defaults(uncertainty_flag=True)
 
     parser.add_argument('--p_dropout_base', type=float, default=0., help='Dropout rate for the base network')
-    parser.add_argument('--datasubset', type=str, default='sine', help='sine or line')
     parser.add_argument('--cross_validate', action='store_true')
 
 
@@ -120,9 +117,6 @@ def initialize():
 
     # Dropout rate for the neural network
     params['p_dropout_base'] = args.p_dropout_base
-    # Sine or line if we are dealing with the sine-line task
-    params['datasubset'] = args.datasubset
-
 
     if params['datasource'] == 'drp_chem':
         
