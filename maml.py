@@ -39,6 +39,7 @@ def parse_args():
     parser.add_argument('--meta_lr', type=float, default=1e-3, help='Learning rate of meta-parameters')
     parser.add_argument('--meta_batch_size', type=int, default=25, help='Number of tasks sampled per outer loop')
     parser.add_argument('--num_epochs', type=int, default=1000, help='How many outer loops are used to train')
+    parser.add_argument('--num_epochs_save', type=int, default=1000, help='How often should we save')
 
     parser.add_argument('--num_val_tasks', type=int, default=100, help='Number of validation tasks')
     parser.add_argument('--uncertainty', dest='uncertainty_flag', action='store_true')
@@ -111,6 +112,9 @@ def initialize():
     params['num_tasks_save_loss'] = args.meta_batch_size 
     params['num_epochs'] = args.num_epochs
 
+    # How often should we save?
+    params['num_epochs_save'] = args.num_epochs_save
+
     # How many gradient updates we run on the inner loop
     print(f'Number of inner updates = {args.num_inner_updates}')
     params['num_inner_updates'] = args.num_inner_updates
@@ -122,13 +126,13 @@ def initialize():
         
         # I am only running MAML to compare with PLATIPUS, thus assume this data already exists
         if params['cross_validate']:
-            with open(os.path.join(".\\data","train_dump.pkl"), "rb") as f:
+            with open(os.path.join("./data","train_dump.pkl"), "rb") as f:
                 params['training_batches'] = pickle.load(f)
-            with open(os.path.join(".\\data","val_dump.pkl"), "rb") as f:
+            with open(os.path.join("./data","val_dump.pkl"), "rb") as f:
                 params['validation_batches'] = pickle.load(f)
-            with open(os.path.join(".\\data","test_dump.pkl"), "rb") as f:
+            with open(os.path.join("./data","test_dump.pkl"), "rb") as f:
                 params['testing_batches'] = pickle.load(f)
-            with open(os.path.join(".\\data","counts_dump.pkl"), "rb") as f:
+            with open(os.path.join("./data","counts_dump.pkl"), "rb") as f:
                 params['counts'] = pickle.load(f)
 
         net = FCNet(
@@ -338,7 +342,7 @@ def meta_train(params, amine=None):
     # How often should we do a printout?
     num_meta_updates_print = 1
     # How often should we save?
-    num_epochs_save = 1000
+    num_epochs_save = params['num_epochs_save']
 
 
     for epoch in range(resume_epoch, resume_epoch + num_epochs):
