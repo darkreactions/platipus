@@ -1,6 +1,6 @@
 '''
 run me to train cross validation:
-python main.py --datasource=drp_chem --k_shot=20 --n_way=2 --inner_lr=1e-3 --meta_lr=1e-3 --meta_batch_size=10 --Lt=1 --num_inner_updates=10 --Lv=10 --kl_reweight=.0001 --num_epochs=3000 --cross_validate --resume_epoch=0 --verbose --p_dropout_base=0.4
+python main.py --datasource=drp_chem --k_shot=20 --n_way=2 --inner_lr=1e-3 --meta_lr=1e-3 --meta_batch_size=10 --Lt=1 --num_inner_updates=10 --Lv=10 --kl_reweight=.0001 --num_epochs=3000 --num_epochs_save=1000 --cross_validate --resume_epoch=0 --verbose --p_dropout_base=0.4
 
 run me for cross validation results:
 python main.py --datasource=drp_chem --k_shot=20 --n_way=2 --inner_lr=1e-3 --meta_lr=1e-3 --meta_batch_size=10 --Lt=1 --Lv=100 --num_inner_updates=10 --kl_reweight=.0001 --num_epochs=0 --resume_epoch=3000 --cross_validate --verbose --p_dropout_base=0.4 --test
@@ -56,6 +56,7 @@ def parse_args():
     parser.add_argument('--meta_lr', type=float, default=1e-3, help='Learning rate of meta-parameters')
     parser.add_argument('--meta_batch_size', type=int, default=25, help='Number of tasks sampled per outer loop')
     parser.add_argument('--num_epochs', type=int, default=50000, help='How many outer loops are used to train')
+    parser.add_argument('--num_epochs_save', type=int, default=1000, help='How often should we save')
 
     parser.add_argument('--kl_reweight', type=float, default=1,
                         help='Reweight factor of the KL divergence between variational posterior q and prior p')
@@ -130,8 +131,7 @@ def initialize():
     params['num_epochs'] = args.num_epochs
 
     # How often should we save?
-    # TODO: Might add this to the parser later on 
-    params['num_epochs_save'] = 1000
+    params['num_epochs_save'] = args.num_epochs_save
 
     # How many gradient updates we run on the inner loop
     print(f'Number of inner updates = {args.num_inner_updates}')
