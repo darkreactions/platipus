@@ -2,10 +2,10 @@
 NOTE: Before running the following commands, make sure to run the trainning command(s) in maml.py first
 
 run me to train cross validation:
-python main.py --datasource=drp_chem --k_shot=20 --n_way=2 --num_total_samples_per_class=40 --num_training_samples_per_class=20 --inner_lr=1e-3 --meta_lr=1e-3 --meta_batch_size=10 --Lt=1 --num_inner_updates=10 --Lv=10 --kl_reweight=.0001 --num_epochs=3000 --num_epochs_save=1000 --cross_validate --resume_epoch=0 --verbose --p_dropout_base=0.4
+python main.py --datasource=drp_chem --k_shot=20 --n_way=2 --inner_lr=1e-3 --meta_lr=1e-3 --meta_batch_size=10 --Lt=1 --num_inner_updates=10 --Lv=10 --kl_reweight=.0001 --num_epochs=3000 --num_epochs_save=1000 --cross_validate --resume_epoch=0 --verbose --p_dropout_base=0.4
 
 run me for cross validation results:
-python main.py --datasource=drp_chem --k_shot=20 --n_way=2 --num_total_samples_per_class=40 --num_training_samples_per_class=20 --inner_lr=1e-3 --meta_lr=1e-3 --meta_batch_size=10 --Lt=1 --Lv=100 --num_inner_updates=10 --kl_reweight=.0001 --num_epochs=0 --num_epochs_save=1000 --resume_epoch=3000 --cross_validate --verbose --p_dropout_base=0.4 --test
+python main.py --datasource=drp_chem --k_shot=20 --n_way=2 --inner_lr=1e-3 --meta_lr=1e-3 --meta_batch_size=10 --Lt=1 --Lv=100 --num_inner_updates=10 --kl_reweight=.0001 --num_epochs=0 --num_epochs_save=1000 --resume_epoch=3000 --cross_validate --verbose --p_dropout_base=0.4 --test
 
 
 DON'T TOUCH ME YET
@@ -45,8 +45,6 @@ def parse_args():
     parser.add_argument('--n_way', type=int, default=1,
                         help='Number of classes per task, this is 2 for the chemistry data')
     parser.add_argument('--resume_epoch', type=int, default=0, help='Epoch id to resume learning or perform testing')
-    parser.add_argument('--num_total_samples_per_class', type=int, default=40, help='Number of total samples per class')
-    parser.add_argument('--num_training_samples_per_class', type=int, default=20, help='Number of training samples per class, should be the same with k_shot number')
 
     parser.add_argument('--train', dest='train_flag', action='store_true')
     parser.add_argument('--test', dest='train_flag', action='store_false')
@@ -105,9 +103,7 @@ def initialize():
     params['cross_validate'] = args.cross_validate
     # Set up the value of k in k-shot learning
     print(f'{args.k_shot}-shot')
-    params['num_training_samples_per_class'] = args.num_training_samples_per_class
-    if params['num_training_samples_per_class'] != args.k_shot:
-        raise (IndexError('Should be the same'))
+    params['num_training_samples_per_class'] = args.k_shot
 
     # Total number of samples per class, need some extra for the outer loop update as well 
     if params['train_flag']:
@@ -116,7 +112,7 @@ def initialize():
         params['num_total_samples_per_class'] = params['num_training_samples_per_class'] + 20
 
     # n-way: 2 for the chemistry data
-    print(f'{args.n_way}-way')
+    print(f"{args.n_way}-way")
     params['num_classes_per_task'] = args.n_way
 
     # Initialize the datasource and learning rate
@@ -154,8 +150,8 @@ def initialize():
     if params['datasource'] == 'drp_chem':
 
         # TODO: This is hard coded, fix 
-        params['num_total_samples_per_class'] = args.num_total_samples_per_class
-        params['num_training_samples_per_class'] = args.num_training_samples_per_class
+        params['num_total_samples_per_class'] = 40
+        params['num_training_samples_per_class'] = 20
 
         if params['train_flag']:
 
