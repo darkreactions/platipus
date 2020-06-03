@@ -260,6 +260,28 @@ def initialize():
     print(dst_folder)
     params['dst_folder'] = dst_folder
 
+    # Set up the path to save graphs
+    graph_folder = '{0:s}/graphs'.format(params['dst_folder'])
+    if not os.path.exists(graph_folder):
+        os.makedirs(graph_folder)
+        print('No folder for graph storage found')
+        print(f'Make folder to store graphs at')
+    else:
+        print('Found existing folder. Graphs will be stored at')
+    print(graph_folder)
+    params['graph_folder'] = graph_folder
+
+    # Set up sub-folder under graphs to save active learning cross validation graphs
+    active_learning_graph_folder = '{0:s}/active_learning_cv_graphs'.format(params['graph_folder'])
+    if not os.path.exists(active_learning_graph_folder):
+        os.makedirs(active_learning_graph_folder)
+        print('No folder for active learning cross-validation graph storage found')
+        print(f'Make folder to store cross-validation graphs at')
+    else:
+        print('Found existing folder. Active learning cross-validation graphs will be stored at')
+    print(active_learning_graph_folder)
+    params['active_learning_graph_folder'] = active_learning_graph_folder
+
     # In the case that we are loading a model, resume epoch will not be zero 
     params['resume_epoch'] = args.resume_epoch
     if params['resume_epoch'] == 0:
@@ -683,7 +705,13 @@ def main():
             plt.legend()
 
             fig.text(0.5, 0.04, "Number of samples given", ha="center", va="center")
-            plt.show()
+
+            # Save the average metrics graph to ./graphs folder
+            graph_dst = '{0:s}/average_metrics.png'.format(params['graph_folder'])
+            if os.path.isfile(graph_dst):
+                os.remove(graph_dst)
+            plt.savefig(graph_dst)
+            # plt.show()
 
         # TEST CODE, SHOULD NOT BE RUN
         elif params['datasource'] == 'drp_chem' and not params['cross_validate']:
@@ -1165,7 +1193,13 @@ def test_model_actively(params, amine=None):
         plt.legend()
 
         fig.text(0.5, 0.04, "Number of samples given", ha="center", va="center")
-        plt.show()
+
+        # Save the active training graph to ./active_learning_cv_graphs folder
+        active_graph_dst = '{0:s}/cv_metrics_{1:s}.png'.format(params['active_learning_graph_folder'], amine)
+        if os.path.isfile(active_graph_dst):
+            os.remove(active_graph_dst)
+        plt.savefig(active_graph_dst)
+        # plt.show()
 
         params['cv_statistics']['accuracies'].append(accuracies)
         params['cv_statistics']['confusion_matrices'].append(confusion_matrices)
@@ -1284,7 +1318,6 @@ def test_model_actively(params, amine=None):
         plt.legend()
 
         fig.text(0.5, 0.04, "Number of samples given", ha="center", va="center")
-        plt.show()
 
 
 # Determines the KL and Meta Objectlive loss on a set of training
