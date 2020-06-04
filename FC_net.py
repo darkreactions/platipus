@@ -11,24 +11,43 @@ import numpy as np
 import collections
 
 class FCNet(torch.nn.Module):
-
-    # Initialize our neural network, ideally device will not be CPU but it can be
+    """
+    Establishing a fully connected neural network
+    """
     def __init__(self,
                 dim_input=1,
                 dim_output=1,
                 num_hidden_units=(100, 100, 100),
                 device=torch.device('cpu')
     ):
+        """Initializes the FCNet
 
+        Args:
+            dim_input:          An integer. Dimension of the input matrix
+            dim_output:         An integer. Dimension of the output matrix
+            num_hidden_units:   A tuple. The number of hidden nodes in
+                                the three layers defined in the net
+            device:             The device we use to run,
+                                ideally will not be CPU but it can be
+        """
         super(FCNet, self).__init__()
         self.dim_output = dim_output
         self.dim_input = dim_input
         self.num_hidden_units = num_hidden_units
         self.device = device
 
-    # Dictionary is formatted as {weight_name : (number_of_outputs, number_of_inputs)}
-    # For the bias we have {weight_name : number_of_outputs}
     def get_weight_shape(self):
+        """Get the shape of the weight we use in each layer
+
+        Documenting the shape of the weights inputted and outputted
+        from the hidden nodes in each layer.
+        The shape of the first layer will later be used
+        in the 'initialise weight' function.
+
+        return: Generates an ordered dictionary in the format of:
+        {weight_name : (number_of_outputs, number_of_inputs)}
+        For the bias we have {weight_name: number_of_outputs}
+        """
         weight_shape = collections.OrderedDict()
 
         weight_shape['w1'] = (self.num_hidden_units[0], self.dim_input)
@@ -42,10 +61,22 @@ class FCNet(torch.nn.Module):
         weight_shape['b{0:d}'.format(len(self.num_hidden_units) + 1)] = self.dim_output
 
         return weight_shape
-    
-    # Initialize the weights of our neural network, this is called by maml not PLATIPUS
-    # since PLATIPUS has its own fun initialization
+
     def initialise_weights(self):
+        """Initializing the weights of the neural network
+
+        Generates the weights being inputted into the neural network
+        The initialization method can be varied.
+        The default is kaiming initialization
+        This function will be called by MAML model but not PLATIPUS model
+        since PLATIPUS has its own initialization
+
+        return: A dictionary of the same keys as
+        the output of "get_weights_shape" function
+        but with initialized weights as index for keys with 'w'
+        and zeros as indices for keys with 'b', in the format of
+        {weight_name: weight_value} for weights and {bias_name: bias_value}
+        """
         w = {}
         weight_shape = self.get_weight_shape()
         for key in weight_shape.keys():
@@ -62,8 +93,23 @@ class FCNet(torch.nn.Module):
                 w[key].requires_grad_()
         return w
 
-    # Run a forward pass of the model, in Pytorch we do not need to worry about the final Softmax 
     def forward(self, x, w, p_dropout=0):
+        """The forward pass of the model
+
+        A forward pass that applies a linear transformation to the
+        incoming data with ReLU activation layers and dropout layers.
+        In Pytorch we do not need to worry about the final Softmax
+
+        Args:
+            x:          The input tensor that we want to train on.
+            w:          The weights for the network. Should be the previously defined
+                        dictionary with initialized weights.
+            p_dropout:  The probability of an element in the input tensor to be zeroed.
+                        The probability can be zero.
+
+        return: A tensor of the same shape with the input tensor
+        that has gone through the forward loops
+        """
         out = x
 
         for i in range(len(self.num_hidden_units) + 1):
@@ -81,8 +127,12 @@ class FCNet(torch.nn.Module):
                     out = torch.nn.functional.dropout(out, p_dropout)
         return out
 
-    # Get the number if weights in the net
     def get_num_weights(self):
+        """Get the fully connected weight of the net
+
+        return: An integer that is the product of
+        all the weights presented in the fully connected layers
+        """
         num_weights = 0
         # Note that get_weight_shape() is found in FC_net.py
         weight_shape = self.get_weight_shape()
