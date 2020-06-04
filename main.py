@@ -1,5 +1,12 @@
 '''
-NOTE: Before running the following commands, make sure to run the trainning command(s) in maml.py first
+NOTE: Before running the following commands, make sure to run command lines in the order of training PLATIPUS, training MAML, and cross-validating both models.
+
+Small scale testing:
+python main.py --datasource=drp_chem --k_shot=20 --n_way=2 --inner_lr=1e-3 --meta_lr=1e-3 --meta_batch_size=10 --Lt=1 --num_inner_updates=10 --Lv=10 --kl_reweight=.0001 --num_epochs=4 --num_epochs_save=2 --cross_validate --resume_epoch=0 --verbose --p_dropout_base=0.4
+
+python maml.py --datasource=drp_chem --k_shot=20 --n_way=2 --inner_lr=1e-3 --meta_lr=1e-3 --meta_batch_size=10 --num_epochs=4 --num_epochs_save=2 --cross_validate --resume_epoch=0 --verbose --p_dropout_base=0.4
+
+python main.py --datasource=drp_chem --k_shot=20 --n_way=2 --inner_lr=1e-3 --meta_lr=1e-3 --meta_batch_size=10 --Lt=1 --Lv=100 --num_inner_updates=10 --kl_reweight=.0001 --num_epochs=0 --num_epochs_save=2 --resume_epoch=4 --cross_validate --verbose --p_dropout_base=0.4 --test
 
 run me to train cross validation:
 python main.py --datasource=drp_chem --k_shot=20 --n_way=2 --inner_lr=1e-3 --meta_lr=1e-3 --meta_batch_size=10 --Lt=1 --num_inner_updates=10 --Lv=10 --kl_reweight=.0001 --num_epochs=3000 --num_epochs_save=1000 --cross_validate --resume_epoch=0 --verbose --p_dropout_base=0.4
@@ -31,13 +38,51 @@ from utils import load_chem_dataset
 from utils import load_chem_dataset_testing
 from FC_net import FCNet
 
-import matplotlib
 from sklearn.metrics import confusion_matrix
 from matplotlib import pyplot as plt
 
 
-# Set up the initial variables for running PLATIPUS
 def parse_args():
+    """Set up the initial variables for running PLATIPUS.
+
+    Retrieves argument values from the terminal command line to create an argparse.Namespace object for
+        initialization.
+
+    Args:
+        N/A
+
+    Returns:
+        args: Namespace object with the following attributes:
+            datasource:         A string identifying the datasource to be used, with default datasource set to drp_chem.
+            k_shot:             An integer representing the number of training samples per class, with default set to 1.
+            n_way:              An integer representing the number of classes per task, with default set to 1.
+            resume_epoch:       An integer representing the epoch to resume learning or perform testing, 0 by default.
+            train:              A train_flag attribute. Including it in the command line will set the train_flag to
+                                    True by default.
+            test:               A train_flag attribute. Including it in the command line will set the train_flag to
+                                    False.
+            inner_lr:           A float representing the learning rate for task-specific parameters, corresponding to
+                                    the 'alpha' learning rate in meta-training section of PLATIPUS.
+                                    It is set to 1e-3 by default.
+            pred_lr:            A float representing the learning rate for task-specific parameters during prediction,
+                                    corresponding to the 'alpha' learning rate in meta-testing section of PLATIPUS.
+                                    It is set to 1e-1 by default.
+            num_inner_updates:  An integer representing the number of gradient updates for task-specific parameters,
+                                    with default set to 5.
+            meta_lr:            A float representing the learning rate of meta-parameters, corresponding to the 'beta'
+                                    learning rate in meta-training section of PLATIPUS.
+                                    It is set to 1e-3 by default.
+            meta_batch_size:    An integer representing the number of tasks sampled per outer loop.
+                                    It is set to 25 by default.
+            num_epochs:         An integer representing the number of outer loops used to train, defaulted to 50000.
+            num_epochs_save:    An integer representing the number of outer loops to train before one saving,
+                                    with default set to 1000.
+            TODO: kl_reweight, Lt, Lv
+            p_dropout_base:     A float representing the dropout rate for the base network, with default set to 0.0
+            cross_validate:     A boolean. Including it in the command will run the model with cross-validation.
+            TODO: verbose: A boolean. Including it in the command line will ...
+    """
+
     parser = argparse.ArgumentParser(description='Setup variables for PLATIPUS.')
     parser.add_argument('--datasource', type=str, default='drp_chem',
                         help='datasource to be used, defaults to drp_chem')
@@ -76,10 +121,78 @@ def parse_args():
     return args
 
 
-# Do all of the initialization that we need for the rest of the code to run...
-# It had a bunch of global variables before, so trying to use a parameters dictionary to circumvent that
-# without blowing up the number of parameters in each function
 def initialize():
+    """Initializes a dictionary of parameters corresponding to the arguments
+
+    The purpose of this function is trying to use a parameters dictionary without blowing up the number of
+        parameters in each function
+
+    Args:
+        N/A
+
+    Returns:
+        params: A dictionary of the parameters for the model with the following keys:
+            device:                             A torch.device object representing the device on which a torch.Tensor
+                                                    is/will be allocated.
+            gpu_id:                             An integer representing which GPU it will be using.
+            train_flag:                         A boolean representing if it will be training the model or not.
+            cross_validate:                     A boolean representing if it will use cross-validation or not.
+            num_training_samples_per_class:     An integer representing the number of training samples per class.
+            num_total_samples_per_class:        An integer representing the number of total samples per class.
+            num_classes_per_task:               An integer representing the number of classes per task.
+            datasource:                         A string representing the data used for PLATIPUS.
+            inner_lr:                           A float representing the learning rate for task-specific parameters,
+                                                    corresponding to the 'alpha' learning rate in meta-training section
+                                                    of PLATIPUS.
+            pred_lr:                            A float representing the learning rate for task-specific parameters
+                                                    during prediction, corresponding to the 'alpha' learning rate in
+                                                    meta-testing section of PLATIPUS.
+            meta_lr:                            A float representing the learning rate of meta-parameters, corresponding
+                                                    to the 'beta' learning rate in meta-training section of PLATIPUS.
+            num_tasks_per_epoch:                An integer representing the number of tasks used per epoch.
+            num_tasks_save_loss:                An integer representing the number of tasks used before one saving of
+                                                    the values of the losses.
+            num_epochs:                         An integer representing the number of outer loops used to train.
+            num_epochs_save:                    An integer representing the number of outer loops to train before
+                                                    one saving of the model parameters.
+            num_inner_updates:                  An integer representing the number of gradient updates for task-specific
+                                                    parameters.
+            p_dropout_base:                     A float representing the dropout rate for the base network.
+            TODO: L, K
+            training_batches:                   A dictionary representing the training batches used to train PLATIPUS.
+                                                    Key is amine left out, and value has hierarchy of:
+                                                    batches -> x_t, y_t, x_v, y_v -> meta_batch_size number of amines
+                                                    -> k_shot number of reactions -> number of features of each reaction
+            validation_batches:                 A dictionary representing the validation batches used for
+                                                    cross-validation in PLATIPUS. Key is amine which the data is for,
+                                                    value has the following hierarchy: x_s, y_s, x_q, y_q
+                                                    -> k_shot number of reactions -> number of features of each reaction
+            testing_batches:                    A dictionary representing the testing batches held out for scientific
+                                                    research purposes. Key is amine which the data is for, value has
+                                                    the following hierarchy: x_s, y_s, x_q, y_q
+                                                    -> k_shot number of reactions -> number of features of each reaction
+            counts:                             A dictionary with 'total' and each available amines as keys and lists of
+                                                    length 2 as values in the format of:
+                                                    [# of failed reactions, # of successful reactions]
+            net:                                A FCNet object representing the neural network model used for PLATIPUS.
+            loss_fn:                            A CrossEntropyLoss object representing the loss function for the model.
+            sm_loss:                            A Softmax object representing the softmax layer to handle losses.
+            w_shape:                            A OrderedDict object representing the weight shape and number of weights
+                                                    in the model, with format
+                                                    {weight_name : (number_of_outputs, number_of_inputs)} for weights,
+                                                    {weight_name : number_of_outputs} for biases.
+            TODO: num_weights, KL_reweight
+            dst_folder:                         A string representing the path to save models.
+            TODO: graph_folder, active_learning_graph_folder
+            resume_epoch:                       An integer representing the epoch id to resume learning or perform
+                                                    testing.
+            TODO: Theta:                        A dictionary representing the meta-parameters for PLATIPUS, with
+                                                    weights/biases as keys and their corresponding torch.Tensor object
+                                                    as values (requires_grad is set to True for all tensors).
+            TODO: op_Theta:                     A torch.optim object representing the optimizer used for meta-parameter
+                                                    theta. Currently using Adam as suggested in the PLATIPUS paper.
+        """
+
     args = parse_args()
     params = {}
 
@@ -105,7 +218,7 @@ def initialize():
     print(f'{args.k_shot}-shot')
     params['num_training_samples_per_class'] = args.k_shot
 
-    # Total number of samples per class, need some extra for the outer loop update as well 
+    # Total number of samples per class, need some extra for the outer loop update as well
     if params['train_flag']:
         params['num_total_samples_per_class'] = params['num_training_samples_per_class'] + 15
     else:
@@ -142,14 +255,15 @@ def initialize():
     # Dropout rate for the neural network
     params['p_dropout_base'] = args.p_dropout_base
 
-    # I think of L as how many models we sample in the inner update and K as how many models we sample in validation 
+    # L as how many models we sample in the inner update and K as how many models we sample in validation
     print(f'L = {args.Lt}, K = {args.Lv}')
     params['L'] = args.Lt
     params['K'] = args.Lv
 
     if params['datasource'] == 'drp_chem':
 
-        # TODO: This is hard coded, fix 
+        # Set number of training samples and number of total samples per class
+        # These two values are hard-coded, corresponding to the values hard-coded in load_chem_dataset below
         params['num_total_samples_per_class'] = 40
         params['num_training_samples_per_class'] = 20
 
@@ -192,7 +306,6 @@ def initialize():
                     pickle.dump(testing_batches, f)
                 with open(os.path.join("./data", "counts_dump_nocv.pkl"), "wb") as f:
                     pickle.dump(counts, f)
-
 
         # Make sure we don't overwrite our batches if we are validating and testing
         else:
@@ -384,8 +497,15 @@ def initialize():
     return params
 
 
-# Use this for cross validation, we need to set up a new loss function too
 def reinitialize_model_params(params):
+    """Reinitialize model meta-parameters for cross validation in PLATIPUS
+
+    Args:
+        params: A dictionary of parameters used for this model. See documentation in initialize() for details.
+
+    Returns:
+        N/A
+    """
     Theta = {}
     Theta['mean'] = {}
     Theta['logSigma'] = {}
@@ -438,8 +558,18 @@ def reinitialize_model_params(params):
     params['op_Theta'] = op_Theta
 
 
-# Main driver code
 def main():
+    """Main driver code
+
+    The main function to conduct PLATIPUS meta-training for each available amine.
+
+    Args:
+        N/A
+
+    Returns:
+        N/A
+    """
+
     # Do the massive initialization and get back a dictionary instead of using global variables
     params = initialize()
 
@@ -673,7 +803,8 @@ def main():
                     total += bcr_list_maml[i]
                 MAML_average_bcrs.append(total / len(stats_dict['balanced_classification_rates_MAML']))
 
-            fig = plt.figure()
+            # TODO: Figure out what to do with the gap between 0 and 20 (with a 20-shot model)
+            fig = plt.figure(figsize=(16,12))
             plt.subplot(2, 2, 1)
             plt.ylabel('Accuracy')
             plt.title(f'Averaged learning curve')
@@ -692,7 +823,7 @@ def main():
 
             plt.subplot(2, 2, 3)
             plt.ylabel('Recall')
-            plt.title(f' Averaged recall curve')
+            plt.title(f'Averaged recall curve')
             plt.plot(num_examples, average_recalls, 'ro-', label='PLATIPUS')
             plt.plot(num_examples, MAML_average_recalls, 'bo-', label='MAML')
             plt.legend()
@@ -708,6 +839,7 @@ def main():
 
             # Save the average metrics graph to ./graphs folder
             graph_dst = '{0:s}/average_metrics.png'.format(params['graph_folder'])
+            # Remove duplicate graphs in case we can't directly overwrite the files
             if os.path.isfile(graph_dst):
                 os.remove(graph_dst)
             plt.savefig(graph_dst)
@@ -758,9 +890,19 @@ def main():
         sys.exit('Unknown action')
 
 
-# Run the actual meta training for PLATIPUS
-# Lots of cool stuff happening in this function
 def meta_train(params, amine=None):
+    """The meta-training section of PLATIPUS
+
+    Lots of cool stuff happening in this function.
+
+    Args:
+        params:     A dictionary of parameters used for this model. See documentation in initialize() for details.
+        amine:      A string representing the specific amine that the model will be trained on.
+
+    Returns:
+        N/A
+    """
+
     # Start by unpacking the params we need
     # Messy but it does eliminate global variables and make things easier to trace
     datasource = params['datasource']
@@ -905,6 +1047,10 @@ def meta_train(params, amine=None):
 
 
 def test_model_actively(params, amine=None):
+    """TODO: Documentation
+
+    """
+
     # Start by unpacking any necessary parameters
     device = params['device']
     gpu_id = params['gpu_id']
@@ -1163,7 +1309,7 @@ def test_model_actively(params, amine=None):
             recalls_MAML.append(recall)
             balanced_classification_rates_MAML.append(bcr)
 
-        fig = plt.figure()
+        fig = plt.figure(figsize=(16,12))
         plt.subplot(2, 2, 1)
         plt.ylabel('Accuracy')
         plt.title(f'Learning curve for {amine}')
@@ -1196,6 +1342,7 @@ def test_model_actively(params, amine=None):
 
         # Save the active training graph to ./active_learning_cv_graphs folder
         active_graph_dst = '{0:s}/cv_metrics_{1:s}.png'.format(params['active_learning_graph_folder'], amine)
+        # Remove duplicate graphs in case we can't directly overwrite the files
         if os.path.isfile(active_graph_dst):
             os.remove(active_graph_dst)
         plt.savefig(active_graph_dst)
@@ -1292,7 +1439,7 @@ def test_model_actively(params, amine=None):
             recalls.append(recall)
             balanced_classification_rates.append(bcr)
 
-        fig = plt.figure()
+        fig = plt.figure(figsize=(16,12))
         plt.subplot(2, 2, 1)
         plt.ylabel('Accuracy')
         plt.title(f'Learning curve for {amine}')
@@ -1324,6 +1471,10 @@ def test_model_actively(params, amine=None):
 # and validation data 
 # Steps correspond to steps in the PLATIPUS TRAINING algorithm in Finn et al
 def get_training_loss(x_t, y_t, x_v, y_v, params):
+    """TODO: Documentation
+
+    """
+
     # Start by unpacking the parameters we need
     Theta = params['Theta']
     net = params['net']
@@ -1426,6 +1577,24 @@ def get_training_loss(x_t, y_t, x_v, y_v, params):
 # on some testing data
 # Steps correspond to steps in the PLATIPUS TESTING algorithm in Finn et al
 def get_task_prediction(x_t, y_t, x_v, params):
+    """TODO: Summary here
+
+    TODO: Extra explanation here
+
+    Args:
+        x_t:        A numpy array (3D) representing the training data of one batch.
+                        The dimension is meta_batch_size by k_shot by number of features of our data input.
+        y_t:        A numpy array (3D) representing the training labels of one batch.
+                        The dimension is meta_batch_size by k_shot by n_way.
+        x_v:        A numpy array (3D) representing the validation data of one batch.
+                        The dimension is meta_batch_size by k_shot by number of features of our data input.
+        params:     A dictionary of parameters used for this model. See documentation in initialize() for details.
+
+    Returns:
+        TODO: y_pred_v: A numpy array (3D) representing the predicted labels given our the testing data of one batch.
+            The dimension is meta_batch_size by k_shot by n_way.
+    """
+
     # As usual, begin by unpacking the parameters we need
     Theta = params['Theta']
     net = params['net']
@@ -1496,6 +1665,9 @@ def get_task_prediction(x_t, y_t, x_v, params):
 # Get naive predictions from the model without doing any update steps
 # This is used to get the zero point for the model for drp_chem
 def get_naive_prediction(x_vals, params):
+    """TODO: Documentation
+
+    """
     # As usual, begin by unpacking the parameters we need
     Theta = params['Theta']
     net = params['net']
@@ -1513,6 +1685,9 @@ def get_naive_prediction(x_vals, params):
 
 # Super simple function to get MAML prediction with no updates
 def get_naive_task_prediction_maml(x_vals, meta_params, params):
+    """TODO: Documentation
+
+    """
     net = params['net']
     y_pred_v = net.forward(x=x_vals, w=meta_params)
     return y_pred_v
@@ -1523,6 +1698,25 @@ def get_naive_task_prediction_maml(x_vals, meta_params, params):
 # Also make sure the MAML model has the same architecture as the PLATIPUS model
 # or elese the call to net.forward() will give you problems
 def get_task_prediction_maml(x_t, y_t, x_v, meta_params, params):
+    """TODO: Summary
+
+    TODO: Extra explanation here
+
+    Args:
+        x_t:        A numpy array (3D) representing the training data of one batch.
+                        The dimension is meta_batch_size by k_shot by number of features of our data input.
+        y_t:        A numpy array (3D) representing the training labels of one batch.
+                        The dimension is meta_batch_size by k_shot by n_way.
+        x_v:        A numpy array (3D) representing the validation data of one batch.
+                        The dimension is meta_batch_size by k_shot by number of features of our data input.
+        TODO: meta_params
+        TODO: params: A dictionary of parameters used for this model. See documentation in initialize() for details.
+
+    Returns:
+        TODO: y_pred_v: A numpy array (3D) representing the predicted labels given our the testing data of one batch.
+            The dimension is meta_batch_size by k_shot by n_way.
+    """
+
     # Get the program parameters from params
     net = params['net']
     loss_fn = params['loss_fn']
@@ -1569,6 +1763,10 @@ def get_task_prediction_maml(x_t, y_t, x_v, meta_params, params):
 # Use the PLATIPUS means and variances to actually generate a set of weights
 # ie a plausible model 
 def generate_weights(meta_params, params):
+    """TODO: Documentation
+
+    """
+
     device = params['device']
     w = {}
     for key in meta_params['mean'].keys():
@@ -1580,6 +1778,10 @@ def generate_weights(meta_params, params):
 
 # Helps us create a data structure to store model weights during gradient updates
 def initialise_dict_of_dict(key_list):
+    """TODO: Documentation
+
+    """
+
     q = dict.fromkeys(['mean', 'logSigma'])
     for para in q.keys():
         q[para] = {}
