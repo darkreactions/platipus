@@ -7,8 +7,6 @@ python maml.py --datasource=drp_chem --k_shot=20 --n_way=2 --inner_lr=1e-3 --met
 import torch
 
 import numpy as np
-import random
-import itertools
 
 import os
 import sys
@@ -30,31 +28,34 @@ def parse_args():
 
     Returns:
         args: Namespace object with the following attributes:
-            datasource: A string identifying the datasource to be used, with default datasource set to drp_chem.
-            k_shot: An integer representing the number of training samples per class, with default set to 5.
-            n_way: An integer representing the number of classes per task, with default set to 1.
-            resume_epoch: An integer representing the epoch id to resume learning or perform testing, with default set
-                to 0.
-            train: A train_flag attribute. Including it in the command line will set the train_flag to True. (default)
-            test: A train_flag attribute. Including it in the command line will set the train_flag to False.
-            inner_lr: A float representing the learning rate for task-specific parameters, corresponding to the 'alpha'
-                learning rate in MAML paper. It is set to 1e-3 by default.
-            num_inner_updates: An integer representing the number of gradient updates for task-specific parameters, with
-                default set to 5.
-            meta_lr: A float representing the learning rate of meta-parameters, corresponding to the 'beta' learning
-                rate in MAML paper. It is set to 1e-3 by default.
-            meta_batch_size: An integer representing the number of tasks sampled per outer loop, with default set to 25.
-            num_epochs: An integer representing the number of outer loops used to train, with default set to 1000.
-            num_epochs_save: An integer representing the number of outer loops to train before one saving, with default
-                set to 1000.
-            num_val_tasks: An integer representing the number of validation tasks, with default set to 100.
-            uncertainty: A uncertainty_flag attribute. Including it in the command line will set the uncertainty_flag
-                to True. (default)
-            no_uncertainty: A uncertainty_flag attribute. Including it in the command line will set the uncertainty_flag
-                to False.
-            p_dropout_base: A float representing the dropout rate for the base network, with default set to 0.0
-            cross_validate: A boolean. Including it in the command will run the model with cross-validation.
-            verbose: A boolean. Including it in the command line will print out the memory usage of the current device.
+            datasource:         A string identifying the datasource to be used, with default datasource set to drp_chem.
+            k_shot:             An integer representing the number of training samples per class, with default set to 5.
+            n_way:              An integer representing the number of classes per task, with default set to 1.
+            resume_epoch:       An integer representing the epoch id to resume learning or perform testing, with
+                                    default set to 0.
+            train:              A train_flag attribute. Including it in the command line will set the train_flag to
+                                    True by default.
+            test:               A train_flag attribute. Including it in the command line will set the train_flag
+                                    to False.
+            inner_lr:           A float representing the learning rate for task-specific parameters, corresponding to
+                                    the 'alpha' learning rate in MAML paper. It is set to 1e-3 by default.
+            num_inner_updates:  An integer representing the number of gradient updates for task-specific parameters,
+                                    with default set to 5.
+            meta_lr:            A float representing the learning rate of meta-parameters, corresponding to the 'beta'
+                                    learning rate in MAML paper. It is set to 1e-3 by default.
+            meta_batch_size:    An integer representing the number of tasks sampled per outer loop, defaulted to 25.
+            num_epochs:         An integer representing the number of outer loops used to train, defaulted to 1000.
+            num_epochs_save:    An integer representing the number of outer loops to train before one saving,
+                                    defaulted to 1000.
+            num_val_tasks:      An integer representing the number of validation tasks, with default set to 100.
+            uncertainty:        A uncertainty_flag attribute. Including it in the command line will set the uncertainty_
+                                    flag to True. (default)
+            no_uncertainty:     A uncertainty_flag attribute. Including it in the command line will set the uncertainty_
+                                    flag to False.
+            p_dropout_base:     A float representing the dropout rate for the base network, with default set to 0.0
+            cross_validate:     A boolean. Including it in the command will run the model with cross-validation.
+            verbose:            A boolean. Including it in the command line will print out the memory usage of
+                                    the current device.
     """
     parser = argparse.ArgumentParser(description='Setup variables for MAML.')
 
@@ -98,51 +99,59 @@ def initialize():
 
     Returns:
         params: A dictionary of the parameters for the model with the following keys:
-            device: A torch.device object representing the device on which a torch.Tensor is/will be allocated.
-            gpu_id: An integer representing which GPU it will be using.
-            train_flag: A boolean representing if it will be training the model or not.
-            cross_validate: A boolean representing if it will use cross-validation or not.
+            device:                         A torch.device object representing the device on which a torch.Tensor
+                                                is/will be allocated.
+            gpu_id:                         An integer representing which GPU it will be using.
+            train_flag:                     A boolean representing if it will be training the model or not.
+            cross_validate:                 A boolean representing if it will use cross-validation or not.
             num_training_samples_per_class: An integer representing the number of training samples per class.
-            num_total_samples_per_class: An integer representing the number of total samples per class.
-            num_classes_per_task: An integer representing the number of classes per task.
-            datasource: A string representing the data used for MAML.
-            inner_lr: A float representing the learning rate for task-specific parameters, corresponding to the 'alpha'
-                learning rate in MAML paper.
-            meta_lr: A float representing the learning rate of meta-parameters, corresponding to the 'beta' learning
-                rate in MAML paper.
-            num_tasks_per_epoch: An integer representing the number of tasks used per epoch.
-            num_tasks_save_loss: An integer representing the number of tasks used before one saving of the values of the
-                losses.
-            num_epochs: An integer representing the number of outer loops used to train.
-            num_epochs_save: An integer representing the number of outer loops to train before one saving.
-            num_inner_updates: An integer representing the number of gradient updates for task-specific parameters.
-            p_dropout_base: A float representing the dropout rate for the base network.
-            training_batches: A dictionary representing the training batches used to train PLATIPUS in main.py.
-                Key is amine left out, and value has hierarchy of:
-                batches -> x_t, y_t, x_v, y_v -> meta_batch_size number of amines -> k_shot number of reactions
-                -> each reaction has some number of features
-            validation_batches: A dictionary representing the validation batches used for cross-validation in PLATIPUS.
-                Key is amine which the data is for, value has the following hierarchy:
-                x_s, y_s, x_q, y_q -> k_shot number of reactions -> each reaction has some number of features
-            testing_batches: A dictionary representing the testing batches held out for scientific research purposes.
-                Key is amine which the data is for, value has the following hierarchy:
-                x_s, y_s, x_q, y_q -> k_shot number of reactions -> each reaction has some number of features
-            counts: A dictionary with 'total' and each available amines as keys and lists of length 2 as values. The
-                list has two entries: the number of failed reactions, and the number of successful reactions.
-            net: A FCNet object representing the neural network model used for MAML.
-            loss_fn: A CrossEntropyLoss object representing the loss function for the model.
-            sm_loss: A Softmax object representing the softmax layer to handle losses later on.
-            w_shape: A OrderedDict object representing the weight shape and number of weights in the model, with format
-                {weight_name : (number_of_outputs, number_of_inputs)} for weights, and
-                {weight_name : number_of_outputs} for biases.
-            num_val_tasks: An integer representing the number of validation tasks.
-            dst_folder: A string representing the path to save models.
-            resume_epoch: An integer representing the epoch id to resume learning or perform testing.
-            theta: A dictionary representing the meta-parameters for MAML, with weights/biases as keys and their
-                corresponding torch.Tensor object as values (requires_grad is set to True for all tensors).
-            op_theta: A torch.optim object representing the optimizer used for meta-parameter theta. Currently using
-                Adam as suggested in the MAML paper.
-            uncertainty_flag: A boolean representing if the uncertainty flag is turned on or not.
+            num_total_samples_per_class:    An integer representing the number of total samples per class.
+            num_classes_per_task:           An integer representing the number of classes per task.
+            datasource:                     A string representing the data used for MAML.
+            inner_lr:                       A float representing the learning rate for task-specific parameters,
+                                                corresponding to the 'alpha' learning rate in MAML paper.
+            meta_lr:                        A float representing the learning rate of meta-parameters, corresponding to
+                                                the 'beta' learning rate in MAML paper.
+            num_tasks_per_epoch:            An integer representing the number of tasks used per epoch.
+            num_tasks_save_loss:            An integer representing the number of tasks used before one saving of
+                                                the values of the losses.
+            num_epochs:                     An integer representing the number of outer loops used to train.
+            num_epochs_save:                An integer representing the number of outer loops to train before one saving
+                                                of the current model parameters.
+            num_inner_updates:              An integer representing the number of gradient updates for task-specific
+                                                parameters.
+            p_dropout_base:                 A float representing the dropout rate for the base network.
+            training_batches:               A dictionary representing the training batches used to train PLATIPUS.
+                                                Key is amine left out, and value has hierarchy of:
+                                                batches -> x_t, y_t, x_v, y_v -> meta_batch_size number of amines
+                                                -> k_shot number of reactions -> number of features of each reaction
+            validation_batches:             A dictionary representing the validation batches used for cross-validation
+                                                in PLATIPUS. Key is amine which the data is for, value has the following
+                                                hierarchy: x_s, y_s, x_q, y_q -> k_shot number of reactions
+                                                -> number of features of each reaction
+            testing_batches:                A dictionary representing the testing batches held out for scientific
+                                                research purposes. Key is amine which the data is for, value has the
+                                                following hierarchy: x_s, y_s, x_q, y_q -> k_shot number of reactions
+                                                -> number of features of each reaction
+            counts:                         A dictionary with 'total' and each available amines as keys and lists of
+                                                length 2 as values, in the format of:
+                                                [# of failed reactions, # of successful reactions]
+            net:                            A FCNet object representing the neural network model used for MAML.
+            loss_fn:                        A CrossEntropyLoss object representing the loss function for the model.
+            sm_loss:                        A Softmax object representing the softmax layer to handle losses later on.
+            w_shape:                        A OrderedDict object representing the weight shape and number of weights in
+                                                the model, with format:
+                                                {weight_name : (number_of_outputs, number_of_inputs)} for weights, and
+                                                {weight_name : number_of_outputs} for biases.
+            num_val_tasks:                  An integer representing the number of validation tasks.
+            dst_folder:                     A string representing the path to save models.
+            resume_epoch:                   An integer representing the epoch id to resume learning or perform testing.
+            theta:                          A dictionary representing the meta-parameters for MAML, with weights/biases
+                                                as keys and their corresponding torch.Tensor object as values.
+                                                requires_grad is set to True for all tensors.
+            op_theta:                       A torch.optim object representing the optimizer used for meta-parameter
+                                                theta. Currently using Adam as suggested in the MAML paper.
+            uncertainty_flag:               A boolean representing if the uncertainty flag is turned on or not.
     """
 
     args = parse_args()
@@ -322,7 +331,8 @@ def reinitialize_model_params(params):
     """Reinitialize model parameters for cross validation
 
     Args:
-        params: A dictionary of parameters used for this model. See documentation in initialize() for details.
+        params: A dictionary of parameters used for this model.
+                See documentation in initialize() for details.
 
     Returns:
         N/A
@@ -403,7 +413,7 @@ def meta_train(params, amine=None):
 
     Args:
         params: A dictionary of parameters used for this model. See documentation in initialize() for details.
-        amine: A string representing the specific amine that the model will be trained on.
+        amine:  A string representing the specific amine that the model will be trained on.
 
     Returns:
         N/A
@@ -540,20 +550,20 @@ def get_task_prediction(x_t, y_t, x_v, params, y_v=None):
     """Get the predictions on input data
 
     Args:
-        x_t: A numpy array (3D) representing the training data of one batch.
-            The dimension is meta_batch_size by k_shot by number of features of our data input.
-        y_t: A numpy array (3D) representing the training labels of one batch.
-            The dimension is meta_batch_size by k_shot by n_way.
-        x_v: A numpy array (3D) representing the validation data of one batch.
-            The dimension is meta_batch_size by k_shot by number of features of our data input.
-        params: A dictionary of parameters used for this model. See documentation in initialize() for details.
-        y_v: A numpy array (3D) representing the validation labels of one batch.
-            The dimension is meta_batch_size by k_shot by n_way. It is optional, with default set to None.
+        x_t:        A numpy array (3D) representing the training data of one batch.
+                        The dimension is meta_batch_size by k_shot by number of features of our data input.
+        y_t:        A numpy array (3D) representing the training labels of one batch.
+                        The dimension is meta_batch_size by k_shot by n_way.
+        x_v:        A numpy array (3D) representing the validation data of one batch.
+                        The dimension is meta_batch_size by k_shot by number of features of our data input.
+        params:     A dictionary of parameters used for this model. See documentation in initialize() for details.
+        y_v:        A numpy array (3D) representing the validation labels of one batch.
+                        The dimension is meta_batch_size by k_shot by n_way. It is optional, with default set to None.
 
     Returns:
-        y_pred_v: A numpy array (3D) representing the predicted labels given our the testing data of one batch.
-            The dimension is meta_batch_size by k_shot by n_way.
-        loss_NLL: A torch.Tensor object representing the loss given our predicted labels and validation labels.
+        y_pred_v:   A numpy array (3D) representing the predicted labels given our the testing data of one batch.
+                        The dimension is meta_batch_size by k_shot by n_way.
+        loss_NLL:   A torch.Tensor object representing the loss given our predicted labels and validation labels.
     """
 
     # Unpack the variables that we need
