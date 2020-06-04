@@ -8,11 +8,12 @@ def load_chem_dataset(k_shot, meta_batch_size=32, num_batches=100, verbose=False
     """Load in the chemistry data for training
 
     Args:
-        k_shot:             The number of unseen classes in the dataset
-        meta_batch_size:    The batch size for meta learning, default is 32
-        num_batches:        The batch size for training, default is 100
-        verbose:            Give more information about the training
-                            dataset features, default is False
+        k_shot:             An integer. The number of unseen classes in the dataset
+        meta_batch_size:    An integer. The batch size for meta learning, default is 32
+        num_batches:        An integer. The batch size for training, default is 100
+        verbose:            A boolean that gives information about
+                            the training memory usage,
+                            default is False
 
     return:
         amine_left_out_batches:         A dictionary containing the batches of
@@ -162,11 +163,12 @@ def load_chem_dataset_testing(k_shot, meta_batch_size=32, num_batches=100, verbo
     """Load in the chemistry data for testing
 
     Args:
-        k_shot:             The number of unseen classes in the dataset
-        meta_batch_size:    The batch size for meta learning, default is 32
-        num_batches:        The batch size for training, default is 100
-        verbose:            Give more information about the training
-                            dataset features, default is False
+        k_shot:             An integer. The number of unseen classes in the dataset
+        meta_batch_size:    An integer. The batch size for meta learning, default is 32
+        num_batches:        An integer. The batch size for training, default is 100
+        verbose:            A boolean that gives information about
+                            the training memory usage,
+                            default is False
 
     return:
         amine_batches:      A list of batches of the amines
@@ -277,10 +279,10 @@ def generate_batch(df, meta_batch_size, available_amines, to_exclude, k_shot, am
 
     Args:
         df:                 The data frame of the amines data
-        meta_batch_size:    Batch size for meta learning
-        available_amines:   The list of amines that we are generating batches on
-        to_exclude:         The columns in the dataset that we need to drop
-        k_shot:             The number of unseen classes in the dataset
+        meta_batch_size:    An integer. Batch size for meta learning
+        available_amines:   A list. The list of amines that we are generating batches on
+        to_exclude:         A list. The columns in the dataset that we need to drop
+        k_shot:             An integer. The number of unseen classes in the dataset
         amine_header:       The header of the amine list in the data frame,
                             default = '_rxn_organic-inchikey'
         score_header:       The header of the score header in the data frame,
@@ -321,9 +323,9 @@ def generate_valid_test_batch(X, y, k_shot):
     """Generate the batches for the amine used for cross validation or testing
 
     Args:
-        X:      The features of the chosen amine in the dataset
-        y:      The labels of the chosen amine in the dataset
-        k_shot: The number of unseen classes in the dataset
+        X:      Dataframe. The features of the chosen amine in the dataset
+        y:      Dataframe. The labels of the chosen amine in the dataset
+        k_shot: An integer. The number of unseen classes in the dataset
 
     return: A list of the features and labels for the amine
     """

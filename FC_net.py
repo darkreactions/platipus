@@ -23,9 +23,9 @@ class FCNet(torch.nn.Module):
         """Initializes the FCNet
 
         Args:
-            dim_input:          Dimension of the input matrix
-            dim_output:         Dimension of the output matrix
-            num_hidden_units:   The number of hidden nodes in
+            dim_input:          An integer. Dimension of the input matrix
+            dim_output:         An integer. Dimension of the output matrix
+            num_hidden_units:   A tuple. The number of hidden nodes in
                                 the three layers defined in the net
             device:             The device we use to run,
                                 ideally will not be CPU but it can be
@@ -132,7 +132,7 @@ class FCNet(torch.nn.Module):
     def get_num_weights(self):
         """Get the fully connected weight of the net
 
-        return: A integer that is the product of
+        return: An integer that is the product of
         all the weights presented in the fully connected layers,
         varying from -2147483648 to 2147483647
         """
