@@ -5,6 +5,29 @@ from sklearn.preprocessing import StandardScaler
 
 # Load in the chemistry data, it is harder than it sounds
 def load_chem_dataset(k_shot, meta_batch_size=32, num_batches=100, verbose=False):
+    """Load in the chemistry data for training
+
+    Args:
+        k_shot:             The number of unseen classes in the dataset
+        meta_batch_size:    The batch size for meta learning, default is 32
+        num_batches:        The batch size for training, default is 100
+        verbose:            Give more information about the training
+                            dataset features, default is False
+
+    return:
+        amine_left_out_batches:         A dictionary containing the batches of
+                                        the left out amines in the format of
+                                        {"amine":[[batch1 into],[batch2 info],...]}
+        amine_cross_validate_samples:   A dictionary containing the batches of
+                                        the amines used for cross validation in the format of
+                                        {"amine":[batch info]}
+        amine_test_samples:             A dictionary containing the batches of
+                                        the amines as test samples in the format of
+                                        {"amine":[batch info]}
+        counts:                         A dictionary to record the number of
+                                        successful and failed reactions in the format of
+                                        {"total": [# of failed reactions, # of successful reactions]}
+    """
     # "I'm limited by the technology of my time."
     # Ideally the model would choose from a Uniformly distributed pool of unlabeled reactions
     # Then we would run that reaction in the lab and give it back to the model
@@ -92,55 +115,19 @@ def load_chem_dataset(k_shot, meta_batch_size=32, num_batches=100, verbose=False
         batches = []
         for _ in range(num_batches):
             # t for train, v for validate (but validate is outer loop, trying to be consistent with the PLATIPUS code)
-            x_t, y_t, x_v, y_v = [], [], [], []
-
-            for _ in range(meta_batch_size):
-                # Grab the tasks
-                X = df[df[amine_header] == np.random.choice(available_amines)]
-
-                y = X[score_header].values
-
-                # Drop these columns from the dataset
-                X = X.drop(to_exclude, axis=1).values
-
-                # Standardize features since they are not yet standardized in the dataset
-                scaler = StandardScaler()
-                scaler.fit(X)
-                X = scaler.transform(X)
-
-                spt = np.random.choice(X.shape[0], size=k_shot, replace=False)
-                qry = np.random.choice(X.shape[0], size=k_shot, replace=False)
-
-                x_t.append(X[spt])
-                y_t.append(y[spt])
-                x_v.append(X[qry])
-                y_v.append(y[qry])
-
-            batches.append([np.array(x_t), np.array(y_t), np.array(x_v), np.array(y_v)])
+            batch = generate_batch(df, meta_batch_size, available_amines, to_exclude, k_shot)
+            batches.append(batch)
 
         amine_left_out_batches[amine] = batches
+        #print("hey this is {}".format(batches))
 
         # Now set up the cross validation data
         X = df[df[amine_header] == amine]
         y = X[score_header].values
         X = X.drop(to_exclude, axis=1).values
-        spt = np.random.choice(X.shape[0], size=k_shot, replace=False)
-        qry = [i for i in range(len(X)) if i not in spt]
-        if len(qry) <= 5:
-            print("Warning: minimal testing data for meta-learn assessment")
+        cross_valid = generate_valid_test_batch(X, y, k_shot)
 
-        x_s = X[spt]
-        y_s = y[spt]
-        x_q = X[qry]
-        y_q = y[qry]
-
-        scaler = StandardScaler()
-        scaler.fit(x_s)
-
-        x_s = scaler.transform(x_s)
-        x_q = scaler.transform(x_q)
-
-        amine_cross_validate_samples[amine] = [x_s, y_s, x_q, y_q]
+        amine_cross_validate_samples[amine] = cross_valid
 
     amine_test_samples = {}
 
@@ -150,23 +137,9 @@ def load_chem_dataset(k_shot, meta_batch_size=32, num_batches=100, verbose=False
 
         y = X[score_header].values
         X = X.drop(to_exclude, axis=1).values
-        spt = np.random.choice(X.shape[0], size=k_shot, replace=False)
-        qry = [i for i in range(len(X)) if i not in spt]
-        if len(qry) <= 5:
-            print("Warning: minimal testing data for meta-learn assessment")
+        test_sample = generate_valid_test_batch(X, y, k_shot)
 
-        x_s = X[spt]
-        y_s = y[spt]
-        x_q = X[qry]
-        y_q = y[qry]
-
-        scaler = StandardScaler()
-        scaler.fit(x_s)
-
-        x_s = scaler.transform(x_s)
-        x_q = scaler.transform(x_q)
-
-        amine_test_samples[a] = [x_s, y_s, x_q, y_q]
+        amine_test_samples[a] = test_sample
 
     # amine_left_out_batches structure:
     # key is amine left out, value has following hierarchy
@@ -186,6 +159,25 @@ def load_chem_dataset(k_shot, meta_batch_size=32, num_batches=100, verbose=False
 
 # Do not use any data for model validation this time
 def load_chem_dataset_testing(k_shot, meta_batch_size=32, num_batches=100, verbose=False):
+    """Load in the chemistry data for testing
+
+    Args:
+        k_shot:             The number of unseen classes in the dataset
+        meta_batch_size:    The batch size for meta learning, default is 32
+        num_batches:        The batch size for training, default is 100
+        verbose:            Give more information about the training
+                            dataset features, default is False
+
+    return:
+        amine_batches:      A list of batches of the amines
+                            in the format of [[batch1],[batch2],...]
+        amine_test_samples: A dictionary containing the batches of the amines
+                            as test samples in the format of
+                            {"amine":[batch info]}
+        counts:             A dictionary to record the number of
+                            successful and failed reactions in the format of
+                            {"total": [# of failed reactions, # of successful reactions]}
+    """
     viable_amines = ['ZEVRFFCPALTVDN-UHFFFAOYSA-N',
                      'KFQARYBEAKAXIC-UHFFFAOYSA-N',
                      'NLJDBTZLVTWXRG-UHFFFAOYSA-N',
@@ -250,31 +242,8 @@ def load_chem_dataset_testing(k_shot, meta_batch_size=32, num_batches=100, verbo
     print('Generating training batches')
     for _ in range(num_batches):
         # t for train, v for validate (but validate is outer loop, trying to be consistent with the PLATIPUS code)
-        x_t, y_t, x_v, y_v = [], [], [], []
-
-        for _ in range(meta_batch_size):
-            # Grab the tasks
-            X = df[df[amine_header] == np.random.choice(available_amines)]
-
-            y = X[score_header].values
-
-            # Drop these columns from the dataset
-            X = X.drop(to_exclude, axis=1).values
-
-            # Standardize features since they are not yet standardized in the dataset
-            scaler = StandardScaler()
-            scaler.fit(X)
-            X = scaler.transform(X)
-
-            spt = np.random.choice(X.shape[0], size=k_shot, replace=False)
-            qry = np.random.choice(X.shape[0], size=k_shot, replace=False)
-
-            x_t.append(X[spt])
-            y_t.append(y[spt])
-            x_v.append(X[qry])
-            y_v.append(y[qry])
-
-        batches.append([np.array(x_t), np.array(y_t), np.array(x_v), np.array(y_v)])
+        batch = generate_batch(df, meta_batch_size, available_amines, to_exclude, k_shot)
+        batches.append(batch)
 
     amine_test_samples = {}
 
@@ -285,23 +254,9 @@ def load_chem_dataset_testing(k_shot, meta_batch_size=32, num_batches=100, verbo
 
         y = X[score_header].values
         X = X.drop(to_exclude, axis=1).values
-        spt = np.random.choice(X.shape[0], size=k_shot, replace=False)
-        qry = [i for i in range(len(X)) if i not in spt]
-        if len(qry) <= 5:
-            print("Warning: minimal testing data for meta-learn assessment")
+        test_sample = generate_valid_test_batch(X, y, k_shot)
 
-        x_s = X[spt]
-        y_s = y[spt]
-        x_q = X[qry]
-        y_q = y[qry]
-
-        scaler = StandardScaler()
-        scaler.fit(x_s)
-
-        x_s = scaler.transform(x_s)
-        x_q = scaler.transform(x_q)
-
-        amine_test_samples[a] = [x_s, y_s, x_q, y_q]
+        amine_test_samples[a] = test_sample
 
     # amine_left_out_batches structure:
     # Here we have a list of batches
@@ -315,6 +270,80 @@ def load_chem_dataset_testing(k_shot, meta_batch_size=32, num_batches=100, verbo
         print('Number of features to train on is', len(df.columns) - len(to_exclude))
 
     return batches, amine_test_samples, counts
+
+
+def generate_batch(df, meta_batch_size, available_amines, to_exclude, k_shot, amine_header='_rxn_organic-inchikey', score_header='_out_crystalscore'):
+    """Generate the batch for training amines
+
+    Args:
+        df:                 The data frame of the amines data
+        meta_batch_size:    Batch size for meta learning
+        available_amines:   The list of amines that we are generating batches on
+        to_exclude:         The columns in the dataset that we need to drop
+        k_shot:             The number of unseen classes in the dataset
+        amine_header:       The header of the amine list in the data frame,
+                            default = '_rxn_organic-inchikey'
+        score_header:       The header of the score header in the data frame,
+                            default = '_out_crystalscore'
+
+    return: A list of the batch with
+    training and validation features and labels in numpy arrays.
+    The format is [[training_feature],[training_label],[validation_feature],[validation_label]]
+    """
+    x_t, y_t, x_v, y_v = [], [], [], []
+
+    for _ in range(meta_batch_size):
+        # Grab the tasks
+        X = df[df[amine_header] == np.random.choice(available_amines)]
+
+        y = X[score_header].values
+
+        # Drop these columns from the dataset
+        X = X.drop(to_exclude, axis=1).values
+
+        # Standardize features since they are not yet standardized in the dataset
+        scaler = StandardScaler()
+        scaler.fit(X)
+        X = scaler.transform(X)
+
+        spt = np.random.choice(X.shape[0], size=k_shot, replace=False)
+        qry = np.random.choice(X.shape[0], size=k_shot, replace=False)
+
+        x_t.append(X[spt])
+        y_t.append(y[spt])
+        x_v.append(X[qry])
+        y_v.append(y[qry])
+
+    return [np.array(x_t), np.array(y_t), np.array(x_v), np.array(y_v)]
+
+
+def generate_valid_test_batch(X, y, k_shot):
+    """Generate the batches for the amine used for cross validation or testing
+
+    Args:
+        X:      The features of the chosen amine in the dataset
+        y:      The labels of the chosen amine in the dataset
+        k_shot: The number of unseen classes in the dataset
+
+    return: A list of the features and labels for the amine
+    """
+    spt = np.random.choice(X.shape[0], size=k_shot, replace=False)
+    qry = [i for i in range(len(X)) if i not in spt]
+    if len(qry) <= 5:
+        print("Warning: minimal testing data for meta-learn assessment")
+
+    x_s = X[spt]
+    y_s = y[spt]
+    x_q = X[qry]
+    y_q = y[qry]
+
+    scaler = StandardScaler()
+    scaler.fit(x_s)
+
+    x_s = scaler.transform(x_s)
+    x_q = scaler.transform(x_q)
+
+    return [x_s, y_s, x_q, y_q]
 
 
 if __name__ == "__main__":
