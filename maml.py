@@ -17,17 +17,51 @@ from FC_net import FCNet
 
 import pickle
 
-
 import argparse
 
 
-# Set up the initial variables for running MAML
 def parse_args():
+    """Set up the initial variables for running MAML.
+
+    Retrieves argument values from the terminal command line to create an argparse.Namespace object for initialization.
+
+    Args:
+        N/A
+
+    Returns:
+        args: Namespace object with the following attributes:
+            datasource: A string identifying the datasource to be used, with default datasource set to drp_chem.
+            k_shot: An integer representing the number of training samples per class, with default set to 5.
+            n_way: An integer representing the number of classes per task, with default set to 1.
+            resume_epoch: An integer representing the epoch id to resume learning or perform testing, with default set
+                to 0.
+            train: A train_flag attribute. Including it in the command line will set the train_flag to True. (default)
+            test: A train_flag attribute. Including it in the command line will set the train_flag to False.
+            inner_lr: A float representing the learning rate for task-specific parameters, corresponding to the 'alpha'
+                learning rate in MAML paper. It is set to 1e-3 by default.
+            num_inner_updates: An integer representing the number of gradient updates for task-specific parameters, with
+                default set to 5.
+            meta_lr: A float representing the learning rate of meta-parameters, corresponding to the 'beta' learning
+                rate in MAML paper. It is set to 1e-3 by default.
+            meta_batch_size: An integer representing the number of tasks sampled per outer loop, with default set to 25.
+            num_epochs: An integer representing the number of outer loops used to train, with default set to 1000.
+            num_epochs_save: An integer representing the number of outer loops to train before one saving, with default
+                set to 1000.
+            num_val_tasks: An integer representing the number of validation tasks, with default set to 100.
+            uncertainty: A uncertainty_flag attribute. Including it in the command line will set the uncertainty_flag
+                to True. (default)
+            no_uncertainty: A uncertainty_flag attribute. Including it in the command line will set the uncertainty_flag
+                to False.
+            p_dropout_base: A float representing the dropout rate for the base network, with default set to 0.0
+            cross_validate: A boolean. Including it in the command will run the model with cross-validation.
+            verbose: A boolean. Including it in the command line will print out the memory usage of the current device.
+    """
     parser = argparse.ArgumentParser(description='Setup variables for MAML.')
 
     parser.add_argument('--datasource', type=str, default='drp_chem', help='datasource to be used, default is drp_chem')
     parser.add_argument('--k_shot', type=int, default=5, help='Number of training samples per class or k-shot')
-    parser.add_argument('--n_way', type=int, default=1, help='Number of classes per task, this is 2 for the chemistry data')
+    parser.add_argument('--n_way', type=int, default=1,
+                        help='Number of classes per task, this is 2 for the chemistry data')
     parser.add_argument('--resume_epoch', type=int, default=0, help='Epoch id to resume learning or perform testing')
 
     parser.add_argument('--train', dest='train_flag', action='store_true')
@@ -35,7 +69,8 @@ def parse_args():
     parser.set_defaults(train_flag=True)
 
     parser.add_argument('--inner_lr', type=float, default=1e-3, help='Learning rate for task-specific parameters')
-    parser.add_argument('--num_inner_updates', type=int, default=5, help='Number of gradient updates for task-specific parameters')
+    parser.add_argument('--num_inner_updates', type=int, default=5,
+                        help='Number of gradient updates for task-specific parameters')
     parser.add_argument('--meta_lr', type=float, default=1e-3, help='Learning rate of meta-parameters')
     parser.add_argument('--meta_batch_size', type=int, default=25, help='Number of tasks sampled per outer loop')
     parser.add_argument('--num_epochs', type=int, default=1000, help='How many outer loops are used to train')
@@ -49,17 +84,66 @@ def parse_args():
     parser.add_argument('--p_dropout_base', type=float, default=0., help='Dropout rate for the base network')
     parser.add_argument('--cross_validate', action='store_true')
 
-
     parser.add_argument('--verbose', action='store_true')
 
     args = parser.parse_args()
-    return args 
+    return args
 
 
-# Do all of the initialization that we need for the rest of the code to run...
-# Initializes a dictionary of parameters corresponding to the arguments various 
-# functions will need 
 def initialize():
+    """Initializes a dictionary of parameters corresponding to the arguments
+
+    Args:
+        N/A
+
+    Returns:
+        params: A dictionary of the parameters for the model with the following keys:
+            device: A torch.device object representing the device on which a torch.Tensor is/will be allocated.
+            gpu_id: An integer representing which GPU it will be using.
+            train_flag: A boolean representing if it will be training the model or not.
+            cross_validate: A boolean representing if it will use cross-validation or not.
+            num_training_samples_per_class: An integer representing the number of training samples per class.
+            num_total_samples_per_class: An integer representing the number of total samples per class.
+            num_classes_per_task: An integer representing the number of classes per task.
+            datasource: A string representing the data used for MAML.
+            inner_lr: A float representing the learning rate for task-specific parameters, corresponding to the 'alpha'
+                learning rate in MAML paper.
+            meta_lr: A float representing the learning rate of meta-parameters, corresponding to the 'beta' learning
+                rate in MAML paper.
+            num_tasks_per_epoch: An integer representing the number of tasks used per epoch.
+            num_tasks_save_loss: An integer representing the number of tasks used before one saving of the values of the
+                losses.
+            num_epochs: An integer representing the number of outer loops used to train.
+            num_epochs_save: An integer representing the number of outer loops to train before one saving.
+            num_inner_updates: An integer representing the number of gradient updates for task-specific parameters.
+            p_dropout_base: A float representing the dropout rate for the base network.
+            training_batches: A dictionary representing the training batches used to train PLATIPUS in main.py.
+                Key is amine left out, and value has hierarchy of:
+                batches -> x_t, y_t, x_v, y_v -> meta_batch_size number of amines -> k_shot number of reactions
+                -> each reaction has some number of features
+            validation_batches: A dictionary representing the validation batches used for cross-validation in PLATIPUS.
+                Key is amine which the data is for, value has the following hierarchy:
+                x_s, y_s, x_q, y_q -> k_shot number of reactions -> each reaction has some number of features
+            testing_batches: A dictionary representing the testing batches held out for scientific research purposes.
+                Key is amine which the data is for, value has the following hierarchy:
+                x_s, y_s, x_q, y_q -> k_shot number of reactions -> each reaction has some number of features
+            counts: A dictionary with 'total' and each available amines as keys and lists of length 2 as values. The
+                list has two entries: the number of failed reactions, and the number of successful reactions.
+            net: A FCNet object representing the neural network model used for MAML.
+            loss_fn: A CrossEntropyLoss object representing the loss function for the model.
+            sm_loss: A Softmax object representing the softmax layer to handle losses later on.
+            w_shape: A OrderedDict object representing the weight shape and number of weights in the model, with format
+                {weight_name : (number_of_outputs, number_of_inputs)} for weights, and
+                {weight_name : number_of_outputs} for biases.
+            num_val_tasks: An integer representing the number of validation tasks.
+            dst_folder: A string representing the path to save models.
+            resume_epoch: An integer representing the epoch id to resume learning or perform testing.
+            theta: A dictionary representing the meta-parameters for MAML, with weights/biases as keys and their
+                corresponding torch.Tensor object as values (requires_grad is set to True for all tensors).
+            op_theta: A torch.optim object representing the optimizer used for meta-parameter theta. Currently using
+                Adam as suggested in the MAML paper.
+            uncertainty_flag: A boolean representing if the uncertainty flag is turned on or not.
+    """
 
     args = parse_args()
     params = {}
@@ -73,28 +157,28 @@ def initialize():
     if device.type == 'cuda' and args.verbose:
         print(torch.cuda.get_device_name(0))
         print('Memory Usage:')
-        print('Allocated:', round(torch.cuda.memory_allocated(0)/1024**3,1), 'GB')
-        print('Cached:   ', round(torch.cuda.memory_cached(0)/1024**3,1), 'GB')
+        print('Allocated:', round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1), 'GB')
+        print('Cached:   ', round(torch.cuda.memory_cached(0) / 1024 ** 3, 1), 'GB')
 
     params['device'] = device
-    params['gpu_id'] = gpu_id   
+    params['gpu_id'] = gpu_id
 
     # Set up MAML using user inputs
     params['train_flag'] = args.train_flag
     params['cross_validate'] = args.cross_validate
     # Set up the value of k in k-shot learning
     print(f'{args.k_shot}-shot')
-    params['num_training_samples_per_class'] = args.k_shot 
+    params['num_training_samples_per_class'] = args.k_shot
 
     # Total number of samples per class, need some extra for the outer loop update as well 
     if params['train_flag']:
-        params['num_total_samples_per_class'] = params['num_training_samples_per_class'] + 15 
+        params['num_total_samples_per_class'] = params['num_training_samples_per_class'] + 15
     else:
         params['num_total_samples_per_class'] = params['num_training_samples_per_class'] + 20
 
     # n-way: 1 for the sine-line data and 2 for the chemistry data
     print(f'{args.n_way}-way')
-    params['num_classes_per_task'] = args.n_way 
+    params['num_classes_per_task'] = args.n_way
 
     # Initialize the datasource and learning rate
     print(f'Dataset = {args.datasource}')
@@ -109,7 +193,7 @@ def initialize():
     # Reducing this to 25 like in Finn et al.
     # Tells us how many tasks are per epoch and after how many tasks we should save the values of the losses
     params['num_tasks_per_epoch'] = args.meta_batch_size
-    params['num_tasks_save_loss'] = args.meta_batch_size 
+    params['num_tasks_save_loss'] = args.meta_batch_size
     params['num_epochs'] = args.num_epochs
 
     # How often should we save?
@@ -123,31 +207,32 @@ def initialize():
     params['p_dropout_base'] = args.p_dropout_base
 
     if params['datasource'] == 'drp_chem':
-        
-        # I am only running MAML to compare with PLATIPUS, thus assume this data already exists
+
+        # Use pickle to load the training, validation, hold-out testing batches, and reaction counts used for PLATIPUS
+        # Since we're only running MAML to compare with PLATIPUS, thus assume this data already exists
         if params['cross_validate']:
-            with open(os.path.join("./data","train_dump.pkl"), "rb") as f:
+            with open(os.path.join("./data", "train_dump.pkl"), "rb") as f:
                 params['training_batches'] = pickle.load(f)
-            with open(os.path.join("./data","val_dump.pkl"), "rb") as f:
+            with open(os.path.join("./data", "val_dump.pkl"), "rb") as f:
                 params['validation_batches'] = pickle.load(f)
-            with open(os.path.join("./data","test_dump.pkl"), "rb") as f:
+            with open(os.path.join("./data", "test_dump.pkl"), "rb") as f:
                 params['testing_batches'] = pickle.load(f)
-            with open(os.path.join("./data","counts_dump.pkl"), "rb") as f:
+            with open(os.path.join("./data", "counts_dump.pkl"), "rb") as f:
                 params['counts'] = pickle.load(f)
 
         net = FCNet(
-            dim_input= 51,
+            dim_input=51,
             dim_output=params['num_classes_per_task'],
             num_hidden_units=(200, 100, 100),
             device=device
         )
-        params['net'] = net 
+        params['net'] = net
         # Try weighting positive reactions more heavily
         # Majority class label count/ class label count for each weight
         # See https://discuss.pytorch.org/t/what-is-the-weight-values-mean-in-torch-nn-crossentropyloss/11455/9
         # Do this again just in case we are loading weights
         counts = params['counts']
-        weights = [counts['total'][0]/counts['total'][0], counts['total'][0]/counts['total'][1]]
+        weights = [counts['total'][0] / counts['total'][0], counts['total'][0] / counts['total'][1]]
         class_weights = torch.tensor(weights, device=device)
         params['loss_fn'] = torch.nn.CrossEntropyLoss(class_weights)
         # Set up a softmax layer to handle losses later on 
@@ -155,7 +240,7 @@ def initialize():
     else:
         sys.exit('Unknown dataset')
 
-    # Weight shape and number of weights in the model 
+    # Weight shape and number of weights in the model
     params['w_shape'] = net.get_weight_shape()
     print(f'Number of parameters of base model = {net.get_num_weights()}')
 
@@ -187,7 +272,7 @@ def initialize():
         theta = {}
         for key in params['w_shape'].keys():
             if 'b' in key:
-                theta[key] = torch.zeros(params['w_shape'][key], device=device, requires_grad=True)      
+                theta[key] = torch.zeros(params['w_shape'][key], device=device, requires_grad=True)
             else:
                 theta[key] = torch.empty(params['w_shape'][key], device=device)
                 torch.nn.init.xavier_normal_(theta[key], gain=1.)
@@ -207,19 +292,19 @@ def initialize():
             saved_checkpoint = torch.load(
                 checkpoint_file,
                 map_location=lambda storage,
-                loc: storage.cuda(gpu_id)
+                                    loc: storage.cuda(gpu_id)
             )
         else:
             saved_checkpoint = torch.load(
                 checkpoint_file,
                 map_location=lambda storage,
-                loc: storage
+                                    loc: storage
             )
 
         theta = saved_checkpoint['theta']
-    
+
     params['theta'] = theta
-    
+
     # Now we need to set up the optimizer for theta, this is a lot simpler than it is for PLATIPUS
     op_theta = torch.optim.Adam(params=theta.values(), lr=params['meta_lr'])
     if params['resume_epoch'] > 0:
@@ -232,13 +317,22 @@ def initialize():
     print()
     return params
 
-# Use this for cross validation, we need to set up a new loss function too
+
 def reinitialize_model_params(params):
+    """Reinitialize model parameters for cross validation
+
+    Args:
+        params: A dictionary of parameters used for this model. See documentation in initialize() for details.
+
+    Returns:
+        N/A
+    """
+
     # Initialise meta-parameters for MAML
     theta = {}
     for key in params['w_shape'].keys():
         if 'b' in key:
-            theta[key] = torch.zeros(params['w_shape'][key], device=params['device'], requires_grad=True)      
+            theta[key] = torch.zeros(params['w_shape'][key], device=params['device'], requires_grad=True)
         else:
             theta[key] = torch.empty(params['w_shape'][key], device=params['device'])
             torch.nn.init.xavier_normal_(theta[key], gain=1.)
@@ -250,11 +344,19 @@ def reinitialize_model_params(params):
     params['op_theta'] = op_theta
 
 
-# Main driver code
 def main():
+    """Main driver code
 
-    # Do the massive initialization and get back a dictionary instead of using 
-    # global variables
+    The main function to conduct meta-training for each available amine.
+
+    Args:
+        N/A
+
+    Returns:
+        N/A
+    """
+
+    # Do the massive initialization and get back a dictionary instead of using global variables
     params = initialize()
 
     if params['train_flag']:
@@ -283,7 +385,7 @@ def main():
 
                     # Adjust the loss function for each amine
                     amine_counts = params['counts'][amine]
-                    weights = [amine_counts[0]/amine_counts[0], amine_counts[0]/amine_counts[1]]
+                    weights = [amine_counts[0] / amine_counts[0], amine_counts[0] / amine_counts[1]]
                     print('Using the following weights for loss function:', weights)
                     class_weights = torch.tensor(weights, device=params['device'])
                     params['loss_fn'] = torch.nn.CrossEntropyLoss(class_weights)
@@ -292,36 +394,21 @@ def main():
                     meta_train(params, amine)
                     reinitialize_model_params(params)
 
-
-    elif params['resume_epoch'] > 0:
-
-        if not uncertainty_flag:
-            accs, all_task_names = meta_validation(
-                datasubset=test_set,
-                num_val_tasks=num_val_tasks,
-                return_uncertainty=uncertainty_flag
-            )
-            with open(file='maml_{0:s}_{1:d}_{2:d}_accuracies.csv'.format(datasource, num_classes_per_task, num_training_samples_per_class), mode='w') as result_file:
-                for acc, classes_in_task in zip(accs, all_task_names):
-                    row_str = ''
-                    for class_in_task in classes_in_task:
-                        row_str = '{0}{1},'.format(row_str, class_in_task)
-                    result_file.write('{0}{1}\n'.format(row_str, acc))
-        else:
-            corrects, probs = meta_validation(
-                datasubset=test_set,
-                num_val_tasks=num_val_tasks,
-                return_uncertainty=uncertainty_flag
-            )
-            with open(file='maml_{0:s}_correct_prob.csv'.format(datasource), mode='w') as result_file:
-                for correct, prob in zip(corrects, probs):
-                    result_file.write('{0}, {1}\n'.format(correct, prob))
-                    # print(correct, prob)
     else:
         sys.exit('Unknown action')
 
-# Run the actual meta training for MAML
+
 def meta_train(params, amine=None):
+    """The meta-training function for MAML
+
+    Args:
+        params: A dictionary of parameters used for this model. See documentation in initialize() for details.
+        amine: A string representing the specific amine that the model will be trained on.
+
+    Returns:
+        N/A
+    """
+
     # Start by unpacking the variables that we need
     datasource = params['datasource']
     num_total_samples_per_class = params['num_total_samples_per_class']
@@ -344,7 +431,6 @@ def meta_train(params, amine=None):
     # How often should we save?
     num_epochs_save = params['num_epochs_save']
 
-
     for epoch in range(resume_epoch, resume_epoch + num_epochs):
         print(f"Starting epoch {epoch}")
 
@@ -356,28 +442,30 @@ def meta_train(params, amine=None):
             else:
                 b_num = np.random.choice(len(training_batches))
                 batch = training_batches[b_num]
-            x_train, y_train, x_val, y_val = torch.from_numpy(batch[0]).float().to(params['device']), torch.from_numpy(batch[1]).long().to(params['device']), \
-                torch.from_numpy(batch[2]).float().to(params['device']), torch.from_numpy(batch[3]).long().to(params['device'])
+            x_train, y_train, x_val, y_val = torch.from_numpy(batch[0]).float().to(params['device']), torch.from_numpy(
+                batch[1]).long().to(params['device']), \
+                                             torch.from_numpy(batch[2]).float().to(params['device']), torch.from_numpy(
+                batch[3]).long().to(params['device'])
 
         # variables used to store information of each epoch for monitoring purpose
-        meta_loss_saved = [] # meta loss to save
+        meta_loss_saved = []  # meta loss to save
         val_accuracies = []
         train_accuracies = []
 
-        task_count = 0 # a counter to decide when a minibatch of task is completed to perform meta update
-        meta_loss = 0 # accumulate the loss of many ensambling networks to descent gradient for meta update
+        task_count = 0  # a counter to decide when a minibatch of task is completed to perform meta update
+        meta_loss = 0  # accumulate the loss of many ensambling networks to descent gradient for meta update
         num_meta_updates_count = 0
 
-        meta_loss_avg_print = 0 # compute loss average to print
+        meta_loss_avg_print = 0  # compute loss average to print
 
-        meta_loss_avg_save = [] # meta loss to save
+        meta_loss_avg_save = []  # meta loss to save
 
         while (task_count < num_tasks_per_epoch):
             if datasource == 'drp_chem':
                 x_t, y_t, x_v, y_v = x_train[task_count], y_train[task_count], x_val[task_count], y_val[task_count]
             else:
                 sys.exit('Unknown dataset')
-            
+
             loss_NLL = get_task_prediction(x_t, y_t, x_v, params, y_v)
 
             if torch.isnan(loss_NLL).item():
@@ -389,7 +477,7 @@ def meta_train(params, amine=None):
             task_count = task_count + 1
 
             if task_count % num_tasks_per_epoch == 0:
-                meta_loss = meta_loss/num_tasks_per_epoch
+                meta_loss = meta_loss / num_tasks_per_epoch
 
                 # accumulate into different variables for printing purpose
                 meta_loss_avg_print += meta_loss.item()
@@ -399,7 +487,7 @@ def meta_train(params, amine=None):
 
                 # Clip gradients to prevent exploding gradient problem
                 torch.nn.utils.clip_grad_norm_(
-                    parameters=theta.values(), 
+                    parameters=theta.values(),
                     max_norm=3
                 )
 
@@ -408,7 +496,7 @@ def meta_train(params, amine=None):
                 # Printing losses
                 num_meta_updates_count += 1
                 if (num_meta_updates_count % num_meta_updates_print == 0):
-                    meta_loss_avg_save.append(meta_loss_avg_print/num_meta_updates_count)
+                    meta_loss_avg_save.append(meta_loss_avg_print / num_meta_updates_count)
                     print('{0:d}, {1:2.4f}'.format(
                         task_count,
                         meta_loss_avg_save[-1]
@@ -416,39 +504,19 @@ def meta_train(params, amine=None):
 
                     num_meta_updates_count = 0
                     meta_loss_avg_print = 0
-                
+
                 if (task_count % num_tasks_save_loss == 0):
                     meta_loss_saved.append(np.mean(meta_loss_avg_save))
 
                     meta_loss_avg_save = []
 
-                    # print('Saving loss...')
-                    # if datasource != 'sine_line':
-                    #     val_accs, _ = meta_validation(
-                    #         datasubset=val_set,
-                    #         num_val_tasks=num_val_tasks,
-                    #         return_uncertainty=False)
-                    #     val_acc = np.mean(val_accs)
-                    #     val_ci95 = 1.96*np.std(val_accs)/np.sqrt(num_val_tasks)
-                    #     print('Validation accuracy = {0:2.4f} +/- {1:2.4f}'.format(val_acc, val_ci95))
-                    #     val_accuracies.append(val_acc)
-
-                    #     train_accs, _ = meta_validation(
-                    #         datasubset=train_set,
-                    #         num_val_tasks=num_val_tasks,
-                    #         return_uncertainty=False)
-                    #     train_acc = np.mean(train_accs)
-                    #     train_ci95 = 1.96*np.std(train_accs)/np.sqrt(num_val_tasks)
-                    #     print('Train accuracy = {0:2.4f} +/- {1:2.4f}\n'.format(train_acc, train_ci95))
-                    #     train_accuracies.append(train_acc)
-                
                 # Reset meta loss
                 meta_loss = 0
 
             if (task_count >= num_tasks_per_epoch):
                 break
 
-        if ((epoch + 1)% num_epochs_save == 0):
+        if ((epoch + 1) % num_epochs_save == 0):
             checkpoint = {
                 'theta': theta,
                 'meta_loss': meta_loss_saved,
@@ -457,20 +525,37 @@ def meta_train(params, amine=None):
                 'op_theta': op_theta.state_dict()
             }
             print('SAVING WEIGHTS...')
-            checkpoint_filename = ('{0:s}_{1:d}way_{2:d}shot_{3:d}.pt')\
-                        .format(datasource,
-                                num_classes_per_task,
-                                num_training_samples_per_class,
-                                epoch + 1)
+            checkpoint_filename = ('{0:s}_{1:d}way_{2:d}shot_{3:d}.pt') \
+                .format(datasource,
+                        num_classes_per_task,
+                        num_training_samples_per_class,
+                        epoch + 1)
             print(checkpoint_filename)
             dst_folder = params['dst_folder']
             torch.save(checkpoint, os.path.join(dst_folder, checkpoint_filename))
         print()
 
 
-# Get the prediction on some input data
-# This is used for both training and testing, hence why y_v is optional
 def get_task_prediction(x_t, y_t, x_v, params, y_v=None):
+    """Get the predictions on input data
+
+    Args:
+        x_t: A numpy array (3D) representing the training data of one batch.
+            The dimension is meta_batch_size by k_shot by number of features of our data input.
+        y_t: A numpy array (3D) representing the training labels of one batch.
+            The dimension is meta_batch_size by k_shot by n_way.
+        x_v: A numpy array (3D) representing the validation data of one batch.
+            The dimension is meta_batch_size by k_shot by number of features of our data input.
+        params: A dictionary of parameters used for this model. See documentation in initialize() for details.
+        y_v: A numpy array (3D) representing the validation labels of one batch.
+            The dimension is meta_batch_size by k_shot by n_way. It is optional, with default set to None.
+
+    Returns:
+        y_pred_v: A numpy array (3D) representing the predicted labels given our the testing data of one batch.
+            The dimension is meta_batch_size by k_shot by n_way.
+        loss_NLL: A torch.Tensor object representing the loss given our predicted labels and validation labels.
+    """
+
     # Unpack the variables that we need
     theta = params['theta']
     net = params['net']
@@ -496,7 +581,7 @@ def get_task_prediction(x_t, y_t, x_v, params, y_v=None):
 
     # Obtain the weights for the updated model 
     for key in theta.keys():
-        q[key] = theta[key] - inner_lr*gradients[key]
+        q[key] = theta[key] - inner_lr * gradients[key]
 
     # This code gets run if we want to do more than one gradient update
     for _ in range(num_inner_updates - 1):
@@ -511,11 +596,11 @@ def get_task_prediction(x_t, y_t, x_v, params, y_v=None):
         gradients = dict(zip(q.keys(), grads))
 
         for key in q.keys():
-            q[key] = q[key] - inner_lr*gradients[key]
-    
+            q[key] = q[key] - inner_lr * gradients[key]
+
     # Now predict on the validation or test data
     y_pred_v = net.forward(x=x_v, w=q, p_dropout=0)
-    
+
     # Then we were operating on testing data, return our predictions
     if y_v is None:
         return y_pred_v
@@ -523,66 +608,7 @@ def get_task_prediction(x_t, y_t, x_v, params, y_v=None):
     else:
         loss_NLL = loss_fn(y_pred_v, y_v)
         return loss_NLL
-        
 
-# This method is used for testing, we call it after we have trained a model using the 
-# methods above
-def meta_validation(datasubset, num_val_tasks, params, return_uncertainty=False):
-    accuracies = []
-    corrects = []
-    probability_pred = []
-
-    total_validation_samples = (num_total_samples_per_class - num_training_samples_per_class)*num_classes_per_task
-
-    if datasubset == 'train':
-        all_class_data = all_class_train
-        embedding_data = embedding_train
-    elif datasubset == 'val':
-        all_class_data = all_class_val
-        embedding_data = embedding_val
-    elif datasubset == 'test':
-        all_class_data = all_class_test
-        embedding_data = embedding_test
-    else:
-        sys.exit('Unknown datasubset for validation')
-
-    all_class_names = list(all_class_data.keys())
-    all_task_names = list(itertools.combinations(all_class_names, r=num_classes_per_task))
-
-    if train_flag:
-        random.shuffle(all_task_names)
-
-    task_count = 0
-    for class_labels in all_task_names:
-        x_t, y_t, x_v, y_v = get_task_image_data(
-            all_class_data,
-            embedding_data,
-            class_labels,
-            num_total_samples_per_class,
-            num_training_samples_per_class,
-            device)
-
-        y_pred_v = get_task_prediction(x_t, y_t, x_v, y_v=None)
-        y_pred = sm_loss(y_pred_v)
-
-        prob_pred, labels_pred = torch.max(input=y_pred, dim=1)
-        correct = (labels_pred == y_v)
-        corrects.extend(correct.detach().cpu().numpy())
-
-        accuracy = torch.sum(correct, dim=0).item()/total_validation_samples
-        accuracies.append(accuracy)
-
-        probability_pred.extend(prob_pred.detach().cpu().numpy())
-
-        task_count += 1
-        if not train_flag:
-            print(task_count)
-        if task_count >= num_val_tasks:
-            break
-    if not return_uncertainty:
-        return accuracies, all_task_names
-    else:
-        return corrects, probability_pred
 
 if __name__ == "__main__":
     main()
