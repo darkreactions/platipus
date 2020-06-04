@@ -3,9 +3,16 @@ import pandas as pd
 from sklearn.preprocessing import StandardScaler
 
 
-# Load in the chemistry data, it is harder than it sounds
 def load_chem_dataset(k_shot, meta_batch_size=32, num_batches=100, verbose=False):
     """Load in the chemistry data for training
+
+    "I'm limited by the technology of my time."
+    Ideally the model would choose from a Uniformly distributed pool of unlabeled reactions
+    Then we would run that reaction in the lab and give it back to the model
+    The issue is the labs are closed, so we have to restrict the model to the reactions drawn
+    from uniform distributions that we have labels for
+    The list below is a list of inchi keys for amines that have a reaction drawn from a uniform
+    distribution with a successful outcome (no point in amines that have no successful reaction)
 
     Args:
         k_shot:             An integer. The number of unseen classes in the dataset
@@ -16,26 +23,22 @@ def load_chem_dataset(k_shot, meta_batch_size=32, num_batches=100, verbose=False
                             default is False
 
     return:
-        amine_left_out_batches:         A dictionary containing the batches of
-                                        the left out amines in the format of
-                                        {"amine":[[batch1 into],[batch2 info],...]}
-        amine_cross_validate_samples:   A dictionary containing the batches of
-                                        the amines used for cross validation in the format of
-                                        {"amine":[batch info]}
-        amine_test_samples:             A dictionary containing the batches of
-                                        the amines as test samples in the format of
-                                        {"amine":[batch info]}
+        amine_left_out_batches:         A dictionary of batches with structure:
+                                        key is amine left out,
+                                        value has following hierarchy
+                                        batches -> x_t, y_t, x_v, y_v -> meta_batch_size number of amines ->
+                                        k_shot number of reactions -> each reaction has some number of features
+        amine_cross_validate_samples:   A dictionary of batches with structure:
+                                        key is amine which the data is for,
+                                        value has the following hierarchy
+                                        x_s, y_s, x_q, y_q -> k_shot number of reactions ->
+                                        each reaction has some number of features
+        amine_test_samples:             A dictionary that has the same structure as
+                                        amine_cross_validate_samples
         counts:                         A dictionary to record the number of
                                         successful and failed reactions in the format of
                                         {"total": [# of failed reactions, # of successful reactions]}
     """
-    # "I'm limited by the technology of my time."
-    # Ideally the model would choose from a Uniformly distributed pool of unlabeled reactions
-    # Then we would run that reaction in the lab and give it back to the model
-    # The issue is the labs are closed, so we have to restrict the model to the reactions drawn 
-    # from uniform distributions that we have labels for
-    # The list below is a list of inchi keys for amines that have a reaction drawn from a uniform 
-    # distribution with a successful outcome (no point in amines that have no successful reaction)
     viable_amines = ['ZEVRFFCPALTVDN-UHFFFAOYSA-N',
                      'KFQARYBEAKAXIC-UHFFFAOYSA-N',
                      'NLJDBTZLVTWXRG-UHFFFAOYSA-N',
@@ -142,25 +145,16 @@ def load_chem_dataset(k_shot, meta_batch_size=32, num_batches=100, verbose=False
 
         amine_test_samples[a] = test_sample
 
-    # amine_left_out_batches structure:
-    # key is amine left out, value has following hierarchy
-    # batches->x_t, y_t, x_v, y_v -> meta_batch_size number of amines -> k_shot number of reactions -> each reaction has some number of features
-
-    # amine_cross_validate_samples structure: 
-    # key is amine which the data is for, value has the following hierarchy
-    # x_s, y_s, x_q, y_q -> k_shot number of reactions -> each reaction has some number of features
-
-    # amine_test_samples has the same structure as amine_cross_validate_samples
-
     if verbose:
         print('Number of features to train on is', len(df.columns) - len(to_exclude))
 
     return amine_left_out_batches, amine_cross_validate_samples, amine_test_samples, counts
 
 
-# Do not use any data for model validation this time
 def load_chem_dataset_testing(k_shot, meta_batch_size=32, num_batches=100, verbose=False):
     """Load in the chemistry data for testing
+
+    Do not use any data for model validation this time
 
     Args:
         k_shot:             An integer. The number of unseen classes in the dataset
@@ -171,11 +165,13 @@ def load_chem_dataset_testing(k_shot, meta_batch_size=32, num_batches=100, verbo
                             default is False
 
     return:
-        amine_batches:      A list of batches of the amines
-                            in the format of [[batch1],[batch2],...]
-        amine_test_samples: A dictionary containing the batches of the amines
-                            as test samples in the format of
-                            {"amine":[batch info]}
+        amine_batches:      A list of batches with structure:
+                            batches -> x_t, y_t, x_v, y_v -> meta_batch_size number of amines
+                            -> k_shot number of reactions -> each reaction has some number of features
+        amine_test_samples: A dictionary with structure:
+                            key is amine which the data is for, value has the following hierarchy
+                            x_s, y_s, x_q, y_q -> k_shot number of reactions ->
+                            each reaction has some number of features
         counts:             A dictionary to record the number of
                             successful and failed reactions in the format of
                             {"total": [# of failed reactions, # of successful reactions]}
@@ -259,14 +255,6 @@ def load_chem_dataset_testing(k_shot, meta_batch_size=32, num_batches=100, verbo
         test_sample = generate_valid_test_batch(X, y, k_shot)
 
         amine_test_samples[a] = test_sample
-
-    # amine_left_out_batches structure:
-    # Here we have a list of batches
-    # batches->x_t, y_t, x_v, y_v -> meta_batch_size number of amines -> k_shot number of reactions -> each reaction has some number of features
-
-    # amine_test_samples structure: 
-    # key is amine which the data is for, value has the following hierarchy
-    # x_s, y_s, x_q, y_q -> k_shot number of reactions -> each reaction has some number of features
 
     if verbose:
         print('Number of features to train on is', len(df.columns) - len(to_exclude))

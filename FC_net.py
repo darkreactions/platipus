@@ -74,9 +74,8 @@ class FCNet(torch.nn.Module):
         return: A dictionary of the same keys as
         the output of "get_weights_shape" function
         but with initialized weights as index for keys with 'w'
-        and zeros as indices for keys with 'b'. For example:
-        {'w1':0.24
-        'b1':0}
+        and zeros as indices for keys with 'b', in the format of
+        {weight_name: weight_value} for weights and {bias_name: bias_value}
         """
         w = {}
         weight_shape = self.get_weight_shape()
@@ -94,12 +93,12 @@ class FCNet(torch.nn.Module):
                 w[key].requires_grad_()
         return w
 
-    # Run a forward pass of the model, in Pytorch we do not need to worry about the final Softmax 
     def forward(self, x, w, p_dropout=0):
         """The forward pass of the model
 
         A forward pass that applies a linear transformation to the
         incoming data with ReLU activation layers and dropout layers.
+        In Pytorch we do not need to worry about the final Softmax
 
         Args:
             x:          The input tensor that we want to train on.
@@ -128,13 +127,11 @@ class FCNet(torch.nn.Module):
                     out = torch.nn.functional.dropout(out, p_dropout)
         return out
 
-    # Get the number if weights in the net
     def get_num_weights(self):
         """Get the fully connected weight of the net
 
         return: An integer that is the product of
-        all the weights presented in the fully connected layers,
-        varying from -2147483648 to 2147483647
+        all the weights presented in the fully connected layers
         """
         num_weights = 0
         # Note that get_weight_shape() is found in FC_net.py
