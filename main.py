@@ -1047,8 +1047,12 @@ def meta_train(params, amine=None):
 
 
 def test_model_actively(params, amine=None):
-    """TODO: Documentation
+    """train and test the model with active learning
 
+    Choosing the most uncertain point in the validation dataset to the training set for PLATIPUS
+    and choose a random point in the validation dataset to the training set for MAML
+    since MAML cannot reason about uncertainty. Then plot out the accuracy, precision, recall and
+    balanced classification rate graph for each amine being trained or tested.
     """
 
     # Start by unpacking any necessary parameters
@@ -1467,12 +1471,28 @@ def test_model_actively(params, amine=None):
         fig.text(0.5, 0.04, "Number of samples given", ha="center", va="center")
 
 
-# Determines the KL and Meta Objectlive loss on a set of training
-# and validation data 
-# Steps correspond to steps in the PLATIPUS TRAINING algorithm in Finn et al
 def get_training_loss(x_t, y_t, x_v, y_v, params):
-    """TODO: Documentation
+    """Get the training loss
 
+    Determines the KL and Meta Objective loss on a set of training and validation data
+    Steps correspond to steps in the PLATIPUS TRAINING algorithm in Finn et al
+
+    Args:
+        x_t:        A numpy array (3D) representing the training data of one batch.
+                        The dimension is meta_batch_size by k_shot by number of features of our data input.
+        y_t:        A numpy array (3D) representing the training labels of one batch.
+                        The dimension is meta_batch_size by k_shot by n_way.
+        x_v:        A numpy array (3D) representing the validation data of one batch.
+                        The dimension is meta_batch_size by k_shot by number of features of our data input.
+        y_v:        A numpy array (3D) representing the validation labels of one batch.
+                        The dimension is meta_batch_size by k_shot by n_way.
+        params:     A dictionary of parameters used for this model. See documentation in initialize() for details.
+
+
+    return:
+        loss_query: An integer representing query level loss for the training dataset
+        KL_q_p:     An integer representing the KL divergence between the training result
+                    and ideal result distribution
     """
 
     # Start by unpacking the parameters we need
@@ -1573,13 +1593,12 @@ def get_training_loss(x_t, y_t, x_v, y_v, params):
     return loss_query, KL_q_p
 
 
-# Update the PLATIPUS model on some training data then obtain its output
-# on some testing data
-# Steps correspond to steps in the PLATIPUS TESTING algorithm in Finn et al
 def get_task_prediction(x_t, y_t, x_v, params):
-    """TODO: Summary here
+    """Get the task prediction for PLATIPUS model
 
-    TODO: Extra explanation here
+    Update the PLATIPUS model on some training data then obtain its output
+    on some testing data
+    Steps correspond to steps in the PLATIPUS TESTING algorithm in Finn et al
 
     Args:
         x_t:        A numpy array (3D) representing the training data of one batch.
@@ -1591,8 +1610,8 @@ def get_task_prediction(x_t, y_t, x_v, params):
         params:     A dictionary of parameters used for this model. See documentation in initialize() for details.
 
     Returns:
-        TODO: y_pred_v: A numpy array (3D) representing the predicted labels given our the testing data of one batch.
-            The dimension is meta_batch_size by k_shot by n_way.
+        y_pred_v: A numpy array (3D) representing the predicted labels
+        given our the validation or testing data of one batch.
     """
 
     # As usual, begin by unpacking the parameters we need
@@ -1662,11 +1681,17 @@ def get_task_prediction(x_t, y_t, x_v, params):
     return y_pred_v
 
 
-# Get naive predictions from the model without doing any update steps
-# This is used to get the zero point for the model for drp_chem
 def get_naive_prediction(x_vals, params):
-    """TODO: Documentation
+    """Get the naive task prediction for PLATIPUS model
 
+    Get naive predictions from the model without doing any update steps
+    This is used to get the zero point for the model for drp_chem
+
+    Args:
+        x_vals: A numpy array representing the data we want to find the prediction for
+        params: A dictionary of parameters used for this model. See documentation in initialize() for details.
+
+    return: A numpy array (3D) representing the predicted labels
     """
     # As usual, begin by unpacking the parameters we need
     Theta = params['Theta']
@@ -1683,24 +1708,30 @@ def get_naive_prediction(x_vals, params):
     return y_pred_v
 
 
-# Super simple function to get MAML prediction with no updates
 def get_naive_task_prediction_maml(x_vals, meta_params, params):
-    """TODO: Documentation
+    """Get the naive task prediction for MAML model
 
+    Super simple function to get MAML prediction with no updates
+
+    Args:
+        x_vals:     A numpy array representing the data we want to find the prediction for
+        meta_params:A dictionary of dictionaries used for the meta learning model.
+        params:     A dictionary of parameters used for this model. See documentation in initialize() for details.
+
+    return: A numpy array (3D) representing the predicted labels
     """
     net = params['net']
     y_pred_v = net.forward(x=x_vals, w=meta_params)
     return y_pred_v
 
 
-# Run a forward pass to obtain predictions given a MAML model
-# It is required that a MAML model has already been trained
-# Also make sure the MAML model has the same architecture as the PLATIPUS model
-# or elese the call to net.forward() will give you problems
 def get_task_prediction_maml(x_t, y_t, x_v, meta_params, params):
-    """TODO: Summary
+    """Get the prediction of label with a MAML model
 
-    TODO: Extra explanation here
+    Run a forward pass to obtain predictions given a MAML model
+    It is required that a MAML model has already been trained
+    Also make sure the MAML model has the same architecture as the PLATIPUS model
+    or elese the call to net.forward() will give you problems
 
     Args:
         x_t:        A numpy array (3D) representing the training data of one batch.
@@ -1709,12 +1740,12 @@ def get_task_prediction_maml(x_t, y_t, x_v, meta_params, params):
                         The dimension is meta_batch_size by k_shot by n_way.
         x_v:        A numpy array (3D) representing the validation data of one batch.
                         The dimension is meta_batch_size by k_shot by number of features of our data input.
-        TODO: meta_params
-        TODO: params: A dictionary of parameters used for this model. See documentation in initialize() for details.
+        meta_params:A dictionary of dictionaries used for the meta learning model.
+        params:     A dictionary of parameters used for this model. See documentation in initialize() for details.
 
     Returns:
-        TODO: y_pred_v: A numpy array (3D) representing the predicted labels given our the testing data of one batch.
-            The dimension is meta_batch_size by k_shot by n_way.
+        y_pred_v: A numpy array (3D) representing the predicted labels
+        given our the validation or testing data of one batch.
     """
 
     # Get the program parameters from params
@@ -1760,11 +1791,18 @@ def get_task_prediction_maml(x_t, y_t, x_v, meta_params, params):
     return y_pred_v
 
 
-# Use the PLATIPUS means and variances to actually generate a set of weights
-# ie a plausible model 
 def generate_weights(meta_params, params):
-    """TODO: Documentation
+    """Generate a set of weights
 
+    Use the PLATIPUS means and variances to actually generate a set of weights
+    i.e. a plausible model
+
+    Args:
+        meta_params:A dictionary within dictionary.
+                    The parameters for meta learning
+        params:     The program parameters
+
+    return: A dictionary with indices generated using the epsilon reparameterization trick
     """
 
     device = params['device']
@@ -1776,10 +1814,18 @@ def generate_weights(meta_params, params):
     return w
 
 
-# Helps us create a data structure to store model weights during gradient updates
 def initialise_dict_of_dict(key_list):
-    """TODO: Documentation
+    """Initialize a dictionary within a dictionary
 
+    Helps us create a data structure to store model weights during gradient updates
+
+    Args:
+        key_list: A list of keys that will be initialized
+        in each of the keys in the outer-most dictionary
+
+    return:
+        q: A dictionary that has a dictionary as the index of each key.
+        In the format of {"key":{"key":0}}
     """
 
     q = dict.fromkeys(['mean', 'logSigma'])
