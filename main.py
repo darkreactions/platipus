@@ -803,8 +803,7 @@ def main():
                     total += bcr_list_maml[i]
                 MAML_average_bcrs.append(total / len(stats_dict['balanced_classification_rates_MAML']))
 
-            # TODO: Figure out what to do with the gap between 0 and 20 (with a 20-shot model)
-            fig = plt.figure(figsize=(16,12))
+            fig = plt.figure(figsize=(16, 12))
             plt.subplot(2, 2, 1)
             plt.ylabel('Accuracy')
             plt.title(f'Averaged learning curve')
@@ -1128,9 +1127,11 @@ def test_model_actively(params, amine=None):
 
         num_examples = []
 
-        # For testing
-        # iters = 1
-        iters = len(x_v)
+        # Set up the number of active learning iterations
+        # Starting from 1 so that we can compare PLATIPUS/MAML with other models such as SVM and KNN that
+        #  have valid results from the first validation point.
+        # For testing, overwrite with iters = 1
+        iters = len(x_t) + len(x_v) - 1
 
         # CODE FOR ZERO POINT
         print('Getting the model baseline before training on zero points')
@@ -1164,7 +1165,14 @@ def test_model_actively(params, amine=None):
         balanced_classification_rates.append(bcr)
         num_examples.append(0)
 
-        for i in range(iters):
+        # Randomly pick a point to start active learning with
+        rand_index = np.random.choice(iters+1)
+
+        # Reset the training set and validation set
+        x_t, x_v = all_data[rand_index].view(-1, 51), torch.cat([all_data[0:rand_index], all_data[rand_index + 1:]])
+        y_t, y_v = all_labels[rand_index].view(1), torch.cat([all_labels[0:rand_index], all_labels[rand_index + 1:]])
+
+        for _ in range(iters):
             print(f'Doing active learning with {len(x_t)} examples')
             num_examples.append(len(x_t))
             preds = get_task_prediction(x_t, y_t, all_data, params)
@@ -1222,14 +1230,6 @@ def test_model_actively(params, amine=None):
             balanced_classification_rates.append(bcr)
 
         # Now do it again but for the MAML model
-        # Start by resetting the data
-        validation_batches = params['validation_batches']
-        val_batch = validation_batches[amine]
-        x_t, y_t, x_v, y_v = torch.from_numpy(val_batch[0]).float().to(params['device']), torch.from_numpy(
-            val_batch[1]).long().to(params['device']), \
-                             torch.from_numpy(val_batch[2]).float().to(params['device']), torch.from_numpy(
-            val_batch[3]).long().to(params['device'])
-
         accuracies_MAML = []
         corrects_MAML = []
         confusion_matrices_MAML = []
@@ -1270,6 +1270,10 @@ def test_model_actively(params, amine=None):
         recalls_MAML.append(recall)
         balanced_classification_rates_MAML.append(bcr)
         num_examples.append(0)
+
+        # Reset the training and validation data for MAML
+        x_t, x_v = all_data[rand_index].view(1, 51), torch.cat([all_data[0:rand_index], all_data[rand_index + 1:]])
+        y_t, y_v = all_labels[rand_index].view(1), torch.cat([all_labels[0:rand_index], all_labels[rand_index + 1:]])
 
         for i in range(iters):
             print(f'Doing MAML learning with {len(x_t)} examples')
@@ -1313,7 +1317,7 @@ def test_model_actively(params, amine=None):
             recalls_MAML.append(recall)
             balanced_classification_rates_MAML.append(bcr)
 
-        fig = plt.figure(figsize=(16,12))
+        fig = plt.figure(figsize=(16, 12))
         plt.subplot(2, 2, 1)
         plt.ylabel('Accuracy')
         plt.title(f'Learning curve for {amine}')
