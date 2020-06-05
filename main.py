@@ -859,6 +859,7 @@ def main():
             if os.path.isfile(graph_dst):
                 os.remove(graph_dst)
             plt.savefig(graph_dst)
+            print(f"Graph average_metrics.png saved in folder {params['graph_folder']}")
             # plt.show()
 
         # TEST CODE, SHOULD NOT BE RUN
@@ -1371,6 +1372,7 @@ def test_model_actively(params, amine=None):
         if os.path.isfile(active_graph_dst):
             os.remove(active_graph_dst)
         plt.savefig(active_graph_dst)
+        print(f"Graph cv_metrics_{amine}.png saved in folder {params['active_learning_graph_folder']}")
         # plt.show()
 
         params['cv_statistics']['accuracies'].append(accuracies)
