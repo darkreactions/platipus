@@ -77,10 +77,16 @@ def parse_args():
             num_epochs:         An integer representing the number of outer loops used to train, defaulted to 50000.
             num_epochs_save:    An integer representing the number of outer loops to train before one saving,
                                     with default set to 1000.
-            TODO: kl_reweight, Lt, Lv
+            kl_reweight:        An integer representing the re-weight factor of the KL divergence between
+                                    variational posterior q and prior p. The default weight is set to 1.
+            Lt:                 An integer representing the number of ensemble networks to train task specific
+                                    parameters. The default is set to 1.
+            Lv:                 An integer representing the number of ensemble networks to validate meta-parameters.
+                                    The default is set to 1.
             p_dropout_base:     A float representing the dropout rate for the base network, with default set to 0.0
             cross_validate:     A boolean. Including it in the command will run the model with cross-validation.
-            TODO: verbose: A boolean. Including it in the command line will ...
+            verbose:            A boolean. Including it in the command line will output additional information to the
+                                    terminal for functions with verbose feature.
     """
 
     parser = argparse.ArgumentParser(description='Setup variables for PLATIPUS.')
@@ -158,7 +164,10 @@ def initialize():
             num_inner_updates:                  An integer representing the number of gradient updates for task-specific
                                                     parameters.
             p_dropout_base:                     A float representing the dropout rate for the base network.
-            TODO: L, K
+            L:                                  An integer representing the number of ensemble networks to train
+                                                    task specific parameters.
+            K:                                  An integer representing the number of ensemble networks to validate
+                                                    meta-parameters.
             training_batches:                   A dictionary representing the training batches used to train PLATIPUS.
                                                     Key is amine left out, and value has hierarchy of:
                                                     batches -> x_t, y_t, x_v, y_v -> meta_batch_size number of amines
@@ -181,16 +190,24 @@ def initialize():
                                                     in the model, with format
                                                     {weight_name : (number_of_outputs, number_of_inputs)} for weights,
                                                     {weight_name : number_of_outputs} for biases.
-            TODO: num_weights, KL_reweight
+            num_weights:                        An integer representing the number of weights in the net. It is used to
+                                                    avoid an linting error, even though it's inefficient.
+            KL_reweight:                        An integer representing the re-weight factor of the KL divergence
+                                                    between variational posterior q and prior p.
             dst_folder:                         A string representing the path to save models.
-            TODO: graph_folder, active_learning_graph_folder
+            graph_folder:                       A string representing the path to save all graphs. It will be under
+                                                    dst_folder.
+            active_learning_graph_folder:       A string representing the path to save the graphs in the active learning
+                                                    section. It will be under graph_folder.
             resume_epoch:                       An integer representing the epoch id to resume learning or perform
                                                     testing.
-            TODO: Theta:                        A dictionary representing the meta-parameters for PLATIPUS, with
-                                                    weights/biases as keys and their corresponding torch.Tensor object
-                                                    as values (requires_grad is set to True for all tensors).
-            TODO: op_Theta:                     A torch.optim object representing the optimizer used for meta-parameter
-                                                    theta. Currently using Adam as suggested in the PLATIPUS paper.
+            Theta:                              A dictionary representing the meta-parameters (big theta) for PLATIPUS,
+                                                    with the mean of the model parameter, the variance of model
+                                                    parameter, the learned diagonal covariance of posterior q, and two
+                                                    learning rates as keys and tcorresponding torch.Tensor as values.
+                                                    requires_grad is set to True for all tensors.
+            op_Theta:                           A torch.optim object representing the optimizer used for meta-parameter
+                                                    Theta. Currently using Adam as suggested in the PLATIPUS paper.
         """
 
     args = parse_args()
@@ -1129,7 +1146,7 @@ def test_model_actively(params, amine=None):
 
         # Set up the number of active learning iterations
         # Starting from 1 so that we can compare PLATIPUS/MAML with other models such as SVM and KNN that
-        #  have valid results from the first validation point.
+        # have valid results from the first validation point.
         # For testing, overwrite with iters = 1
         iters = len(x_t) + len(x_v) - 1
 
