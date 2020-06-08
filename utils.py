@@ -1,6 +1,22 @@
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
+import Path
+import pickle
+
+
+def write_pickle(path, data):
+    path = Path(path)
+    with open(path, "wb") as f:
+        pickle.dump(data, f)
+
+
+def read_pickle(path):
+    path = Path(path)
+    data = None
+    with open(path, "rb") as f:
+        data = pickle.load(f)
+    return data
 
 
 def load_chem_dataset(k_shot, meta_batch_size=32, num_batches=100, verbose=False):
@@ -71,7 +87,7 @@ def load_chem_dataset(k_shot, meta_batch_size=32, num_batches=100, verbose=False
     # Successful reaction is defined as having a crystal score of...
     SUCCESS = 4
 
-    # Get amine and distribution counts for the data 
+    # Get amine and distribution counts for the data
     df = pd.read_csv(path)
 
     # Set up the 0/1 labels and drop non-uniformly distributed reactions
@@ -97,10 +113,12 @@ def load_chem_dataset(k_shot, meta_batch_size=32, num_batches=100, verbose=False
     all_train = df[df[amine_header].isin(amines)]
     print('Number of reactions in training set', all_train.shape[0])
     all_train_success = all_train[all_train[score_header] == 1]
-    print('Number of successful reactions in the training set', all_train_success.shape[0])
+    print('Number of successful reactions in the training set',
+          all_train_success.shape[0])
 
     # [Number of failed reactions, number of successful reactions]
-    counts['total'] = [all_train.shape[0] - all_train_success.shape[0], all_train_success.shape[0]]
+    counts['total'] = [all_train.shape[0] -
+                       all_train_success.shape[0], all_train_success.shape[0]]
 
     amine_left_out_batches = {}
     amine_cross_validate_samples = {}
@@ -111,15 +129,19 @@ def load_chem_dataset(k_shot, meta_batch_size=32, num_batches=100, verbose=False
         available_amines = [a for a in amines if a != amine]
 
         all_train = df[df[amine_header].isin(available_amines)]
-        print(f'Number of reactions in training set holding out {amine}', all_train.shape[0])
+        print(
+            f'Number of reactions in training set holding out {amine}', all_train.shape[0])
         all_train_success = all_train[all_train[score_header] == 1]
-        print(f'Number of successful reactions in training set holding out {amine}', all_train_success.shape[0])
+        print(
+            f'Number of successful reactions in training set holding out {amine}', all_train_success.shape[0])
 
-        counts[amine] = [all_train.shape[0] - all_train_success.shape[0], all_train_success.shape[0]]
+        counts[amine] = [all_train.shape[0] -
+                         all_train_success.shape[0], all_train_success.shape[0]]
         batches = []
         for _ in range(num_batches):
             # t for train, v for validate (but validate is outer loop, trying to be consistent with the PLATIPUS code)
-            batch = generate_batch(df, meta_batch_size, available_amines, to_exclude, k_shot)
+            batch = generate_batch(df, meta_batch_size,
+                                   available_amines, to_exclude, k_shot)
             batches.append(batch)
 
         amine_left_out_batches[amine] = batches
@@ -146,7 +168,8 @@ def load_chem_dataset(k_shot, meta_batch_size=32, num_batches=100, verbose=False
         amine_test_samples[a] = test_sample
 
     if verbose:
-        print('Number of features to train on is', len(df.columns) - len(to_exclude))
+        print('Number of features to train on is',
+              len(df.columns) - len(to_exclude))
 
     return amine_left_out_batches, amine_cross_validate_samples, amine_test_samples, counts
 
@@ -208,7 +231,7 @@ def load_chem_dataset_testing(k_shot, meta_batch_size=32, num_batches=100, verbo
     # Successful reaction is defined as having a crystal score of...
     SUCCESS = 4
 
-    # Get amine and distribution counts for the data 
+    # Get amine and distribution counts for the data
     df = pd.read_csv(path)
 
     # Set up the 0/1 labels and drop non-uniformly distributed reactions
@@ -232,15 +255,18 @@ def load_chem_dataset_testing(k_shot, meta_batch_size=32, num_batches=100, verbo
     all_train = df[df[amine_header].isin(available_amines)]
     print('Number of reactions in training set', all_train.shape[0])
     all_train_success = all_train[all_train[score_header] == 1]
-    print('Number of successful reactions in the training set', all_train_success.shape[0])
+    print('Number of successful reactions in the training set',
+          all_train_success.shape[0])
 
-    counts['total'] = [all_train.shape[0] - all_train_success.shape[0], all_train_success.shape[0]]
+    counts['total'] = [all_train.shape[0] -
+                       all_train_success.shape[0], all_train_success.shape[0]]
 
     batches = []
     print('Generating training batches')
     for _ in range(num_batches):
         # t for train, v for validate (but validate is outer loop, trying to be consistent with the PLATIPUS code)
-        batch = generate_batch(df, meta_batch_size, available_amines, to_exclude, k_shot)
+        batch = generate_batch(df, meta_batch_size,
+                               available_amines, to_exclude, k_shot)
         batches.append(batch)
 
     amine_test_samples = {}
@@ -257,7 +283,8 @@ def load_chem_dataset_testing(k_shot, meta_batch_size=32, num_batches=100, verbo
         amine_test_samples[a] = test_sample
 
     if verbose:
-        print('Number of features to train on is', len(df.columns) - len(to_exclude))
+        print('Number of features to train on is',
+              len(df.columns) - len(to_exclude))
 
     return batches, amine_test_samples, counts
 
