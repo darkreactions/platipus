@@ -409,6 +409,70 @@ def main():
         sys.exit('Unknown action')
 
 
+def load_previous_model_maml(dst_folder_root, params, amine=None):
+    """Load the MAML model previously trained.
+
+    Args:
+        dst_folder_root:        A string representing the root directory to get the checkpoint from.
+        params:                 A dictionary of parameters used for this model.
+                                    See documentation in initialize() for details.
+        amine:                  A string representing the amine that our model metrics are for. Default to be None.
+
+    Returns:
+        maml_checkpoint:        The checkpoint of the previously trained MAML model.
+    """
+
+    # Load MAML data for comparison
+    # This requires that we already trained a MAML model, see maml.py
+    device = params['device']
+    gpu_id = params['gpu_id']
+    num_training_samples_per_class = params['num_training_samples_per_class']
+    num_classes_per_task = params['num_classes_per_task']
+
+    # Assume root directory is current directory
+    num_epochs_save = params['num_epochs_save']
+
+    maml_folder = '{0:s}/MAML_few_shot/MAML_{1:s}_{2:d}way_{3:d}shot_{4:s}'.format(
+        dst_folder_root,
+        params['datasource'],
+        params['num_classes_per_task'],
+        params['num_training_samples_per_class'],
+        amine
+    )
+    maml_filename = 'drp_chem_{0:d}way_{1:d}shot_{2:s}.pt'.format(num_classes_per_task,
+                                                                  num_training_samples_per_class, '{0:d}')
+
+    # Try to find the model that was training for the most epochs
+    # If you get an error here, your MAML model was not saved at epochs of increment num_epochs_save
+    # By default that value is 1000
+    i = num_epochs_save
+    maml_checkpoint_filename = os.path.join(
+        maml_folder, maml_filename.format(i))
+    while (os.path.exists(maml_checkpoint_filename)):
+        i = i + num_epochs_save
+        maml_checkpoint_filename = os.path.join(
+            maml_folder, maml_filename.format(i))
+
+    # This is overshooting, just have it here as a sanity check
+    print('loading from', maml_checkpoint_filename)
+
+    if torch.cuda.is_available():
+        maml_checkpoint = torch.load(
+            os.path.join(maml_folder, maml_filename.format(
+                i - num_epochs_save)),
+            map_location=lambda storage,
+                                loc: storage.cuda(gpu_id)
+        )
+    else:
+        maml_checkpoint = torch.load(
+            os.path.join(maml_folder, maml_filename.format(
+                i - num_epochs_save)),
+            map_location=lambda storage,
+                                loc: storage
+        )
+    return maml_checkpoint
+
+
 def meta_train(params, amine=None):
     """The meta-training function for MAML
 
@@ -677,7 +741,7 @@ def zero_point_maml(preds, sm_loss, all_labels):
     true_negative = cm[0][0] / (cm[0][0] + cm[0][1])
     bcr = 0.5 * (recall + true_negative)
 
-    return correct, accuracy, cm, precision, recall, bcr
+    return correct, cm, accuracy, precision, recall, bcr
 
 
 def active_learning_maml(preds, sm_loss, all_labels, x_t, y_t, x_v, y_v):
