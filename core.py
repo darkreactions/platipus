@@ -1042,7 +1042,8 @@ def zero_point_platipus(preds, sm_loss, all_labels):
     Returns:
         prob_pred:      A torch.Tensor object representing all the probabilities of the current predictions of all data
                             points w/o active learning.
-        TODO: correct:
+        correct:        An torch.Tensor object representing an array-like element-wise comparison between the actual 
+                            labels and predicted labels. 
         cm:             A numpy array representing the confusion matrix given our predicted labels and the actual
                             corresponding labels. It's a 2x2 matrix for the drp_chem model.
         accuracy:       A float representing the accuracy rate of the model: the rate of correctly predicted reactions
@@ -1105,7 +1106,8 @@ def active_learning_platipus(preds, sm_loss, all_labels, params, x_t, y_t, x_v, 
                             The dimension is meta_batch_size by k_shot by n_way.
         prob_pred:      A torch.Tensor object representing all the probabilities of the current predictions of all data
                             points w/o active learning.
-        TODO: correct:
+        correct:        An torch.Tensor object representing an array-like element-wise comparison between the actual 
+                            labels and predicted labels.
         cm:             A numpy array representing the confusion matrix given our predicted labels and the actual
                             corresponding labels. It's a 2x2 matrix for the drp_chem model.
         accuracy:       A float representing the accuracy rate of the model: the rate of correctly predicted reactions
@@ -1184,7 +1186,8 @@ def zero_point_maml(preds, sm_loss, all_labels):
         all_labels:     A torch.Tensor object representing all the labels of our reactions.
 
     Returns:
-        TODO: correct:
+        correct:        An torch.Tensor object representing an array-like element-wise comparison between the actual 
+                            labels and predicted labels.
         cm:             A numpy array representing the confusion matrix given our predicted labels and the actual
                             corresponding labels. It's a 2x2 matrix for the drp_chem model.
         accuracy:       A float representing the accuracy rate of the model: the rate of correctly predicted reactions
@@ -1242,7 +1245,8 @@ def active_learning_maml(preds, sm_loss, all_labels, x_t, y_t, x_v, y_v):
                         The dimension is meta_batch_size by k_shot by number of features of our data input.
         y_v:            A numpy array (3D) representing the labels of the available points in the active learning pool.
                             The dimension is meta_batch_size by k_shot by n_way.
-        TODO: correct:
+        correct:        An torch.Tensor object representing an array-like element-wise comparison between the actual 
+                            labels and predicted labels.
         cm:             A numpy array representing the confusion matrix given our predicted labels and the actual
                             corresponding labels. It's a 2x2 matrix for the drp_chem model.
         accuracy:       A float representing the accuracy rate of the model: the rate of correctly predicted reactions
