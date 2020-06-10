@@ -35,7 +35,7 @@ def main(params):
                 for amine in params['training_batches']:
                     print("Starting training for amine", amine)
                     # Change the path to save models
-                    params['dst_folder'] = save_model(params, amine)
+                    params['dst_folder'] = save_model("PLATIPUS", params, amine)
 
                     # Adjust the loss function for each amine
                     amine_counts = params['counts'][amine]
@@ -53,26 +53,25 @@ def main(params):
                         class_weights)
 
                     # Train the model then reinitialize a new one
-                    meta_train_platipus(params, amine)
+                    params = meta_train_platipus(params, amine)
                     Theta = initialzie_theta_platipus(params)
                     params['Theta'] = Theta
                     params['op_Theta'] = set_optim_platipus(Theta, params["meta_lr"])
             else:
-                meta_train_platipus(params)
+                params = meta_train_platipus(params)
 
     elif params['resume_epoch'] > 0:
         if params['datasource'] == 'drp_chem' and params['cross_validate']:
             # I am saving this dictionary in case things go wrong
             # It will get added to in the active learning code
-            stats_dict_keys = ['accuracies', 'confusion_matrices', 'precisions', 'recalls', 'balanced_classification_rates',
-                               'accuracies_MAML', 'confusion_matrices_MAML', 'precisions_MAML', 'recalls_MAML','balanced_classification_rates_MAML']
-            stats_dict = create_stats_dict(stats_dict_keys)
+            model_list = ["PLATIPUS", "MAML"]
+            stats_dict = create_stats_dict(model_list)
             params['cv_statistics'] = stats_dict
             # Test performance of each individual cross validation model
             for amine in params['validation_batches']:
                 print("Starting validation for amine", amine)
                 # Change the path to save models
-                params['dst_folder'] = save_model(params, amine)
+                params['dst_folder'] = save_model("PLATIPUS",params, amine)
 
                 # Here we are loading a previously trained model
                 saved_checkpoint = load_previous_model_platipus(params)
@@ -93,40 +92,7 @@ def main(params):
                 params['loss_fn'] = torch.nn.CrossEntropyLoss(class_weights)
 
                 # Run forward pass on the validation data
-                validation_batches = params['validation_batches']
-                val_batch = validation_batches[amine]
-                x_t, y_t, x_v, y_v = torch.from_numpy(val_batch[0]).float().to(params['device']), torch.from_numpy(
-                    val_batch[1]).long().to(params['device']), \
-                    torch.from_numpy(val_batch[2]).float().to(params['device']), torch.from_numpy(
-                    val_batch[3]).long().to(params['device'])
-
-                accuracies = []
-                corrects = []
-                probability_pred = []
-                sm_loss = params['sm_loss']
-                preds = get_task_prediction_platipus(x_t, y_t, x_v, params)
-                # print('raw task predictions', preds)
-                y_pred_v = sm_loss(torch.stack(preds))
-                # print('after applying softmax', y_pred_v)
-                y_pred = torch.mean(input=y_pred_v, dim=0, keepdim=False)
-                # print('after calling torch mean', y_pred)
-
-                prob_pred, labels_pred = torch.max(input=y_pred, dim=1)
-                # print('print training labels', y_t)
-                print('print labels predicted', labels_pred)
-                print('print true labels', y_v)
-                # print('print probability of prediction', prob_pred)
-                correct = (labels_pred == y_v)
-                corrects.extend(correct.detach().cpu().numpy())
-
-                # print('length of validation set', len(y_v))
-                accuracy = torch.sum(correct, dim=0).item() / len(y_v)
-                accuracies.append(accuracy)
-
-                probability_pred.extend(prob_pred.detach().cpu().numpy())
-
-                print('accuracy for model is', accuracies)
-                print('probabilities for predictions are', probability_pred)
+                forward_pass_validate_platipus(params, amine)
                 test_model_actively(params, amine)
 
             # Save this dictionary in case we need it later
@@ -139,12 +105,14 @@ def main(params):
             stats_dict = params['cv_statistics']
 
             # Do some deletion so the average graph has no nan's
+            # changed this to the new stats dict format
             for key in stats_dict.keys():
-                del stats_dict[key][10]
-                del stats_dict[key][11]
+                for k in stats_dict[key].keys():
+                    del stats_dict[key][k][10]
+                    del stats_dict[key][k][11]
 
-            for key in ['precisions', 'precisions_MAML']:
-                for stat_list in stats_dict[key]:
+            for key in stats_dict.keys():
+                for stat_list in stats_dict[key]["precisions"]:
                     print(stat_list[0])
                     if np.isnan(stat_list[0]):
                         stat_list[0] = 0
@@ -154,7 +122,7 @@ def main(params):
             #         del stat_list[0]
 
             # Find the minimum number of points for performance evaluation
-            min_length = len(min(stats_dict['accuracies'], key=len))
+            min_length = len(min(stats_dict["PLATIPUS"]['accuracies'], key=len))
             print(f'Minimum number of points we have to work with is {min_length}')
 
             # Evaluate all models' performances
@@ -511,17 +479,20 @@ def test_model_actively(params, amine=None):
         plot_metrics_graph(num_examples, stats_dict, params['active_learning_graph_folder'], amine=amine)
 
 
-def create_stats_dict(keys):
+def create_stats_dict(models):
     """Creating the stats dictionary
 
     Args:
-        keys: A list containing the name of the keys we want to initiate in stats dictionary
+        model: A list of the models that we are creating metrics for
 
-    return: A dictionary with format: {"key":[],"key2":[]}
+    return: A dictionary with format: {"model":{"metric1":[],"metric2":[], etc}, "model":{"metric1":[], etc}}
     """
     stats_dict = {}
-    for key in keys:
-        stats_dict[key] = []
+    metrics = ['accuracies', 'confusion_matrices', 'precisions', 'recalls', 'bcrs']
+    for model in models:
+        stats_dict[model] = {}
+        for key in metrics:
+            stats_dict[model][key] = []
     return stats_dict
 
 

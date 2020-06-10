@@ -1,8 +1,10 @@
 import torch
+import sys
 
 from utils import *
 
 from sklearn.metrics import confusion_matrix
+from core import test_model_actively
 
 
 # Originally "reinitialzie model params" Core line 147 in main function
@@ -128,7 +130,7 @@ def meta_train_platipus(params, amine=None):
         amine:      A string representing the specific amine that the model will be trained on.
 
     Returns:
-        N/A
+        params: A dictionary of updated parameters
     """
     
     # Start by unpacking the params we need
@@ -275,6 +277,7 @@ def meta_train_platipus(params, amine=None):
             torch.save(checkpoint, os.path.join(
                 dst_folder, checkpoint_filename))
         print()
+    return params
 
         
 def generate_weights_platipus(meta_params, params):
@@ -672,3 +675,47 @@ def active_learning_platipus(preds, sm_loss, all_labels, params, x_t, y_t, x_v, 
     bcr = 0.5 * (recall + true_negative)
 
     return x_t, y_t, x_v, y_v, prob_pred, correct, cm, accuracy, precision, recall, bcr
+
+
+def forward_pass_validate_platipus(params, amine):
+    """ The forward pass for validation in the PLATIPUS model
+
+    Args:
+        params:     A dictionary of parameters used for this model.
+                    See documentation in initialize() for details.
+        amine:      The amine that we are validating on
+    """
+    validation_batches = params['validation_batches']
+    val_batch = validation_batches[amine]
+    x_t, y_t, x_v, y_v = torch.from_numpy(val_batch[0]).float().to(params['device']), torch.from_numpy(
+        val_batch[1]).long().to(params['device']), \
+                         torch.from_numpy(val_batch[2]).float().to(params['device']), torch.from_numpy(
+        val_batch[3]).long().to(params['device'])
+
+    accuracies = []
+    corrects = []
+    probability_pred = []
+    sm_loss = params['sm_loss']
+    preds = get_task_prediction_platipus(x_t, y_t, x_v, params)
+    # print('raw task predictions', preds)
+    y_pred_v = sm_loss(torch.stack(preds))
+    # print('after applying softmax', y_pred_v)
+    y_pred = torch.mean(input=y_pred_v, dim=0, keepdim=False)
+    # print('after calling torch mean', y_pred)
+
+    prob_pred, labels_pred = torch.max(input=y_pred, dim=1)
+    # print('print training labels', y_t)
+    print('print labels predicted', labels_pred)
+    print('print true labels', y_v)
+    # print('print probability of prediction', prob_pred)
+    correct = (labels_pred == y_v)
+    corrects.extend(correct.detach().cpu().numpy())
+
+    # print('length of validation set', len(y_v))
+    accuracy = torch.sum(correct, dim=0).item() / len(y_v)
+    accuracies.append(accuracy)
+
+    probability_pred.extend(prob_pred.detach().cpu().numpy())
+
+    print('accuracy for model is', accuracies)
+    print('probabilities for predictions are', probability_pred)

@@ -454,31 +454,37 @@ def load_test_samples(hold_out_amines, df, to_exclude, k_shot, amine_header, sco
     return amine_test_samples
 
   
-def save_model(params, amine=None):
+def save_model(model, params, amine=None):
     """This is to save models
 
     Create specific folders and store the model in the folder
 
     Args:
+        model:  A string that indicates which model we are using
         params: A dictionary of the initialized parameters
         amine:  The specific amine that we want to store models for.
                 Default is None
 
     return: The path for dst_folder
     """
+    # Make sure we are creating directory for all models
     dst_folder_root = '.'
     dst_folder = ""
     if amine is not None and amine in params["training_batches"]:
-        dst_folder = '{0:s}/PLATIPUS_few_shot/PLATIPUS_{1:s}_{2:d}way_{3:d}shot_{4:s}'.format(
+        dst_folder = '{0:s}/{1:s}_few_shot/{2:s}_{3:s}_{4:d}way_{5:d}shot_{6:s}'.format(
             dst_folder_root,
+            model,
+            model,
             params['datasource'],
             params['num_classes_per_task'],
             params['num_training_samples_per_class'],
             amine
         )
     elif amine is not None and amine in params["validation_batches"]:
-        dst_folder = '{0:s}/PLATIPUS_few_shot/PLATIPUS_{1:s}_{2:d}way_{3:d}shot_{4:s}'.format(
+        dst_folder = '{0:s}/{1:s}_few_shot/{2:s}_{3:s}_{4:d}way_{5:d}shot_{6:s}'.format(
             dst_folder_root,
+            model,
+            model,
             params['datasource'],
             params['num_classes_per_task'],
             params['num_training_samples_per_class'],
@@ -486,8 +492,10 @@ def save_model(params, amine=None):
         )
         return dst_folder
     else:
-        dst_folder = '{0:s}/PLATIPUS_few_shot/PLATIPUS_{1:s}_{2:d}way_{3:d}shot'.format(
+        dst_folder = '{0:s}/{1:s}_few_shot/{2:s}_{3:s}_{4:d}way_{5:d}shot'.format(
             dst_folder_root,
+            model,
+            model,
             params['datasource'],
             params['num_classes_per_task'],
             params['num_training_samples_per_class']

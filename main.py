@@ -373,7 +373,7 @@ def initialize():
     params['KL_reweight'] = args.kl_reweight
 
     # Set up the path to save models
-    params['dst_folder'] = save_model(params)
+    params['dst_folder'] = save_model("PLATIPUS", params)
 
     # Set up the path to save graphs
     graph_folder = '{0:s}/graphs'.format(params['dst_folder'])
