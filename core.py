@@ -1,5 +1,3 @@
-
-
 import torch
 import numpy as np
 import random
@@ -10,13 +8,10 @@ import copy
 import os
 import sys
 
-
-from utils import load_chem_dataset, save_model
+from utils import *
 from FC_net import FCNet
 
 from sklearn.metrics import confusion_matrix
-from matplotlib import pyplot as plt
-#from collections import defaultdict
 
 
 def initialzie_theta(params):
@@ -245,119 +240,16 @@ def main(params):
             #     for stat_list in stats_dict[key]:
             #         del stat_list[0]
 
+            # Find the minimum number of points for performance evaluation
             min_length = len(min(stats_dict['accuracies'], key=len))
-            print(
-                f'Minimum number of points we have to work with is {min_length}')
-            average_accs = []
-            average_precisions = []
-            average_recalls = []
-            average_bcrs = []
+            print(f'Minimum number of points we have to work with is {min_length}')
 
-            MAML_average_accs = []
-            MAML_average_precisions = []
-            MAML_average_recalls = []
-            MAML_average_bcrs = []
+            # Evaluate all models' performances
+            avg_stat = find_avg_metrics(stats_dict, min_length)
 
-            num_examples = []
-
-            print('Minimum length is', min_length)
-            for i in range(min_length):
-                if i == 0:
-                    num_examples.append(0)
-                else:
-                    num_examples.append(20 + i)
-                # Go by amine, this code is bulky but I like having it here for debugging
-                total = 0
-                for acc_list in stats_dict['accuracies']:
-                    total += acc_list[i]
-                average_accs.append(total / len(stats_dict['accuracies']))
-
-                total = 0
-                for prec_list in stats_dict['precisions']:
-                    total += prec_list[i]
-                average_precisions.append(
-                    total / len(stats_dict['precisions']))
-
-                total = 0
-                for rec_list in stats_dict['recalls']:
-                    total += rec_list[i]
-                average_recalls.append(total / len(stats_dict['recalls']))
-
-                total = 0
-                for bcr_list in stats_dict['balanced_classification_rates']:
-                    total += bcr_list[i]
-                average_bcrs.append(
-                    total / len(stats_dict['balanced_classification_rates']))
-
-                total = 0
-                for acc_list_maml in stats_dict['accuracies_MAML']:
-                    total += acc_list_maml[i]
-                MAML_average_accs.append(
-                    total / len(stats_dict['accuracies_MAML']))
-
-                total = 0
-                for prec_list_maml in stats_dict['precisions_MAML']:
-                    total += prec_list_maml[i]
-                MAML_average_precisions.append(
-                    total / len(stats_dict['precisions_MAML']))
-
-                total = 0
-                for rec_list_maml in stats_dict['recalls_MAML']:
-                    total += rec_list_maml[i]
-                MAML_average_recalls.append(
-                    total / len(stats_dict['recalls_MAML']))
-
-                total = 0
-                for bcr_list_maml in stats_dict['balanced_classification_rates_MAML']:
-                    total += bcr_list_maml[i]
-                MAML_average_bcrs.append(
-                    total / len(stats_dict['balanced_classification_rates_MAML']))
-
-            fig = plt.figure(figsize=(16, 12))
-            plt.subplot(2, 2, 1)
-            plt.ylabel('Accuracy')
-            plt.title(f'Averaged learning curve')
-            plt.plot(num_examples, average_accs, 'ro-', label='PLATIPUS')
-            plt.plot(num_examples, MAML_average_accs, 'bo-', label='MAML')
-            plt.legend()
-
-            print(average_precisions)
-            print(MAML_average_precisions)
-            plt.subplot(2, 2, 2)
-            plt.ylabel('Precision')
-            plt.title(f'Averaged precision curve')
-            plt.plot(num_examples, average_precisions, 'ro-', label='PLATIPUS')
-            plt.plot(num_examples, MAML_average_precisions,
-                     'bo-', label='MAML')
-            plt.legend()
-
-            plt.subplot(2, 2, 3)
-            plt.ylabel('Recall')
-            plt.title(f'Averaged recall curve')
-            plt.plot(num_examples, average_recalls, 'ro-', label='PLATIPUS')
-            plt.plot(num_examples, MAML_average_recalls, 'bo-', label='MAML')
-            plt.legend()
-
-            plt.subplot(2, 2, 4)
-            plt.ylabel('Balanced classification rate')
-            plt.title(f'Averaged BCR curve')
-            plt.plot(num_examples, average_bcrs, 'ro-', label='PLATIPUS')
-            plt.plot(num_examples, MAML_average_bcrs, 'bo-', label='MAML')
-            plt.legend()
-
-            fig.text(0.5, 0.04, "Number of samples given",
-                     ha="center", va="center")
-
-            # Save the average metrics graph to ./graphs folder
-            graph_dst = '{0:s}/average_metrics.png'.format(
-                params['graph_folder'])
-            # Remove duplicate graphs in case we can't directly overwrite the files
-            if os.path.isfile(graph_dst):
-                os.remove(graph_dst)
-            plt.savefig(graph_dst)
-            print(
-                f"Graph average_metrics.png saved in folder {params['graph_folder']}")
-            # plt.show()
+            # Graph all model's performances
+            num_examples = [i for i in range(min_length)]
+            plot_metrics_graph(num_examples, avg_stat, params['graph_folder'])
 
         # TEST CODE, SHOULD NOT BE RUN
         elif params['datasource'] == 'drp_chem' and not params['cross_validate']:
@@ -647,7 +539,7 @@ def test_model_actively(params, amine=None):
         recalls = []
         balanced_classification_rates = []
 
-        num_examples = []
+        num_examples = [0]
 
         # Set up the number of active learning iterations
         # Starting from 1 so that we can compare PLATIPUS/MAML with other models such as SVM and KNN that
@@ -655,38 +547,32 @@ def test_model_actively(params, amine=None):
         # For testing, overwrite with iters = 1
         iters = len(x_t) + len(x_v) - 1
 
-        # CODE FOR ZERO POINT
+        # Zero point prediction for PLATIPUS model
         print('Getting the model baseline before training on zero points')
-        preds = get_naive_prediction(all_data, params)
-        y_pred_v = sm_loss(torch.stack(preds))
-        y_pred = torch.mean(input=y_pred_v, dim=0, keepdim=False)
+        preds = get_naive_prediction_platipus(all_data, params)
 
-        prob_pred, labels_pred = torch.max(input=y_pred, dim=1)
-        correct = (labels_pred == all_labels)
-        corrects.extend(correct.detach().cpu().numpy())
-        accuracy = torch.sum(correct, dim=0).item() / len(all_labels)
-        accuracies.append(accuracy)
+        # Evaluate zero point performance for PLATIPUS
+        prob_pred, correct, cm, accuracy, precision, recall, bcr = zero_point_platipus(preds, sm_loss, all_labels)
 
+        # Display and update individual performance metric
         probability_pred.extend(prob_pred.detach().cpu().numpy())
 
-        cm = confusion_matrix(all_labels.detach().cpu(
-        ).numpy(), labels_pred.detach().cpu().numpy())
+        corrects.extend(correct.detach().cpu().numpy())
+
+        print('accuracy for model is', accuracy)
+        accuracies.append(accuracy)
+
         print(cm)
         confusion_matrices.append(cm)
-        print('accuracy for model is', accuracy)
 
-        precision = cm[1][1] / (cm[1][1] + cm[0][1])
-        recall = cm[1][1] / (cm[1][1] + cm[1][0])
-        true_negative = cm[0][0] / (cm[0][0] + cm[0][1])
-        bcr = 0.5 * (recall + true_negative)
         print('precision for model is', precision)
-        print('recall for model is', recall)
-        print('balanced classification rate for model is', bcr)
-
         precisions.append(precision)
+
+        print('recall for model is', recall)
         recalls.append(recall)
+
+        print('balanced classification rate for model is', bcr)
         balanced_classification_rates.append(bcr)
-        num_examples.append(0)
 
         # Randomly pick a point to start active learning with
         rand_index = np.random.choice(iters+1)
@@ -701,60 +587,28 @@ def test_model_actively(params, amine=None):
             print(f'Doing active learning with {len(x_t)} examples')
             num_examples.append(len(x_t))
             preds = get_task_prediction(x_t, y_t, all_data, params)
-            y_pred_v = sm_loss(torch.stack(preds))
-            y_pred = torch.mean(input=y_pred_v, dim=0, keepdim=False)
 
-            prob_pred, labels_pred = torch.max(input=y_pred, dim=1)
-            correct = (labels_pred == all_labels)
-            corrects.extend(correct.detach().cpu().numpy())
-            accuracy = torch.sum(correct, dim=0).item() / len(all_labels)
-            accuracies.append(accuracy)
+            # Update available datapoints in the pool and evaluate current model performance
+            x_t, y_t, x_v, y_v, prob_pred, correct, cm, accuracy, precision, recall, bcr = active_learning_platipus(
+                preds, sm_loss, all_labels, params, x_t, y_t, x_v, y_v)
 
+            # Display and update individual performance metric
             probability_pred.extend(prob_pred.detach().cpu().numpy())
+            corrects.extend(correct.detach().cpu().numpy())
 
-            # print(all_labels)
-            # print(labels_pred)
-
-            # Now add the most uncertain point to the training data
-            preds_update = get_task_prediction(x_t, y_t, x_v, params)
-
-            y_pred_v_update = sm_loss(torch.stack(preds_update))
-            y_pred_update = torch.mean(
-                input=y_pred_v_update, dim=0, keepdim=False)
-
-            prob_pred_update, labels_pred_update = torch.max(
-                input=y_pred_update, dim=1)
-
-            print(y_v)
-            print(labels_pred_update)
-            print(len(prob_pred_update))
-
-            value, index = prob_pred_update.min(0)
-            print(f'Minimum confidence {value}')
-            # Add to the training data
-            x_t = torch.cat((x_t, x_v[index].view(1, 51)))
-            y_t = torch.cat((y_t, y_v[index].view(1)))
-            # Remove from pool, there is probably a less clunky way to do this
-            x_v = torch.cat([x_v[0:index], x_v[index + 1:]])
-            y_v = torch.cat([y_v[0:index], y_v[index + 1:]])
-            print('length of x_v is now', len(x_v))
-
-            cm = confusion_matrix(all_labels.detach().cpu(
-            ).numpy(), labels_pred.detach().cpu().numpy())
             print(cm)
             confusion_matrices.append(cm)
+
             print('accuracy for model is', accuracy)
+            accuracies.append(accuracy)
 
-            precision = cm[1][1] / (cm[1][1] + cm[0][1])
-            recall = cm[1][1] / (cm[1][1] + cm[1][0])
-            true_negative = cm[0][0] / (cm[0][0] + cm[0][1])
-            bcr = 0.5 * (recall + true_negative)
             print('precision for model is', precision)
-            print('recall for model is', recall)
-            print('balanced classification rate for model is', bcr)
-
             precisions.append(precision)
+
+            print('recall for model is', recall)
             recalls.append(recall)
+
+            print('balanced classification rate for model is', bcr)
             balanced_classification_rates.append(bcr)
 
         # Now do it again but for the MAML model
@@ -764,41 +618,36 @@ def test_model_actively(params, amine=None):
         precisions_MAML = []
         recalls_MAML = []
         balanced_classification_rates_MAML = []
-        num_examples = []
-        corrects_MAML = []
 
+        num_examples = [0]
+
+        # Set up softmax loss function for maml
         sm_loss_maml = torch.nn.Softmax(dim=1)
 
+        # Zero point prediction for MAML model
         print('Getting the MAML model baseline before training on zero points')
         preds = get_naive_task_prediction_maml(all_data, Theta_maml, params)
-        y_pred = sm_loss_maml(preds)
-        print(y_pred)
 
-        _, labels_pred = torch.max(input=y_pred, dim=1)
-        print(labels_pred)
-        correct = (labels_pred == all_labels)
+        # Evaluate zero point performance for MAML
+        correct, accuracy, cm, precision, recall, bcr = zero_point_maml(preds, sm_loss_maml, all_labels)
+
+        # Display and update individual performance metric
         corrects_MAML.extend(correct.detach().cpu().numpy())
-        accuracy = torch.sum(correct, dim=0).item() / len(all_labels)
-        accuracies_MAML.append(accuracy)
 
-        cm = confusion_matrix(all_labels.detach().cpu(
-        ).numpy(), labels_pred.detach().cpu().numpy())
         print(cm)
         confusion_matrices_MAML.append(cm)
+
         print('accuracy for model is', accuracy)
+        accuracies_MAML.append(accuracy)
 
-        precision = cm[1][1] / (cm[1][1] + cm[0][1])
-        recall = cm[1][1] / (cm[1][1] + cm[1][0])
-        true_negative = cm[0][0] / (cm[0][0] + cm[0][1])
-        bcr = 0.5 * (recall + true_negative)
         print('precision for model is', precision)
-        print('recall for model is', recall)
-        print('balanced classification rate for model is', bcr)
-
         precisions_MAML.append(precision)
+
+        print('recall for model is', recall)
         recalls_MAML.append(recall)
+
+        print('balanced classification rate for model is', bcr)
         balanced_classification_rates_MAML.append(bcr)
-        num_examples.append(0)
 
         # Reset the training and validation data for MAML
         x_t, x_v = all_data[rand_index].view(1, 51), torch.cat(
@@ -809,91 +658,33 @@ def test_model_actively(params, amine=None):
         for i in range(iters):
             print(f'Doing MAML learning with {len(x_t)} examples')
             num_examples.append(len(x_t))
-            preds = get_task_prediction_maml(
-                x_t=x_t, y_t=y_t, x_v=all_data, meta_params=Theta_maml, params=params)
-            y_pred = sm_loss_maml(preds)
+            preds = get_task_prediction_maml(x_t=x_t, y_t=y_t, x_v=all_data, meta_params=Theta_maml, params=params)
 
-            _, labels_pred = torch.max(input=y_pred, dim=1)
-            correct = (labels_pred == all_labels)
+            # Update available datapoints in the pool and evaluate current model performance
+            x_t, y_t, x_v, y_v, correct, cm, accuracy, precision, recall, bcr = active_learning_maml(
+                preds, sm_loss_maml, all_labels, x_t, y_t, x_v, y_v
+            )
+
+            # Display and update individual performance metric
             corrects_MAML.extend(correct.detach().cpu().numpy())
-            accuracy = torch.sum(correct, dim=0).item() / len(all_labels)
-            accuracies_MAML.append(accuracy)
 
-            # print(all_labels)
-            # print(labels_pred)
-
-            # Now add a random point since MAML cannot reason about uncertainty
-            index = np.random.choice(len(x_v))
-            # Add to the training data
-            x_t = torch.cat((x_t, x_v[index].view(1, 51)))
-            y_t = torch.cat((y_t, y_v[index].view(1)))
-            # Remove from pool, there is probably a less clunky way to do this
-            x_v = torch.cat([x_v[0:index], x_v[index + 1:]])
-            y_v = torch.cat([y_v[0:index], y_v[index + 1:]])
-            print('length of x_v is now', len(x_v))
-
-            cm = confusion_matrix(all_labels.detach().cpu(
-            ).numpy(), labels_pred.detach().cpu().numpy())
             print(cm)
             confusion_matrices_MAML.append(cm)
+
             print('accuracy for model is', accuracy)
+            accuracies_MAML.append(accuracy)
 
-            precision = cm[1][1] / (cm[1][1] + cm[0][1])
-            recall = cm[1][1] / (cm[1][1] + cm[1][0])
-            true_negative = cm[0][0] / (cm[0][0] + cm[0][1])
-            bcr = 0.5 * (recall + true_negative)
             print('precision for model is', precision)
-            print('recall for model is', recall)
-            print('balanced classification rate for model is', bcr)
-
             precisions_MAML.append(precision)
+
+            print('recall for model is', recall)
             recalls_MAML.append(recall)
+
+            print('balanced classification rate for model is', bcr)
             balanced_classification_rates_MAML.append(bcr)
 
-        fig = plt.figure(figsize=(16, 12))
-        plt.subplot(2, 2, 1)
-        plt.ylabel('Accuracy')
-        plt.title(f'Learning curve for {amine}')
-        plt.plot(num_examples, accuracies, 'ro-', label='PLATIPUS')
-        plt.plot(num_examples, accuracies_MAML, 'bo-', label='MAML')
-        plt.legend()
-
-        plt.subplot(2, 2, 2)
-        plt.ylabel('Precision')
-        plt.title(f'Precision curve for {amine}')
-        plt.plot(num_examples, precisions, 'ro-', label='PLATIPUS')
-        plt.plot(num_examples, precisions_MAML, 'bo-', label='MAML')
-        plt.legend()
-
-        plt.subplot(2, 2, 3)
-        plt.ylabel('Recall')
-        plt.title(f'Recall curve for {amine}')
-        plt.plot(num_examples, recalls, 'ro-', label='PLATIPUS')
-        plt.plot(num_examples, recalls_MAML, 'bo-', label='MAML')
-        plt.legend()
-
-        plt.subplot(2, 2, 4)
-        plt.ylabel('Balanced classification rate')
-        plt.title(f'BCR curve for {amine}')
-        plt.plot(num_examples, balanced_classification_rates,
-                 'ro-', label='PLATIPUS')
-        plt.plot(num_examples, balanced_classification_rates_MAML,
-                 'bo-', label='MAML')
-        plt.legend()
-
-        fig.text(0.5, 0.04, "Number of samples given",
-                 ha="center", va="center")
-
-        # Save the active training graph to ./active_learning_cv_graphs folder
-        active_graph_dst = '{0:s}/cv_metrics_{1:s}.png'.format(
-            params['active_learning_graph_folder'], amine)
-        # Remove duplicate graphs in case we can't directly overwrite the files
-        if os.path.isfile(active_graph_dst):
-            os.remove(active_graph_dst)
-        plt.savefig(active_graph_dst)
-        print(
-            f"Graph cv_metrics_{amine}.png saved in folder {params['active_learning_graph_folder']}")
-        # plt.show()
+        # TODO: make sure the stats_dict passed in has the hierachy: {model_name: metric_name: [metrics]}
+        plot_metrics_graph(num_examples, stats_dict, params['active_learning_graph_folder'], amine=amine)
 
         params['cv_statistics']['accuracies'].append(accuracies)
         params['cv_statistics']['confusion_matrices'].append(
@@ -910,7 +701,7 @@ def test_model_actively(params, amine=None):
         params['cv_statistics']['balanced_classification_rates_MAML'].append(
             balanced_classification_rates_MAML)
 
-        # Here we are testing, this code should NOT be run yet
+    # Here we are testing, this code should NOT be run yet
     elif params['datasource'] == 'drp_chem' and not params['cross_validate']:
         testing_batches = params['testing_batches']
         test_batch = testing_batches[amine]
@@ -938,89 +729,32 @@ def test_model_actively(params, amine=None):
             print(f'Doing active learning with {len(x_t)} examples')
             num_examples.append(len(x_t))
             preds = get_task_prediction(x_t, y_t, all_data, params)
-            y_pred_v = sm_loss(torch.stack(preds))
-            y_pred = torch.mean(input=y_pred_v, dim=0, keepdim=False)
 
-            prob_pred, labels_pred = torch.max(input=y_pred, dim=1)
-            correct = (labels_pred == all_labels)
-            corrects.extend(correct.detach().cpu().numpy())
-            accuracy = torch.sum(correct, dim=0).item() / len(all_labels)
-            accuracies.append(accuracy)
+            # Update available datapoints in the pool and evaluate current model performance
+            x_t, y_t, x_v, y_v, prob_pred, correct, cm, accuracy, precision, recall, bcr = active_learning_platipus(
+                preds, sm_loss, all_labels, params, x_t, y_t, x_v, y_v)
 
+            # Display and update individual performance metric
             probability_pred.extend(prob_pred.detach().cpu().numpy())
+            corrects.extend(correct.detach().cpu().numpy())
 
-            # print(all_labels)
-            # print(labels_pred)
-
-            # Now add the most uncertain point to the training data
-            preds_update = get_task_prediction(x_t, y_t, x_v, params)
-
-            y_pred_v_update = sm_loss(torch.stack(preds_update))
-            y_pred_update = torch.mean(
-                input=y_pred_v_update, dim=0, keepdim=False)
-
-            prob_pred_update, labels_pred_update = torch.max(
-                input=y_pred_update, dim=1)
-
-            print(y_v)
-            print(labels_pred_update)
-            print(len(prob_pred_update))
-
-            value, index = prob_pred_update.min(0)
-            print(f'Minimum confidence {value}')
-            # Add to the training data
-            x_t = torch.cat((x_t, x_v[index].view(1, 51)))
-            y_t = torch.cat((y_t, y_v[index].view(1)))
-            # Remove from pool, there is probably a less clunky way to do this
-            x_v = torch.cat([x_v[0:index], x_v[index + 1:]])
-            y_v = torch.cat([y_v[0:index], y_v[index + 1:]])
-            print('length of x_v is now', len(x_v))
-
-            cm = confusion_matrix(all_labels.detach().cpu(
-            ).numpy(), labels_pred.detach().cpu().numpy())
             print(cm)
             confusion_matrices.append(cm)
-            print('accuracy for model is', accuracy)
-            precision = cm[1][1] / (cm[1][1] + cm[0][1])
-            recall = cm[1][1] / (cm[1][1] + cm[1][0])
-            true_negative = cm[0][0] / (cm[0][0] + cm[0][1])
-            bcr = 0.5 * (recall + true_negative)
-            print('precision for model is', precision)
-            print('recall for model is', recall)
-            print('balanced classification rate for model is', bcr)
 
+            print('accuracy for model is', accuracy)
+            accuracies.append(accuracy)
+
+            print('precision for model is', precision)
             precisions.append(precision)
+
+            print('recall for model is', recall)
             recalls.append(recall)
+
+            print('balanced classification rate for model is', bcr)
             balanced_classification_rates.append(bcr)
 
-        fig = plt.figure(figsize=(16, 12))
-        plt.subplot(2, 2, 1)
-        plt.ylabel('Accuracy')
-        plt.title(f'Learning curve for {amine}')
-        plt.plot(num_examples, accuracies, 'bo-', label='PLATIPUS')
-        plt.legend()
-
-        plt.subplot(2, 2, 2)
-        plt.ylabel('Precision')
-        plt.title(f'Precision curve for {amine}')
-        plt.plot(num_examples, precisions, 'ro-', label='PLATIPUS')
-        plt.legend()
-
-        plt.subplot(2, 2, 3)
-        plt.ylabel('Recall')
-        plt.title(f'Recall curve for {amine}')
-        plt.plot(num_examples, recalls, 'go-', label='PLATIPUS')
-        plt.legend()
-
-        plt.subplot(2, 2, 4)
-        plt.ylabel('Balanced classification rate')
-        plt.title(f'BCR curve for {amine}')
-        plt.plot(num_examples, balanced_classification_rates,
-                 'mo-', label='PLATIPUS')
-        plt.legend()
-
-        fig.text(0.5, 0.04, "Number of samples given",
-                 ha="center", va="center")
+        # TODO: make sure the stats_dict get passed
+        plot_metrics_graph(num_examples, stats_dict, params['active_learning_graph_folder'], amine=amine)
 
 
 def get_training_loss(x_t, y_t, x_v, y_v, params):
@@ -1239,7 +973,7 @@ def get_task_prediction(x_t, y_t, x_v, params):
     return y_pred_v
 
 
-def get_naive_prediction(x_vals, params):
+def get_naive_prediction_platipus(x_vals, params):
     """Get the naive task prediction for PLATIPUS model
 
     Get naive predictions from the model without doing any update steps
@@ -1266,6 +1000,135 @@ def get_naive_prediction(x_vals, params):
     return y_pred_v
 
 
+def zero_point_platipus(preds, sm_loss, all_labels):
+    """Evalute platipus model performance w/o any active learning.
+
+    Args:
+        preds:          A list representing the labels predicted given our all our data points in the pool.
+        sm_loss:        A Softmax object representing the softmax layer to handle losses.
+        all_labels:     A torch.Tensor object representing all the labels of our reactions.
+
+    Returns:
+        prob_pred:      A torch.Tensor object representing all the probabilities of the current predictions of all data
+                            points w/o active learning.
+        correct:        An torch.Tensor object representing an array-like element-wise comparison between the actual 
+                            labels and predicted labels. 
+        cm:             A numpy array representing the confusion matrix given our predicted labels and the actual
+                            corresponding labels. It's a 2x2 matrix for the drp_chem model.
+        accuracy:       A float representing the accuracy rate of the model: the rate of correctly predicted reactions
+                            out of all reactions.
+        precision:      A float representing the precision rate of the model: the rate of the number of actually
+                            successful reactions out of all the reactions predicted to be successful.
+        recall:         A float representing the recall rate of the model: the rate of the number of reactions predicted
+                            to be successful out of all the acutal successful reactions.
+        bcr:            A float representing the balanced classification rate of the model. It's the average value of
+                            recall rate and true negative rate.
+    """
+
+    y_pred_v = sm_loss(torch.stack(preds))
+    y_pred = torch.mean(input=y_pred_v, dim=0, keepdim=False)
+
+    prob_pred, labels_pred = torch.max(input=y_pred, dim=1)
+
+    correct = (labels_pred == all_labels)
+
+    # Evaluate the model zero-point accuracy
+    accuracy = torch.sum(correct, dim=0).item() / len(all_labels)
+
+    # Generate confusion matrix using actual labels and predicted labels
+    cm = confusion_matrix(all_labels.detach().cpu().numpy(), labels_pred.detach().cpu().numpy())
+
+    precision = cm[1][1] / (cm[1][1] + cm[0][1])
+    recall = cm[1][1] / (cm[1][1] + cm[1][0])
+    true_negative = cm[0][0] / (cm[0][0] + cm[0][1])
+    bcr = 0.5 * (recall + true_negative)
+
+    return prob_pred, correct, cm, accuracy, precision, recall, bcr
+
+
+def active_learning_platipus(preds, sm_loss, all_labels, params, x_t, y_t, x_v, y_v):
+    """Update active learning pool and evalute platipus model performance.
+
+    Args:
+        preds:          A list representing the labels predicted given our all our data points in the pool.
+        sm_loss:        A Softmax object representing the softmax layer to handle losses.
+        all_labels:     A torch.Tensor object representing all the labels of our reactions.
+        params:         A dictionary of parameters used for this model.
+                            See documentation in initialize() for details.
+        x_t:            A numpy array (3D) representing the data of the points used for active learning.
+                            The dimension is meta_batch_size by k_shot by number of features of our data input.
+        y_t:            A numpy array (3D) representing the labels of the points used for active learning.
+                            The dimension is meta_batch_size by k_shot by n_way.
+        x_v:            A numpy array (3D) representing the data of the available points in the active learning pool.
+                            The dimension is meta_batch_size by k_shot by number of features of our data input.
+        y_v:            A numpy array (3D) representing the labels of the available points in the active learning pool.
+                            The dimension is meta_batch_size by k_shot by n_way.
+
+    Returns:
+        x_t:            A numpy array (3D) representing the training data of one batch.
+                        The dimension is meta_batch_size by k_shot by number of features of our data input.
+        y_t:            A numpy array (3D) representing the training labels of one batch.
+                        The dimension is meta_batch_size by k_shot by n_way.
+        x_v:            A numpy array (3D) representing the validation data of one batch.
+                        The dimension is meta_batch_size by k_shot by number of features of our data input.
+        y_v:            A numpy array (3D) representing the labels of the available points in the active learning pool.
+                            The dimension is meta_batch_size by k_shot by n_way.
+        prob_pred:      A torch.Tensor object representing all the probabilities of the current predictions of all data
+                            points w/o active learning.
+        correct:        An torch.Tensor object representing an array-like element-wise comparison between the actual 
+                            labels and predicted labels.
+        cm:             A numpy array representing the confusion matrix given our predicted labels and the actual
+                            corresponding labels. It's a 2x2 matrix for the drp_chem model.
+        accuracy:       A float representing the accuracy rate of the model: the rate of correctly predicted reactions
+                            out of all reactions.
+        precision:      A float representing the precision rate of the model: the rate of the number of actually
+                            successful reactions out of all the reactions predicted to be successful.
+        recall:         A float representing the recall rate of the model: the rate of the number of reactions predicted
+                            to be successful out of all the acutal successful reactions.
+        bcr:            A float representing the balanced classification rate of the model. It's the average of
+                            the recall rate and the true negative rate.
+    """
+
+    y_pred_v = sm_loss(torch.stack(preds))
+    y_pred = torch.mean(input=y_pred_v, dim=0, keepdim=False)
+
+    prob_pred, labels_pred = torch.max(input=y_pred, dim=1)
+    correct = (labels_pred == all_labels)
+
+    accuracy = torch.sum(correct, dim=0).item() / len(all_labels)
+
+    # Now add the most uncertain point to the training data
+    preds_update = get_task_prediction(x_t, y_t, x_v, params)
+
+    y_pred_v_update = sm_loss(torch.stack(preds_update))
+    y_pred_update = torch.mean(input=y_pred_v_update, dim=0, keepdim=False)
+
+    prob_pred_update, labels_pred_update = torch.max(input=y_pred_update, dim=1)
+
+    print(y_v)
+    print(labels_pred_update)
+    print(len(prob_pred_update))
+
+    value, index = prob_pred_update.min(0)
+    print(f'Minimum confidence {value}')
+    # Add to the training data
+    x_t = torch.cat((x_t, x_v[index].view(1, 51)))
+    y_t = torch.cat((y_t, y_v[index].view(1)))
+    # Remove from pool, there is probably a less clunky way to do this
+    x_v = torch.cat([x_v[0:index], x_v[index + 1:]])
+    y_v = torch.cat([y_v[0:index], y_v[index + 1:]])
+    print('length of x_v is now', len(x_v))
+
+    cm = confusion_matrix(all_labels.detach().cpu().numpy(), labels_pred.detach().cpu().numpy())
+
+    precision = cm[1][1] / (cm[1][1] + cm[0][1])
+    recall = cm[1][1] / (cm[1][1] + cm[1][0])
+    true_negative = cm[0][0] / (cm[0][0] + cm[0][1])
+    bcr = 0.5 * (recall + true_negative)
+
+    return x_t, y_t, x_v, y_v, prob_pred, correct, cm, accuracy, precision, recall, bcr
+
+
 def get_naive_task_prediction_maml(x_vals, meta_params, params):
     """Get the naive task prediction for MAML model
 
@@ -1281,6 +1144,117 @@ def get_naive_task_prediction_maml(x_vals, meta_params, params):
     net = params['net']
     y_pred_v = net.forward(x=x_vals, w=meta_params)
     return y_pred_v
+
+
+def zero_point_maml(preds, sm_loss, all_labels):
+    """Evalute MAML model performance w/o any active learning.
+
+    Args:
+        preds:          A list representing the labels predicted given our all our data points in the pool.
+        sm_loss:        A Softmax object representing the softmax layer to handle losses.
+        all_labels:     A torch.Tensor object representing all the labels of our reactions.
+
+    Returns:
+        correct:        An torch.Tensor object representing an array-like element-wise comparison between the actual 
+                            labels and predicted labels.
+        cm:             A numpy array representing the confusion matrix given our predicted labels and the actual
+                            corresponding labels. It's a 2x2 matrix for the drp_chem model.
+        accuracy:       A float representing the accuracy rate of the model: the rate of correctly predicted reactions
+                            out of all reactions.
+        precision:      A float representing the precision rate of the model: the rate of the number of actually
+                            successful reactions out of all the reactions predicted to be successful.
+        recall:         A float representing the recall rate of the model: the rate of the number of reactions predicted
+                            to be successful out of all the acutal successful reactions.
+        bcr:            A float representing the balanced classification rate of the model. It's the average value of
+                            recall rate and true negative rate.
+    """
+
+    y_pred = sm_loss(preds)
+    print(y_pred)
+
+    _, labels_pred = torch.max(input=y_pred, dim=1)
+    print(labels_pred)
+
+    correct = (labels_pred == all_labels)
+
+    accuracy = torch.sum(correct, dim=0).item() / len(all_labels)
+
+    cm = confusion_matrix(all_labels.detach().cpu().numpy(), labels_pred.detach().cpu().numpy())
+
+    precision = cm[1][1] / (cm[1][1] + cm[0][1])
+    recall = cm[1][1] / (cm[1][1] + cm[1][0])
+    true_negative = cm[0][0] / (cm[0][0] + cm[0][1])
+    bcr = 0.5 * (recall + true_negative)
+
+    return correct, accuracy, cm, precision, recall, bcr
+
+
+def active_learning_maml(preds, sm_loss, all_labels, x_t, y_t, x_v, y_v):
+    """Update active learning pool and evalute MAML model performance.
+
+    Args:
+        preds:          A list representing the labels predicted given our all our data points in the pool.
+        sm_loss:        A Softmax object representing the softmax layer to handle losses.
+        all_labels:     A torch.Tensor object representing all the labels of our reactions.
+        x_t:            A numpy array (3D) representing the data of the points used for active learning.
+                            The dimension is meta_batch_size by k_shot by number of features of our data input.
+        y_t:            A numpy array (3D) representing the labels of the points used for active learning.
+                            The dimension is meta_batch_size by k_shot by n_way.
+        x_v:            A numpy array (3D) representing the data of the available points in the active learning pool.
+                            The dimension is meta_batch_size by k_shot by number of features of our data input.
+        y_v:            A numpy array (3D) representing the labels of the available points in the active learning pool.
+                            The dimension is meta_batch_size by k_shot by n_way.
+
+    Returns:
+        x_t:            A numpy array (3D) representing the training data of one batch.
+                        The dimension is meta_batch_size by k_shot by number of features of our data input.
+        y_t:            A numpy array (3D) representing the training labels of one batch.
+                        The dimension is meta_batch_size by k_shot by n_way.
+        x_v:            A numpy array (3D) representing the validation data of one batch.
+                        The dimension is meta_batch_size by k_shot by number of features of our data input.
+        y_v:            A numpy array (3D) representing the labels of the available points in the active learning pool.
+                            The dimension is meta_batch_size by k_shot by n_way.
+        correct:        An torch.Tensor object representing an array-like element-wise comparison between the actual 
+                            labels and predicted labels.
+        cm:             A numpy array representing the confusion matrix given our predicted labels and the actual
+                            corresponding labels. It's a 2x2 matrix for the drp_chem model.
+        accuracy:       A float representing the accuracy rate of the model: the rate of correctly predicted reactions
+                            out of all reactions.
+        precision:      A float representing the precision rate of the model: the rate of the number of actually
+                            successful reactions out of all the reactions predicted to be successful.
+        recall:         A float representing the recall rate of the model: the rate of the number of reactions predicted
+                            to be successful out of all the acutal successful reactions.
+        bcr:            A float representing the balanced classification rate of the model. It's the average of
+                            the recall rate and the true negative rate.
+    """
+
+    y_pred = sm_loss(preds)
+
+    _, labels_pred = torch.max(input=y_pred, dim=1)
+    correct = (labels_pred == all_labels)
+    accuracy = torch.sum(correct, dim=0).item() / len(all_labels)
+
+    # print(all_labels)
+    # print(labels_pred)
+
+    # Now add a random point since MAML cannot reason about uncertainty
+    index = np.random.choice(len(x_v))
+    # Add to the training data
+    x_t = torch.cat((x_t, x_v[index].view(1, 51)))
+    y_t = torch.cat((y_t, y_v[index].view(1)))
+    # Remove from pool, there is probably a less clunky way to do this
+    x_v = torch.cat([x_v[0:index], x_v[index + 1:]])
+    y_v = torch.cat([y_v[0:index], y_v[index + 1:]])
+    print('length of x_v is now', len(x_v))
+
+    cm = confusion_matrix(all_labels.detach().cpu().numpy(), labels_pred.detach().cpu().numpy())
+
+    precision = cm[1][1] / (cm[1][1] + cm[0][1])
+    recall = cm[1][1] / (cm[1][1] + cm[1][0])
+    true_negative = cm[0][0] / (cm[0][0] + cm[0][1])
+    bcr = 0.5 * (recall + true_negative)
+
+    return x_t, y_t, x_v, y_v, correct, cm, accuracy, precision, recall, bcr
 
 
 def get_task_prediction_maml(x_t, y_t, x_v, meta_params, params):

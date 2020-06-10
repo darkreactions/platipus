@@ -1,9 +1,13 @@
+import os
+
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 import Path
 import pickle
 import os
+
+from matplotlib import pyplot as plt
 
 
 def write_pickle(path, data):
@@ -295,6 +299,134 @@ def generate_valid_test_batch(X, y, k_shot):
     return [x_s, y_s, x_q, y_q]
 
 
+def find_avg_metrics(stats_dict, min_length):
+    """Calculate the average metrics of several models' performances
+
+    Args:
+        stats_dict:         A dictionary representing the performance metrics of the machine learning models.
+                                It has the format of {model_name: {metric_name: [[metric_values for each amine]]}}
+        min_length:         An integer representing the fewest number of points to start metrics calculations.
+
+    Returns:
+        avg_stat:           A dictionary representing the average performance metrics of each model.
+                                It has the format of {model_name: {metric_name: [avg_metric_values]}}.
+    """
+
+    # Set up default dictionary to store average metrics for each model
+    metrics = {
+        'accuracies': [],
+        'precisions': [],
+        'recalls': [],
+        'bcrs': []
+    }
+
+    avg_stat = {}
+
+    # Calculate average metrics by model
+    for model in stats_dict:
+        # Pre-fill each model's value with standard metrics dictionary
+        avg_stat.setdefault(model, metrics)
+        for i in range(min_length):
+            # Go by amine, this code is bulky but it's good for debugging
+            total = 0
+            for acc_list in stats_dict[model]['accuracies']:
+                total += acc_list[i]
+            avg_acc = total / len(stats_dict[model]['accuracies'])
+            avg_stat[model]['accuracies'].append(avg_acc)
+
+            total = 0
+            for prec_list in stats_dict[model]['precisions']:
+                total += prec_list[i]
+            avg_prec = total / len(stats_dict[model]['precisions'])
+            avg_stat[model]['precisions'].append(avg_prec)
+
+            total = 0
+            for rec_list in stats_dict[model]['recalls']:
+                total += rec_list[i]
+            avg_recall = total / len(stats_dict[model]['recalls'])
+            avg_stat[model]['recalls'].append(avg_recall)
+
+            total = 0
+            for bcr_list in stats_dict[model]['balanced_classification_rates']:
+                total += bcr_list[i]
+            avg_brc = total / len(stats_dict[model]['balanced_classification_rates'])
+            avg_stat[model]['bcrs'].append(avg_brc)
+
+    return avg_stat
+
+
+def plot_metrics_graph(num_examples, stats_dict, dst, amine=None, show=False):
+    """Plot metrics graphs for all models in comparison
+
+    The graph will have 4 subplots, which are for: accuracy, precision, recall, and bcr, from left to right,
+        top to bottom
+
+    Args:
+        num_examples:       A list representing the number of examples we are working with at each point.
+        stats_dict:         A dictionary with each model as key and a dictionary of model specific metrics as value.
+                                Each metric dictionary has the same keys: 'accuracies', 'precisions', 'recalls', 'bcrs',
+                                and their corresponding list of values for each model as dictionary values.
+        dst:                A string representing the folder that the graph will be saved in.
+        amine:              A string representing the amine that our model metrics are for. Default to be None.
+        show:               A boolean representing whether we want to show the graph or not. Default to False to
+                                seamlessly run the whole model,
+
+    Returns:
+        N/A
+    """
+
+    # Set up initial figure for plotting
+    fig = plt.figure(figsize=(16, 12))
+
+    # Setting up each sub-graph as axes
+    # From left to right, top to bottom: Accuracy, Precision, Recall, BCR
+    acc = plt.subplot(2, 2, 1)
+    acc.set_ylabel('Accuracy')
+    acc.set_title(f'Learning curve for {amine}') if amine else acc.set_title(f'Averaged learning curve')
+
+    prec = plt.subplot(2, 2, 2)
+    prec.set_ylabel('Precision')
+    prec.set_title(f'Precision curve for {amine}') if amine else prec.set_title(f'Averaged precision curve')
+
+    rec = plt.subplot(2, 2, 3)
+    rec.set_ylabel('Recall')
+    rec.set_title(f'Recall curve for {amine}') if amine else rec.set_title(f'Averaged recall curve')
+
+    bcr = plt.subplot(2, 2, 4)
+    bcr.set_ylabel('Balanced classification rate')
+    bcr.set_title(f'BCR curve for {amine}') if amine else bcr.set_title(f'Averaged BCR curve')
+
+    # Plot each model's metrics
+    for model in stats_dict:
+        acc.plot(num_examples, stats_dict[model]['accuracies'], 'o-', label=model)
+        prec.plot(num_examples, stats_dict[model]['precisions'], 'o-', label=model)
+        rec.plot(num_examples, stats_dict[model]['recalls'], 'o-', label=model)
+        bcr.plot(num_examples, stats_dict[model]['bcrs'], 'o-', label=model)
+
+    # Display subplot legends
+    acc.legend()
+    prec.legend()
+    rec.legend()
+    bcr.legend()
+
+    fig.text(0.5, 0.04, "Number of samples given", ha="center", va="center")
+
+    # Set the metrics graph's name and designated folder
+    graph_name = 'cv_metrics_{0:s}.png'.format(amine) if amine else 'average_metrics.png'
+    graph_dst = '{0:s}/{1:s}'.format(dst, graph_name)
+
+    # Remove duplicate graphs in case we can't directly overwrite the files
+    if os.path.isfile(graph_dst):
+        os.remove(graph_dst)
+
+    # Save graph in folder
+    plt.savefig(graph_dst)
+    print(f"Graph {graph_name} saved in folder {dst}")
+
+    if show:
+        plt.show()
+
+        
 def load_test_samples(hold_out_amines, df, to_exclude, k_shot, amine_header, score_header):
     """This is a function used for loading testing samples specifically
 
@@ -321,6 +453,7 @@ def load_test_samples(hold_out_amines, df, to_exclude, k_shot, amine_header, sco
         amine_test_samples[a] = test_sample
     return amine_test_samples
 
+  
 def save_model(params, amine=None):
     """This is to save models
 
