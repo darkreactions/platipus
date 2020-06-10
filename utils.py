@@ -533,6 +533,84 @@ def initialise_dict_of_dict(key_list):
     return q
 
 
+def create_cv_stats_dict(models):
+    """Creates a stats dictionary that stores the performance metrics during the cross-validation stage of all models on
+            a specific amine.
+
+    Args:
+        models:         A list representing all the models to be evaluated.
+
+    Returns:
+        cv_stats_dict:  A dictionary that stores the performance metrics during the cross-validation stage of a specific
+                            amine. It has the format of {model_name:{metric_name: [metric_value]}}.
+    """
+    metrics = {
+        'accuracies': [],
+        'precisions': [],
+        'recalls': [],
+        'bcrs': [],
+        'corrects': [],
+        'confusion_matrices': [],
+        'prob_pred': []
+    }
+
+    cv_stats_dict = {}
+
+    for model in models:
+        # Pre-fill each model's value with standard metrics dictionary
+        cv_stats_dict.setdefault(model, metrics)
+
+    return cv_stats_dict
+
+
+def update_cv_stats_dict(cv_stats_dict, model, correct, cm, accuracy, precision, recall, bcr, prob_pred=None, verbose=True):
+    """Update the stats dictionary that stores the performance metrics during the cross-validation stage of a specific
+            amine
+    Args:
+        cv_stats_dict:  A dictionary that stores the performance metrics during the cross-validation stage of a specific
+                            amine. It has the format of {model_name:{metric_name: [metric_value]}}.
+        model:          A string representing the ML model the metrics are evaluating. Should be either 'PLATIPUS' or
+                            'MAML'.
+        correct:        An torch.Tensor object representing an array-like element-wise comparison between the actual
+                            labels and predicted labels.
+        cm:             A numpy array representing the confusion matrix given our predicted labels and the actual
+                            corresponding labels. It's a 2x2 matrix for the drp_chem model.
+        accuracy:       A float representing the accuracy rate of the model: the rate of correctly predicted reactions
+                            out of all reactions.
+        precision:      A float representing the precision rate of the model: the rate of the number of actually
+                            successful reactions out of all the reactions predicted to be successful.
+        recall:         A float representing the recall rate of the model: the rate of the number of reactions predicted
+                            to be successful out of all the acutal successful reactions.
+        bcr:            A float representing the balanced classification rate of the model. It's the average value of
+                            recall rate and true negative rate.
+        prob_pred:      A torch.Tensor object representing all the probabilities of the current predictions of all data
+                            points w/o active learning. Default to None since the model can be MAML.
+        verbose:        A string representing whether we want to print the metrics out or not.
+
+    Returns:
+        cv_stats_dict:  A dictionary that stores the performance metrics during the cross-validation stage of a specific
+                            amine. It has the same format as above, with values updated given the input metrics.
+    """
+    # Display and update individual performance metric
+    cv_stats_dict[model]['corrects'].extend(correct.detach().cpu().numpy())
+    cv_stats_dict[model]['accuracies'].append(accuracy)
+    cv_stats_dict[model]['confusion_matrices'].append(cm)
+    cv_stats_dict[model]['precisions'].append(precision)
+    cv_stats_dict[model]['recalls'].append(recall)
+    cv_stats_dict[model]['bcr'].append(bcr)
+
+    if prob_pred:
+        cv_stats_dict[model]['prob_pred'].extend(prob_pred.detach().cpu().numpy())
+
+    if verbose:
+        print('accuracy for model is', accuracy)
+        print(cm)
+        print('precision for model is', precision)
+        print('recall for model is', recall)
+        print('balanced classification rate for model is', bcr)
+
+    return cv_stats_dict
+
 if __name__ == "__main__":
     params = {}
     params["cross_validate"] = True
