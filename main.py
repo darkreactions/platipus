@@ -172,6 +172,8 @@ def initialize():
                                                     task specific parameters.
             K:                                  An integer representing the number of ensemble networks to validate
                                                     meta-parameters.
+            verbose:                            A boolean. representing whether it will output additional information to
+                                                    the terminal for functions with verbose feature.
             training_batches:                   A dictionary representing the training batches used to train PLATIPUS.
                                                     Key is amine left out, and value has hierarchy of:
                                                     batches -> x_t, y_t, x_v, y_v -> meta_batch_size number of amines
@@ -282,6 +284,7 @@ def initialize():
     print(f'L = {args.Lt}, K = {args.Lv}')
     params['L'] = args.Lt
     params['K'] = args.Lv
+    params['verbose'] = args.verbose
 
     if params['datasource'] == 'drp_chem':
 
