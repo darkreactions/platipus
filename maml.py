@@ -7,6 +7,7 @@ python maml.py --datasource=drp_chem --k_shot=20 --n_way=2 --inner_lr=1e-3 --met
 import torch
 
 import numpy as np
+from sklearn.metrics import confusion_matrix
 
 import os
 import sys
@@ -618,6 +619,199 @@ def get_task_prediction(x_t, y_t, x_v, params, y_v=None):
     else:
         loss_NLL = loss_fn(y_pred_v, y_v)
         return loss_NLL
+
+def get_naive_task_prediction_maml(x_vals, meta_params, params):
+    """Get the naive task prediction for MAML model
+
+    Super simple function to get MAML prediction with no updates
+
+    Args:
+        x_vals:     A numpy array representing the data we want to find the prediction for
+        meta_params:A dictionary of dictionaries used for the meta learning model.
+        params:     A dictionary of parameters used for this model. See documentation in initialize() for details.
+
+    return: A numpy array (3D) representing the predicted labels
+    """
+    net = params['net']
+    y_pred_v = net.forward(x=x_vals, w=meta_params)
+    return y_pred_v
+
+
+def zero_point_maml(preds, sm_loss, all_labels):
+    """Evalute MAML model performance w/o any active learning.
+
+    Args:
+        preds:          A list representing the labels predicted given our all our data points in the pool.
+        sm_loss:        A Softmax object representing the softmax layer to handle losses.
+        all_labels:     A torch.Tensor object representing all the labels of our reactions.
+
+    Returns:
+        correct:        An torch.Tensor object representing an array-like element-wise comparison between the actual
+                            labels and predicted labels.
+        cm:             A numpy array representing the confusion matrix given our predicted labels and the actual
+                            corresponding labels. It's a 2x2 matrix for the drp_chem model.
+        accuracy:       A float representing the accuracy rate of the model: the rate of correctly predicted reactions
+                            out of all reactions.
+        precision:      A float representing the precision rate of the model: the rate of the number of actually
+                            successful reactions out of all the reactions predicted to be successful.
+        recall:         A float representing the recall rate of the model: the rate of the number of reactions predicted
+                            to be successful out of all the acutal successful reactions.
+        bcr:            A float representing the balanced classification rate of the model. It's the average value of
+                            recall rate and true negative rate.
+    """
+
+    y_pred = sm_loss(preds)
+    print(y_pred)
+
+    _, labels_pred = torch.max(input=y_pred, dim=1)
+    print(labels_pred)
+
+    correct = (labels_pred == all_labels)
+
+    accuracy = torch.sum(correct, dim=0).item() / len(all_labels)
+
+    cm = confusion_matrix(all_labels.detach().cpu().numpy(), labels_pred.detach().cpu().numpy())
+
+    precision = cm[1][1] / (cm[1][1] + cm[0][1])
+    recall = cm[1][1] / (cm[1][1] + cm[1][0])
+    true_negative = cm[0][0] / (cm[0][0] + cm[0][1])
+    bcr = 0.5 * (recall + true_negative)
+
+    return correct, accuracy, cm, precision, recall, bcr
+
+
+def active_learning_maml(preds, sm_loss, all_labels, x_t, y_t, x_v, y_v):
+    """Update active learning pool and evalute MAML model performance.
+
+    Args:
+        preds:          A list representing the labels predicted given our all our data points in the pool.
+        sm_loss:        A Softmax object representing the softmax layer to handle losses.
+        all_labels:     A torch.Tensor object representing all the labels of our reactions.
+        x_t:            A numpy array (3D) representing the data of the points used for active learning.
+                            The dimension is meta_batch_size by k_shot by number of features of our data input.
+        y_t:            A numpy array (3D) representing the labels of the points used for active learning.
+                            The dimension is meta_batch_size by k_shot by n_way.
+        x_v:            A numpy array (3D) representing the data of the available points in the active learning pool.
+                            The dimension is meta_batch_size by k_shot by number of features of our data input.
+        y_v:            A numpy array (3D) representing the labels of the available points in the active learning pool.
+                            The dimension is meta_batch_size by k_shot by n_way.
+
+    Returns:
+        x_t:            A numpy array (3D) representing the training data of one batch.
+                        The dimension is meta_batch_size by k_shot by number of features of our data input.
+        y_t:            A numpy array (3D) representing the training labels of one batch.
+                        The dimension is meta_batch_size by k_shot by n_way.
+        x_v:            A numpy array (3D) representing the validation data of one batch.
+                        The dimension is meta_batch_size by k_shot by number of features of our data input.
+        y_v:            A numpy array (3D) representing the labels of the available points in the active learning pool.
+                            The dimension is meta_batch_size by k_shot by n_way.
+        correct:        An torch.Tensor object representing an array-like element-wise comparison between the actual
+                            labels and predicted labels.
+        cm:             A numpy array representing the confusion matrix given our predicted labels and the actual
+                            corresponding labels. It's a 2x2 matrix for the drp_chem model.
+        accuracy:       A float representing the accuracy rate of the model: the rate of correctly predicted reactions
+                            out of all reactions.
+        precision:      A float representing the precision rate of the model: the rate of the number of actually
+                            successful reactions out of all the reactions predicted to be successful.
+        recall:         A float representing the recall rate of the model: the rate of the number of reactions predicted
+                            to be successful out of all the acutal successful reactions.
+        bcr:            A float representing the balanced classification rate of the model. It's the average of
+                            the recall rate and the true negative rate.
+    """
+
+    y_pred = sm_loss(preds)
+
+    _, labels_pred = torch.max(input=y_pred, dim=1)
+    correct = (labels_pred == all_labels)
+    accuracy = torch.sum(correct, dim=0).item() / len(all_labels)
+
+    # print(all_labels)
+    # print(labels_pred)
+
+    # Now add a random point since MAML cannot reason about uncertainty
+    index = np.random.choice(len(x_v))
+    # Add to the training data
+    x_t = torch.cat((x_t, x_v[index].view(1, 51)))
+    y_t = torch.cat((y_t, y_v[index].view(1)))
+    # Remove from pool, there is probably a less clunky way to do this
+    x_v = torch.cat([x_v[0:index], x_v[index + 1:]])
+    y_v = torch.cat([y_v[0:index], y_v[index + 1:]])
+    print('length of x_v is now', len(x_v))
+
+    cm = confusion_matrix(all_labels.detach().cpu().numpy(), labels_pred.detach().cpu().numpy())
+
+    precision = cm[1][1] / (cm[1][1] + cm[0][1])
+    recall = cm[1][1] / (cm[1][1] + cm[1][0])
+    true_negative = cm[0][0] / (cm[0][0] + cm[0][1])
+    bcr = 0.5 * (recall + true_negative)
+
+    return x_t, y_t, x_v, y_v, correct, cm, accuracy, precision, recall, bcr
+
+
+def get_task_prediction_maml(x_t, y_t, x_v, meta_params, params):
+    """Get the prediction of label with a MAML model
+
+    Run a forward pass to obtain predictions given a MAML model
+    It is required that a MAML model has already been trained
+    Also make sure the MAML model has the same architecture as the PLATIPUS model
+    or elese the call to net.forward() will give you problems
+
+    Args:
+        x_t:        A numpy array (3D) representing the training data of one batch.
+                        The dimension is meta_batch_size by k_shot by number of features of our data input.
+        y_t:        A numpy array (3D) representing the training labels of one batch.
+                        The dimension is meta_batch_size by k_shot by n_way.
+        x_v:        A numpy array (3D) representing the validation data of one batch.
+                        The dimension is meta_batch_size by k_shot by number of features of our data input.
+        meta_params:A dictionary of dictionaries used for the meta learning model.
+        params:     A dictionary of parameters used for this model. See documentation in initialize() for details.
+
+    Returns:
+        y_pred_v: A numpy array (3D) representing the predicted labels
+        given our the validation or testing data of one batch.
+    """
+
+    # Get the program parameters from params
+    net = params['net']
+    loss_fn = params['loss_fn']
+    inner_lr = params['inner_lr']
+    num_inner_updates = params['num_inner_updates']
+    p_dropout_base = params['p_dropout_base']
+
+    # The MAML model weights
+    q = {}
+
+    y_pred_t = net.forward(x=x_t, w=meta_params)
+    loss_vfe = loss_fn(y_pred_t, y_t)
+
+    grads = torch.autograd.grad(
+        outputs=loss_vfe,
+        inputs=meta_params.values(),
+        create_graph=True
+    )
+    gradients = dict(zip(meta_params.keys(), grads))
+
+    for key in meta_params.keys():
+        q[key] = meta_params[key] - inner_lr * gradients[key]
+
+    # Similar to PLATIPUS, we can perform more gradient updates if we wish to
+    for _ in range(num_inner_updates - 1):
+        loss_vfe = 0
+        y_pred_t = net.forward(x=x_t, w=q, p_dropout=p_dropout_base)
+        loss_vfe = loss_fn(y_pred_t, y_t)
+        grads = torch.autograd.grad(
+            outputs=loss_vfe,
+            inputs=q.values(),
+            retain_graph=True
+        )
+        gradients = dict(zip(q.keys(), grads))
+
+        for key in q.keys():
+            q[key] = q[key] - inner_lr * gradients[key]
+
+    # Finally call the forward function
+    y_pred_v = net.forward(x=x_v, w=q)
+    return y_pred_v
 
 
 if __name__ == "__main__":

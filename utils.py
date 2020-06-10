@@ -503,6 +503,28 @@ def save_model(params, amine=None):
     return dst_folder
 
 
+def initialise_dict_of_dict(key_list):
+    """Initialize a dictionary within a dictionary
+
+    Helps us create a data structure to store model weights during gradient updates
+
+    Args:
+        key_list: A list of keys that will be initialized
+        in each of the keys in the outer-most dictionary
+
+    return:
+        q: A dictionary that has a dictionary as the index of each key.
+        In the format of {"key":{"key":0}}
+    """
+
+    q = dict.fromkeys(['mean', 'logSigma'])
+    for para in q.keys():
+        q[para] = {}
+        for key in key_list:
+            q[para][key] = 0
+    return q
+
+
 if __name__ == "__main__":
     params = {}
     params["cross_validate"] = True
