@@ -22,16 +22,17 @@ python main.py --datasource=drp_chem --k_shot=20 --n_way=2 --inner_lr=1e-3 --met
 run me for training a model on all the training data (not CV):
 python main.py --datasource=drp_chem --k_shot=20 --n_way=2 --inner_lr=1e-3 --meta_lr=1e-3 --meta_batch_size=10 --Lt=1 --Lv=10 --kl_reweight=.0001 --num_epochs=3000 --resume_epoch=0 --verbose --p_dropout_base=0.3 --train
 '''
+
 import argparse
 import torch
-import pickle
 import os
 import sys
 
+from core import *
 from FC_net import FCNet
-from utils import load_chem_dataset, write_pickle, read_pickle, save_model
-
-from core import main, initialzie_theta, initialize_optimization_for_theta
+from utils import *
+from platipus import *
+from maml import *
 
 
 def parse_args():
