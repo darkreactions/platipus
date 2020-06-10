@@ -31,7 +31,8 @@ import sys
 from FC_net import FCNet
 from utils import load_chem_dataset, write_pickle, read_pickle, save_model
 
-from core import main, initialzie_theta, initialize_optimization_for_theta
+from core import main
+from platipus import initialzie_theta_platipus, set_optim_platipus
 
 
 def parse_args():
@@ -404,7 +405,7 @@ def initialize():
         # 'mean' is the mean model parameters
         # 'logSigma' and 'logSigma_q' are the variance of the base and variational distributions
         # the two 'gamma' vectors are the learning rate vectors
-        Theta = initialzie_theta(params)
+        Theta = initialzie_theta_platipus(params)
     else:
         # Cross validation will load a bunch of models elsewhere when testing
         # A little confusing, but if we are training we want to initialize the first model
@@ -440,7 +441,7 @@ def initialize():
 
     if not params['cross_validate'] or params['train_flag']:
         # Now we need to set up the optimizer for Theta, PyTorch makes this very easy for us, phew.
-        op_Theta = initialize_optimization_for_theta(Theta, params["meta_lr"])
+        op_Theta = set_optim_platipus(Theta, params["meta_lr"])
 
         if params['resume_epoch'] > 0:
             op_Theta.load_state_dict(saved_checkpoint['op_Theta'])
