@@ -11,22 +11,21 @@ import os
 import sys
 
 
-from utils import load_chem_dataset
-from utils import load_chem_dataset_testing
+from utils import load_chem_dataset, save_model
 from FC_net import FCNet
 
 from sklearn.metrics import confusion_matrix
 from matplotlib import pyplot as plt
+#from collections import defaultdict
 
 
-def reinitialize_model_params(params):
-    """Reinitialize model meta-parameters for cross validation in PLATIPUS
+def initialzie_theta(params):
+    """This function is to initialize Theta
 
     Args:
-        params: A dictionary of parameters used for this model. See documentation in initialize() for details.
+        params: A dictionary of initialized parameters
 
-    Returns:
-        N/A
+    return: A dictionary of initialized meta parameters used for cross validation
     """
     Theta = {}
     Theta['mean'] = {}
@@ -60,9 +59,17 @@ def reinitialize_model_params(params):
         Theta['gamma_p'][key] = torch.tensor(
             1e-2, device=params['device'], requires_grad=True)
         Theta['gamma_p'][key].requires_grad_()
+    return Theta
 
-    params['Theta'] = Theta
+def initialize_optimization_for_theta(Theta,meta_lr):
+    """This function is to set up the optimizer for Theta
 
+    Args:
+        Theta:      A dictionary containing the meta parameters
+        meta_lr:    The defined learning rate for meta_learning
+
+    return: The optimizer setted up for Theta
+    """
     op_Theta = torch.optim.Adam(
         [
             {
@@ -81,9 +88,24 @@ def reinitialize_model_params(params):
                 'params': Theta['gamma_q'].values()
             }
         ],
-        lr=params['meta_lr']
+        lr=meta_lr
     )
-    params['op_Theta'] = op_Theta
+    return op_Theta
+
+
+def reinitialize_model_params(params):
+    """Reinitialize model meta-parameters for cross validation in PLATIPUS
+
+    Args:
+        params: A dictionary of parameters used for this model. See documentation in initialize() for details.
+
+    Returns:
+        N/A
+    """
+    Theta = initialzie_theta(params)
+    params['Theta'] = Theta
+
+    params['op_Theta'] = initialize_optimization_for_theta(Theta, params["meta_lr"])
 
 
 def main(params):
@@ -107,23 +129,7 @@ def main(params):
                 for amine in params['training_batches']:
                     print("Starting training for amine", amine)
                     # Change the path to save models
-                    dst_folder_root = '.'
-                    dst_folder = '{0:s}/PLATIPUS_few_shot/PLATIPUS_{1:s}_{2:d}way_{3:d}shot_{4:s}'.format(
-                        dst_folder_root,
-                        params['datasource'],
-                        params['num_classes_per_task'],
-                        params['num_training_samples_per_class'],
-                        amine
-                    )
-                    if not os.path.exists(dst_folder):
-                        os.makedirs(dst_folder)
-                        print('No folder for storage found')
-                        print(f'Make folder to store meta-parameters at')
-                    else:
-                        print(
-                            'Found existing folder. Meta-parameters will be stored at')
-                    print(dst_folder)
-                    params['dst_folder'] = dst_folder
+                    params['dst_folder'] = save_model(params, amine)
 
                     # Adjust the loss function for each amine
                     amine_counts = params['counts'][amine]
@@ -150,55 +156,18 @@ def main(params):
         if params['datasource'] == 'drp_chem' and params['cross_validate']:
             # I am saving this dictionary in case things go wrong
             # It will get added to in the active learning code
-            stats_dict = {}
-            stats_dict['accuracies'] = []
-            stats_dict['confusion_matrices'] = []
-            stats_dict['precisions'] = []
-            stats_dict['recalls'] = []
-            stats_dict['balanced_classification_rates'] = []
-            stats_dict['accuracies_MAML'] = []
-            stats_dict['confusion_matrices_MAML'] = []
-            stats_dict['precisions_MAML'] = []
-            stats_dict['recalls_MAML'] = []
-            stats_dict['balanced_classification_rates_MAML'] = []
+            stats_dict_keys = ['accuracies', 'confusion_matrices', 'precisions', 'recalls', 'balanced_classification_rates',
+                               'accuracies_MAML', 'confusion_matrices_MAML', 'precisions_MAML', 'recalls_MAML','balanced_classification_rates_MAML']
+            stats_dict = create_stats_dict(stats_dict_keys)
             params['cv_statistics'] = stats_dict
             # Test performance of each individual cross validation model
             for amine in params['validation_batches']:
                 print("Starting validation for amine", amine)
                 # Change the path to save models
-                dst_folder_root = '.'
-                dst_folder = '{0:s}/PLATIPUS_few_shot/PLATIPUS_{1:s}_{2:d}way_{3:d}shot_{4:s}'.format(
-                    dst_folder_root,
-                    params['datasource'],
-                    params['num_classes_per_task'],
-                    params['num_training_samples_per_class'],
-                    amine
-                )
-                params['dst_folder'] = dst_folder
+                params['dst_folder'] = save_model(params, amine)
 
                 # Here we are loading a previously trained model
-                print('Restore previous Theta...')
-                print('Resume epoch {0:d}'.format(params['resume_epoch']))
-                checkpoint_filename = ('{0:s}_{1:d}way_{2:d}shot_{3:d}.pt') \
-                    .format(params['datasource'],
-                            params['num_classes_per_task'],
-                            params['num_training_samples_per_class'],
-                            params['resume_epoch'])
-                checkpoint_file = os.path.join(dst_folder, checkpoint_filename)
-                print('Start to load weights from')
-                print('{0:s}'.format(checkpoint_file))
-                if torch.cuda.is_available():
-                    saved_checkpoint = torch.load(
-                        checkpoint_file,
-                        map_location=lambda storage,
-                        loc: storage.cuda(params['gpu_id'])
-                    )
-                else:
-                    saved_checkpoint = torch.load(
-                        checkpoint_file,
-                        map_location=lambda storage,
-                        loc: storage
-                    )
+                saved_checkpoint = load_previous_model(params)
 
                 Theta = saved_checkpoint['Theta']
                 params['Theta'] = Theta
@@ -1426,6 +1395,53 @@ def initialise_dict_of_dict(key_list):
             q[para][key] = 0
     return q
 
+def create_stats_dict(keys):
+    """Creating the stats dictionary
+
+    Args:
+        keys: A list containing the name of the keys we want to initiate in stats dictionary
+
+    return: A dictionary with format: {"key":[],"key2":[]}
+    """
+    stats_dict = {}
+    for key in keys:
+        stats_dict[key] = []
+    return stats_dict
+
+
+def load_previous_model(params):
+    """This function is to load in previous model
+
+    This is for PLATIPUS model specifically.
+
+    Args:
+        params: A dictionary of initialzed parameters
+
+    return: The saved checkpoint
+    """
+    print('Restore previous Theta...')
+    print('Resume epoch {0:d}'.format(params['resume_epoch']))
+    checkpoint_filename = ('{0:s}_{1:d}way_{2:d}shot_{3:d}.pt') \
+        .format(params['datasource'],
+                params['num_classes_per_task'],
+                params['num_training_samples_per_class'],
+                params['resume_epoch'])
+    checkpoint_file = os.path.join(params["dst_folder"], checkpoint_filename)
+    print('Start to load weights from')
+    print('{0:s}'.format(checkpoint_file))
+    if torch.cuda.is_available():
+        saved_checkpoint = torch.load(
+            checkpoint_file,
+            map_location=lambda storage,
+                                loc: storage.cuda(params['gpu_id'])
+        )
+    else:
+        saved_checkpoint = torch.load(
+            checkpoint_file,
+            map_location=lambda storage,
+                                loc: storage
+        )
+    return saved_checkpoint
 
 if __name__ == "__main__":
     main()
