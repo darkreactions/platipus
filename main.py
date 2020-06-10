@@ -29,9 +29,9 @@ import os
 import sys
 
 from FC_net import FCNet
-from utils import load_chem_dataset, load_chem_dataset_testing, write_pickle, read_pickle
+from utils import load_chem_dataset, write_pickle, read_pickle, save_model
 
-from core import main
+from core import main, initialzie_theta, initialize_optimization_for_theta
 
 
 def parse_args():
@@ -293,6 +293,7 @@ def initialize():
             if params['cross_validate']:
 
                 training_batches, validation_batches, testing_batches, counts = load_chem_dataset(k_shot=20,
+                                                                                                  cross_validation=params['cross_validate'],
                                                                                                   meta_batch_size=args.meta_batch_size,
                                                                                                   num_batches=250,
                                                                                                   verbose=args.verbose)
@@ -308,10 +309,11 @@ def initialize():
                 write_pickle("./data/counts_dump.pkl", counts)
 
             else:
-                training_batches, testing_batches, counts = load_chem_dataset_testing(k_shot=20,
-                                                                                      meta_batch_size=args.meta_batch_size,
-                                                                                      num_batches=250,
-                                                                                      verbose=args.verbose)
+                training_batches, testing_batches, counts = load_chem_dataset(k_shot=20,
+                                                                              cross_validation=params['cross_validate'],
+                                                                              meta_batch_size=args.meta_batch_size,
+                                                                              num_batches=250,
+                                                                              verbose=args.verbose)
                 params['training_batches'] = training_batches
                 params['testing_batches'] = testing_batches
                 params['counts'] = counts
@@ -369,21 +371,7 @@ def initialize():
     params['KL_reweight'] = args.kl_reweight
 
     # Set up the path to save models
-    dst_folder_root = '.'
-    dst_folder = '{0:s}/PLATIPUS_few_shot/PLATIPUS_{1:s}_{2:d}way_{3:d}shot'.format(
-        dst_folder_root,
-        params['datasource'],
-        params['num_classes_per_task'],
-        params['num_training_samples_per_class']
-    )
-    if not os.path.exists(dst_folder):
-        os.makedirs(dst_folder)
-        print('No folder for storage found')
-        print(f'Make folder to store meta-parameters at')
-    else:
-        print('Found existing folder. Meta-parameters will be stored at')
-    print(dst_folder)
-    params['dst_folder'] = dst_folder
+    params['dst_folder'] = save_model(params)
 
     # Set up the path to save graphs
     graph_folder = '{0:s}/graphs'.format(params['dst_folder'])
@@ -416,39 +404,7 @@ def initialize():
         # 'mean' is the mean model parameters
         # 'logSigma' and 'logSigma_q' are the variance of the base and variational distributions
         # the two 'gamma' vectors are the learning rate vectors
-        Theta = {}
-        Theta['mean'] = {}
-        Theta['logSigma'] = {}
-        Theta['logSigma_q'] = {}
-        Theta['gamma_q'] = {}
-        Theta['gamma_p'] = {}
-        for key in params['w_shape'].keys():
-            if 'b' in key:
-                Theta['mean'][key] = torch.zeros(
-                    params['w_shape'][key], device=device, requires_grad=True)
-            else:
-                Theta['mean'][key] = torch.empty(
-                    params['w_shape'][key], device=device)
-                # Could also opt for Kaiming Normal here
-                torch.nn.init.xavier_normal_(
-                    tensor=Theta['mean'][key], gain=1.)
-                Theta['mean'][key].requires_grad_()
-
-            # Subtract 4 to get us into appropriate range for log variances
-            Theta['logSigma'][key] = torch.rand(
-                params['w_shape'][key], device=device) - 4
-            Theta['logSigma'][key].requires_grad_()
-
-            Theta['logSigma_q'][key] = torch.rand(
-                params['w_shape'][key], device=device) - 4
-            Theta['logSigma_q'][key].requires_grad_()
-
-            Theta['gamma_q'][key] = torch.tensor(
-                1e-2, device=device, requires_grad=True)
-            Theta['gamma_q'][key].requires_grad_()
-            Theta['gamma_p'][key] = torch.tensor(
-                1e-2, device=device, requires_grad=True)
-            Theta['gamma_p'][key].requires_grad_()
+        Theta = initialzie_theta(params)
     else:
         # Cross validation will load a bunch of models elsewhere when testing
         # A little confusing, but if we are training we want to initialize the first model
@@ -461,7 +417,7 @@ def initialize():
                         params['num_classes_per_task'],
                         params['num_training_samples_per_class'],
                         params['resume_epoch'])
-            checkpoint_file = os.path.join(dst_folder, checkpoint_filename)
+            checkpoint_file = os.path.join(params["dst_folder"], checkpoint_filename)
             print('Start to load weights from')
             print('{0:s}'.format(checkpoint_file))
             if torch.cuda.is_available():
@@ -484,26 +440,7 @@ def initialize():
 
     if not params['cross_validate'] or params['train_flag']:
         # Now we need to set up the optimizer for Theta, PyTorch makes this very easy for us, phew.
-        op_Theta = torch.optim.Adam(
-            [
-                {
-                    'params': Theta['mean'].values()
-                },
-                {
-                    'params': Theta['logSigma'].values()
-                },
-                {
-                    'params': Theta['logSigma_q'].values()
-                },
-                {
-                    'params': Theta['gamma_p'].values()
-                },
-                {
-                    'params': Theta['gamma_q'].values()
-                }
-            ],
-            lr=params['meta_lr']
-        )
+        op_Theta = initialize_optimization_for_theta(Theta, params["meta_lr"])
 
         if params['resume_epoch'] > 0:
             op_Theta.load_state_dict(saved_checkpoint['op_Theta'])
