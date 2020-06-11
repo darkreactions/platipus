@@ -11,9 +11,6 @@ from platipus import *
 from maml import *
 
 
-from sklearn.metrics import confusion_matrix
-
-
 def main(params):
     """Main driver code
 
@@ -64,9 +61,6 @@ def main(params):
         if params['datasource'] == 'drp_chem' and params['cross_validate']:
             # I am saving this dictionary in case things go wrong
             # It will get added to in the active learning code
-            model_list = ["PLATIPUS", "MAML"]
-            stats_dict = create_stats_dict(model_list)
-            params['cv_statistics'] = stats_dict
             # Test performance of each individual cross validation model
             for amine in params['validation_batches']:
                 print("Starting validation for amine", amine)
@@ -352,23 +346,6 @@ def test_model_actively(params, amine=None):
 
         # Plot the metric graphs and save it in the designated folder
         plot_metrics_graph(num_examples, cv_stats_dict, params['active_learning_graph_folder'], amine=amine)
-
-
-def create_stats_dict(models):
-    """Creating the stats dictionary
-
-    Args:
-        model: A list of the models that we are creating metrics for
-
-    return: A dictionary with format: {"model":{"metric1":[],"metric2":[], etc}, "model":{"metric1":[], etc}}
-    """
-    stats_dict = {}
-    metrics = ['accuracies', 'confusion_matrices', 'precisions', 'recalls', 'bcrs']
-    for model in models:
-        stats_dict[model] = {}
-        for key in metrics:
-            stats_dict[model][key] = []
-    return stats_dict
 
 
 if __name__ == "__main__":
