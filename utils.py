@@ -533,6 +533,23 @@ def initialise_dict_of_dict(key_list):
     return q
 
 
+def create_stats_dict(models):
+    """Creating the stats dictionary
+
+    Args:
+        model: A list of the models that we are creating metrics for
+
+    return: A dictionary with format: {"model":{"metric1":[],"metric2":[], etc}, "model":{"metric1":[], etc}}
+    """
+    stats_dict = {}
+    metrics = ['accuracies', 'confusion_matrices', 'precisions', 'recalls', 'bcrs']
+    for model in models:
+        stats_dict[model] = {}
+        for key in metrics:
+            stats_dict[model][key] = []
+    return stats_dict
+
+
 def create_cv_stats_dict(models):
     """Creates a stats dictionary that stores the performance metrics during the cross-validation stage of all models on
             a specific amine.
@@ -610,6 +627,7 @@ def update_cv_stats_dict(cv_stats_dict, model, correct, cm, accuracy, precision,
         print('balanced classification rate for model is', bcr)
 
     return cv_stats_dict
+
 
 if __name__ == "__main__":
     params = {}
