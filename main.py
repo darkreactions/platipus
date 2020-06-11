@@ -131,7 +131,7 @@ def parse_args():
     return args
 
 
-def initialize():
+def initialize(models_list):
     """Initializes a dictionary of parameters corresponding to the arguments
 
     The purpose of this function is trying to use a parameters dictionary without blowing up the number of
@@ -285,6 +285,14 @@ def initialize():
     params['L'] = args.Lt
     params['K'] = args.Lv
     params['verbose'] = args.verbose
+
+    # Set up the stats dictionary for later use
+    stats_dict = create_stats_dict(models_list)
+    params['cv_statistics'] = stats_dict
+
+    # Save it in case we are running other models before PLATIPUS
+    with open(os.path.join("./data", "cv_statistics.pkl"), "wb") as f:
+        pickle.dump(params['cv_statistics'], f)
 
     if params['datasource'] == 'drp_chem':
 
@@ -460,5 +468,6 @@ def initialize():
 
 
 if __name__ == "__main__":
-    params = initialize()
+    models_list = ["PLATIPUS", "MAML", "SVM", "KNN", "RandomForest"]
+    params = initialize(models_list)
     main(params)
