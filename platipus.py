@@ -1,10 +1,13 @@
 import torch
+import numpy as np
+
 import sys
+import os
 
 from utils import *
 
 from sklearn.metrics import confusion_matrix
-from core import test_model_actively
+from core import *
 
 
 # Originally "reinitialzie model params" Core line 147 in main function
@@ -196,7 +199,7 @@ def meta_train_platipus(params, amine=None):
             else:
                 sys.exit('Unknown dataset')
 
-            loss_i, KL_q_p = get_training_loss(x_t, y_t, x_v, y_v, params)
+            loss_i, KL_q_p = get_training_loss_platipus(x_t, y_t, x_v, y_v, params)
             KL_q_p = KL_q_p * KL_reweight
 
             if torch.isnan(loss_i).item():
