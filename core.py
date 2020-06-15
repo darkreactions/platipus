@@ -86,7 +86,40 @@ def main(params):
                 params['loss_fn'] = torch.nn.CrossEntropyLoss(class_weights)
 
                 # Run forward pass on the validation data
-                forward_pass_validate_platipus(params, amine)
+                validation_batches = params['validation_batches']
+                val_batch = validation_batches[amine]
+                x_t, y_t, x_v, y_v = torch.from_numpy(val_batch[0]).float().to(params['device']), torch.from_numpy(
+                    val_batch[1]).long().to(params['device']), \
+                                     torch.from_numpy(val_batch[2]).float().to(params['device']), torch.from_numpy(
+                    val_batch[3]).long().to(params['device'])
+
+                accuracies = []
+                corrects = []
+                probability_pred = []
+                sm_loss = params['sm_loss']
+                preds = get_task_prediction_platipus(x_t, y_t, x_v, params)
+                # print('raw task predictions', preds)
+                y_pred_v = sm_loss(torch.stack(preds))
+                # print('after applying softmax', y_pred_v)
+                y_pred = torch.mean(input=y_pred_v, dim=0, keepdim=False)
+                # print('after calling torch mean', y_pred)
+
+                prob_pred, labels_pred = torch.max(input=y_pred, dim=1)
+                # print('print training labels', y_t)
+                print('print labels predicted', labels_pred)
+                print('print true labels', y_v)
+                # print('print probability of prediction', prob_pred)
+                correct = (labels_pred == y_v)
+                corrects.extend(correct.detach().cpu().numpy())
+
+                # print('length of validation set', len(y_v))
+                accuracy = torch.sum(correct, dim=0).item() / len(y_v)
+                accuracies.append(accuracy)
+
+                probability_pred.extend(prob_pred.detach().cpu().numpy())
+
+                print('accuracy for model is', accuracies)
+                print('probabilities for predictions are', probability_pred)
                 test_model_actively(params, amine)
 
             # Save this dictionary in case we need it later
