@@ -78,8 +78,19 @@ class ActiveKNN:
         self.evaluate()
 
     def active_learning(self, num_iter=None, to_params=True):
-        """ TODO: Documentation
+        """ The active learning loop
 
+        This is the active learning model that loops around the KNN model
+        to look for the most uncertain point and give the model the label to train
+
+        Args:
+            num_iter:   An integer that is the number of iterations.
+                        Default = None
+            to_params:  A boolean that decide if to store the metrics to the dictionary,
+                        detail see "store_metrics_to_params" function.
+                        Default = True
+
+        return: N/A
         """
         num_iter = num_iter if num_iter else self.x_v.shape[0]
 
@@ -103,6 +114,15 @@ class ActiveKNN:
             self.store_metrics_to_params()
 
     def evaluate(self, store=True):
+        """Evaluation of the model
+
+        Args:
+            store:  A boolean that decides if to store the metrics of the performance of the model.
+                    Default = True
+
+        return: N/A
+        """
+
         # Calculate and report our model's accuracy.
         accuracy = self.learner.score(self.all_data, self.all_labels)
 
@@ -118,6 +138,25 @@ class ActiveKNN:
             self.store_metrics_to_model(cm, accuracy, precision, recall, bcr)
 
     def store_metrics_to_model(self, cm, accuracy, precision, recall, bcr):
+        """Store the performance metrics
+
+        The metrics are specifically the confusion matrices, accuracies,
+        precisions, recalls and balanced classification rates.
+
+        Args:
+           cm:              A numpy array representing the confusion matrix given our predicted labels and the actual
+                            corresponding labels. It's a 2x2 matrix for the drp_chem model.
+            accuracy:       A float representing the accuracy rate of the model: the rate of correctly predicted reactions
+                            out of all reactions.
+            precision:      A float representing the precision rate of the model: the rate of the number of actually
+                            successful reactions out of all the reactions predicted to be successful.
+            recall:         A float representing the recall rate of the model: the rate of the number of reactions predicted
+                            to be successful out of all the acutal successful reactions.
+            bcr:            A float representing the balanced classification rate of the model. It's the average value of
+                            recall rate and true negative rate.
+
+        return: N/A
+        """
         
         self.metrics['confusion_matrices'].append(cm)
         self.metrics['accuracies'].append(accuracy)
@@ -133,8 +172,10 @@ class ActiveKNN:
             print('balanced classification rate for model is', bcr)
             
     def store_metrics_to_params(self):
-        """TODO: Documentation
-        
+        """Store the metrics results to the model's parameters dictionary
+
+        Use the same logic of saving the metrics for each model.
+        Dump the cross validation statistics to a pickle file.
         """
         
         model = 'KNN'
