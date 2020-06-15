@@ -14,7 +14,8 @@ path = './data/0050.perovskitedata_DRP.csv'
 SUCCESS = 4
 
 
-def import_full_dataset(k_shot, meta_batch_size, num_batches, verbose=False, cross_validation=True):
+def import_full_dataset(k_shot, meta_batch_size, num_batches, verbose=False,
+                        cross_validation=True, meta=True):
     viable_amines = ['ZEVRFFCPALTVDN-UHFFFAOYSA-N',
                      'KFQARYBEAKAXIC-UHFFFAOYSA-N',
                      'NLJDBTZLVTWXRG-UHFFFAOYSA-N',
@@ -43,12 +44,16 @@ def import_full_dataset(k_shot, meta_batch_size, num_batches, verbose=False, cro
     df, amines = import_chemdata(verbose, viable_amines)
 
     if cross_validation:
-        return cross_validation_data(df, amines, hold_out_amines, k_shot, meta_batch_size, num_batches, verbose)
+        return cross_validation_data(df, amines, hold_out_amines, k_shot,
+                                     meta_batch_size, num_batches,
+                                     verbose, meta)
     else:
-        return hold_out_data(df, amines, hold_out_amines, k_shot, meta_batch_size, num_batches, verbose)
+        return hold_out_data(df, amines, hold_out_amines, k_shot,
+                             meta_batch_size, num_batches, verbose, meta)
 
 
-def import_test_dataset(k_shot, meta_batch_size, num_batches, verbose=False, cross_validation=True):
+def import_test_dataset(k_shot, meta_batch_size, num_batches, verbose=False,
+                        cross_validation=True,  meta=True):
     """
     meta_batch_size = 10
     k_shot = 20
@@ -63,10 +68,10 @@ def import_test_dataset(k_shot, meta_batch_size, num_batches, verbose=False, cro
     if cross_validation:
         return cross_validation_data(df, amines, hold_out_amines,
                                      k_shot, meta_batch_size,
-                                     num_batches, verbose)
+                                     num_batches, verbose, meta)
     else:
         return hold_out_data(df, amines, hold_out_amines, k_shot,
-                             meta_batch_size, num_batches, verbose)
+                             meta_batch_size, num_batches, verbose, meta)
 
 
 def import_chemdata(verbose, viable_amines):
@@ -103,7 +108,7 @@ def import_chemdata(verbose, viable_amines):
 
 
 def cross_validation_data(df, amines, hold_out_amines, k_shot,
-                          meta_batch_size, num_batches, verbose):
+                          meta_batch_size, num_batches, verbose, meta):
     amines = [a for a in amines if a not in hold_out_amines]
 
     # Used to set up our weighted loss function
@@ -135,22 +140,40 @@ def cross_validation_data(df, amines, hold_out_amines, k_shot,
 
         counts[amine] = [all_train.shape[0] -
                          all_train_success.shape[0], all_train_success.shape[0]]
-        batches = []
-        for _ in range(num_batches):
-            # t for train, v for validate (but validate is outer loop,
-            # trying to be consistent with the PLATIPUS code)
-            batch = generate_batch(df, meta_batch_size,
-                                   available_amines, to_exclude, k_shot)
-            batches.append(batch)
+        if meta:
+            batches = []
+            for _ in range(num_batches):
+                # t for train, v for validate (but validate is outer loop,
+                # trying to be consistent with the PLATIPUS code)
+                batch = generate_batch(df, meta_batch_size,
+                                       available_amines, to_exclude, k_shot)
+                batches.append(batch)
 
-        amine_left_out_batches[amine] = batches
+            amine_left_out_batches[amine] = batches
+        else:
+            X = df[df[amine_header] != amine]
+            y = X[score_header].values
+
+            # Drop these columns from the dataset
+            X = X.drop(to_exclude, axis=1).values
+
+            # Standardize features since they are not yet standardized in the dataset
+            scaler = StandardScaler()
+            scaler.fit(X)
+            X = scaler.transform(X)
+            amine_left_out_batches[amine] = (X, y)
+
         # print("hey this is {}".format(batches))
 
         # Now set up the cross validation data
         X = df[df[amine_header] == amine]
         y = X[score_header].values
         X = X.drop(to_exclude, axis=1).values
-        cross_valid = generate_valid_test_batch(X, y, k_shot)
+
+        if meta:
+            cross_valid = generate_valid_test_batch(X, y, k_shot)
+        else:
+            cross_valid = (X, y)
 
         amine_cross_validate_samples[amine] = cross_valid
 
@@ -165,7 +188,11 @@ def cross_validation_data(df, amines, hold_out_amines, k_shot,
     return amine_left_out_batches, amine_cross_validate_samples, amine_test_samples, counts
 
 
-def hold_out_data(df, amines, hold_out_amines, k_shot, meta_batch_size, num_batches, verbose):
+def hold_out_data(df, amines, hold_out_amines, k_shot, meta_batch_size, num_batches, verbose, meta):
+    """
+    TODO: Implement non-meta branch for hold_out_amine!
+    """
+
     print('Holding out', hold_out_amines)
 
     available_amines = [a for a in amines if a not in hold_out_amines]
@@ -303,6 +330,9 @@ def load_test_samples(hold_out_amines, df, to_exclude, k_shot, amine_header, sco
 
 
 if __name__ == "__main__":
+    meta_batch_size = 10
+    k_shot = 20
+    num_batches = 10
     amine_left_out_batches, amine_cross_validate_samples, amine_test_samples, counts = import_test_dataset(
-        verbose=True, cross_validation=True)
-    print(counts)
+        k_shot, meta_batch_size, num_batches, verbose=True, cross_validation=True, meta=False)
+    print(amine_left_out_batches.keys())
