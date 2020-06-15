@@ -28,12 +28,11 @@ import torch
 import os
 import sys
 
-from core import *
+from core import main
 from FC_net import FCNet
 from utils import *
 from platipus import *
 from maml import *
-
 
 
 def parse_args():
@@ -306,7 +305,8 @@ def initialize(models_list):
             if params['cross_validate']:
 
                 training_batches, validation_batches, testing_batches, counts = load_chem_dataset(k_shot=20,
-                                                                                                  cross_validation=params['cross_validate'],
+                                                                                                  cross_validation=params[
+                                                                                                      'cross_validate'],
                                                                                                   meta_batch_size=args.meta_batch_size,
                                                                                                   num_batches=250,
                                                                                                   verbose=args.verbose)
@@ -430,7 +430,8 @@ def initialize(models_list):
                         params['num_classes_per_task'],
                         params['num_training_samples_per_class'],
                         params['resume_epoch'])
-            checkpoint_file = os.path.join(params["dst_folder"], checkpoint_filename)
+            checkpoint_file = os.path.join(
+                params["dst_folder"], checkpoint_filename)
             print('Start to load weights from')
             print('{0:s}'.format(checkpoint_file))
             if torch.cuda.is_available():

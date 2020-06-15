@@ -1,3 +1,4 @@
+from maml import initialize
 import torch
 import numpy as np
 import pickle
@@ -5,10 +6,19 @@ import pickle
 import os
 import sys
 
-from utils import *
+from utils import (load_chem_dataset, plot_metrics_graph, create_cv_stats_dict,
+                   update_cv_stats_dict)
+
 from FC_net import FCNet
-from platipus import *
-from maml import *
+from platipus import (initialzie_theta_platipus, save_model,
+                      meta_train_platipus, set_optim_platipus,
+                      load_previous_model_platipus, forward_pass_validate_platipus,
+                      find_avg_metrics, get_task_prediction_platipus,
+                      get_naive_prediction_platipus, zero_point_platipus,
+                      active_learning_platipus)
+from maml import (initialize, load_previous_model_maml,
+                  get_naive_task_prediction_maml, zero_point_maml,
+                  get_task_prediction_maml, active_learning_maml)
 
 
 def main(params):
@@ -32,7 +42,8 @@ def main(params):
                 for amine in params['training_batches']:
                     print("Starting training for amine", amine)
                     # Change the path to save models
-                    params['dst_folder'] = save_model("PLATIPUS", params, amine)
+                    params['dst_folder'] = save_model(
+                        "PLATIPUS", params, amine)
 
                     # Adjust the loss function for each amine
                     amine_counts = params['counts'][amine]
@@ -53,7 +64,8 @@ def main(params):
                     params = meta_train_platipus(params, amine)
                     Theta = initialzie_theta_platipus(params)
                     params['Theta'] = Theta
-                    params['op_Theta'] = set_optim_platipus(Theta, params["meta_lr"])
+                    params['op_Theta'] = set_optim_platipus(
+                        Theta, params["meta_lr"])
             else:
                 params = meta_train_platipus(params)
 
@@ -65,7 +77,7 @@ def main(params):
             for amine in params['validation_batches']:
                 print("Starting validation for amine", amine)
                 # Change the path to save models
-                params['dst_folder'] = save_model("PLATIPUS",params, amine)
+                params['dst_folder'] = save_model("PLATIPUS", params, amine)
 
                 # Here we are loading a previously trained model
                 saved_checkpoint = load_previous_model_platipus(params)
@@ -116,8 +128,10 @@ def main(params):
             #         del stat_list[0]
 
             # Find the minimum number of points for performance evaluation
-            min_length = len(min(stats_dict["PLATIPUS"]['accuracies'], key=len))
-            print(f'Minimum number of points we have to work with is {min_length}')
+            min_length = len(
+                min(stats_dict["PLATIPUS"]['accuracies'], key=len))
+            print(
+                f'Minimum number of points we have to work with is {min_length}')
 
             # Evaluate all models' performances
             avg_stat = find_avg_metrics(stats_dict, min_length)
@@ -203,7 +217,7 @@ def test_model_actively(params, amine=None):
             # Initialize the training and the active learning pool for model
             x_t, y_t, x_v, y_v = torch.from_numpy(val_batch[0]).float().to(params['device']), torch.from_numpy(
                 val_batch[1]).long().to(params['device']), \
-                                 torch.from_numpy(val_batch[2]).float().to(params['device']), torch.from_numpy(
+                torch.from_numpy(val_batch[2]).float().to(params['device']), torch.from_numpy(
                 val_batch[3]).long().to(params['device'])
 
             all_labels = torch.cat((y_t, y_v))
@@ -224,7 +238,8 @@ def test_model_actively(params, amine=None):
             if model == 'PLATIPUS':
 
                 # Zero point prediction for PLATIPUS model
-                print('Getting the PLATIPUS model baseline before training on zero points')
+                print(
+                    'Getting the PLATIPUS model baseline before training on zero points')
                 preds = get_naive_prediction_platipus(all_data, params)
 
                 # Evaluate zero point performance for PLATIPUS
@@ -244,7 +259,8 @@ def test_model_actively(params, amine=None):
                 for _ in range(iters):
                     print(f'Doing active learning with {len(x_t)} examples')
                     num_examples.append(len(x_t))
-                    preds = get_task_prediction_platipus(x_t, y_t, all_data, params)
+                    preds = get_task_prediction_platipus(
+                        x_t, y_t, all_data, params)
 
                     # Update available datapoints in the pool and evaluate current model performance
                     x_t, y_t, x_v, y_v, prob_pred, correct, cm, accuracy, precision, recall, bcr = active_learning_platipus(
@@ -256,15 +272,18 @@ def test_model_actively(params, amine=None):
 
             elif model == 'MAML':
                 # Load pre-trained MAML model
-                maml_checkpoint = load_previous_model_maml(dst_folder_root, params, amine=None)
+                maml_checkpoint = load_previous_model_maml(
+                    dst_folder_root, params, amine=None)
                 Theta_maml = maml_checkpoint['theta']
 
                 # Zero point prediction for MAML model
                 print('Getting the MAML model baseline before training on zero points')
-                preds = get_naive_task_prediction_maml(all_data, Theta_maml, params)
+                preds = get_naive_task_prediction_maml(
+                    all_data, Theta_maml, params)
 
                 # Evaluate zero point performance for MAML
-                correct, cm, accuracy, precision, recall, bcr = zero_point_maml(preds, sm_loss_maml, all_labels)
+                correct, cm, accuracy, precision, recall, bcr = zero_point_maml(
+                    preds, sm_loss_maml, all_labels)
 
                 # Display and update individual performance metric
                 cv_stats_dict = update_cv_stats_dict(cv_stats_dict, model, correct, cm, accuracy, precision,
@@ -297,14 +316,20 @@ def test_model_actively(params, amine=None):
             # TODO: Check format
             # Update the main stats dictionary stored in params
             # This is bulky but it's good for future debugging
-            params['cv_statistics'][model]['accuracies'].append(cv_stats_dict[model]['accuracies'])
-            params['cv_statistics'][model]['confusion_matrices'].append(cv_stats_dict[model]['confusion_matrices'])
-            params['cv_statistics'][model]['precisions'].append(cv_stats_dict[model]['precisions'])
-            params['cv_statistics'][model]['recalls'].append(cv_stats_dict[model]['recalls'])
-            params['cv_statistics'][model]['bcrs'].append(cv_stats_dict[model]['bcrs'])
+            params['cv_statistics'][model]['accuracies'].append(
+                cv_stats_dict[model]['accuracies'])
+            params['cv_statistics'][model]['confusion_matrices'].append(
+                cv_stats_dict[model]['confusion_matrices'])
+            params['cv_statistics'][model]['precisions'].append(
+                cv_stats_dict[model]['precisions'])
+            params['cv_statistics'][model]['recalls'].append(
+                cv_stats_dict[model]['recalls'])
+            params['cv_statistics'][model]['bcrs'].append(
+                cv_stats_dict[model]['bcrs'])
 
         # Plot the metric graphs and save it in the designated folder
-        plot_metrics_graph(num_examples, cv_stats_dict, params['active_learning_graph_folder'], amine=amine)
+        plot_metrics_graph(num_examples, cv_stats_dict,
+                           params['active_learning_graph_folder'], amine=amine)
 
     # Here we are testing, this code should NOT be run yet
     elif not params['cross_validate']:
@@ -345,9 +370,11 @@ def test_model_actively(params, amine=None):
                                                  recall, bcr, prob_pred=prob_pred, verbose=params['verbose'])
 
         # Plot the metric graphs and save it in the designated folder
-        plot_metrics_graph(num_examples, cv_stats_dict, params['active_learning_graph_folder'], amine=amine)
+        plot_metrics_graph(num_examples, cv_stats_dict,
+                           params['active_learning_graph_folder'], amine=amine)
 
 
 if __name__ == "__main__":
-    np.random.seed(2)
-    main()
+    # np.random.seed(2)
+    # main()
+    pass
