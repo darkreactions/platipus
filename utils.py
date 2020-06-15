@@ -84,9 +84,9 @@ def load_chem_dataset(k_shot, cross_validation=True, meta_batch_size=32,
                                         {"total": [# of failed reactions, # of successful reactions]}
     """
     if test:
-        return import_test_dataset(verbose=verbose, cross_validation=cross_validation)
+        return import_test_dataset(k_shot, meta_batch_size, num_batches, verbose=verbose, cross_validation=cross_validation)
     else:
-        return import_full_dataset(k_shot, meta_batch_size, verbose=verbose, cross_validation=cross_validation)
+        return import_full_dataset(k_shot, meta_batch_size, num_batches, verbose=verbose, cross_validation=cross_validation)
 
 
 def find_avg_metrics(stats_dict, min_length):

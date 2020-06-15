@@ -14,7 +14,7 @@ path = './data/0050.perovskitedata_DRP.csv'
 SUCCESS = 4
 
 
-def import_full_dataset(k_shot, meta_batch_size, verbose=False, cross_validation=True):
+def import_full_dataset(k_shot, meta_batch_size, num_batches, verbose=False, cross_validation=True):
     viable_amines = ['ZEVRFFCPALTVDN-UHFFFAOYSA-N',
                      'KFQARYBEAKAXIC-UHFFFAOYSA-N',
                      'NLJDBTZLVTWXRG-UHFFFAOYSA-N',
@@ -48,11 +48,12 @@ def import_full_dataset(k_shot, meta_batch_size, verbose=False, cross_validation
         return hold_out_data(df, amines, hold_out_amines, k_shot, meta_batch_size, num_batches, verbose)
 
 
-def import_test_dataset(verbose=False, cross_validation=True):
+def import_test_dataset(k_shot, meta_batch_size, num_batches, verbose=False, cross_validation=True):
+    """
     meta_batch_size = 10
     k_shot = 20
     num_batches = 10
-
+    """
     viable_amines = ['ZEVRFFCPALTVDN-UHFFFAOYSA-N',
                      'KFQARYBEAKAXIC-UHFFFAOYSA-N',
                      'NLJDBTZLVTWXRG-UHFFFAOYSA-N']
