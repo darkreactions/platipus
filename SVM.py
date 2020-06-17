@@ -44,7 +44,7 @@ class ActiveSVM:
         }
         self.verbose = verbose
 
-    def load_dataset(self, data, labels, test_size=None, random_state=None):
+    '''def load_dataset(self, data, labels, test_size=None, random_state=None):
         """TODO: Documentation
 
         """
@@ -66,7 +66,34 @@ class ActiveSVM:
             print(f'The training data has dimension of {self.x_t.shape}.')
             print(f'The training labels has dimension of {self.y_t.shape}.')
             print(f'The testing data has dimension of {self.x_v.shape}.')
+            print(f'The testing labels has dimension of {self.y_v.shape}.')'''
+    def load_dataset(self, amine, amine_left_out_batches, amine_cross_validate_samples, meta=False):
+        """TODO: Change this to accommodate drp+chem dataset
+
+        TODO: Documentation
+
+        """
+
+
+        if meta == True:
+            # option 2
+            pass
+
+        else:
+            self.x_t = amine_left_out_batches[amine][0]
+            self.y_t = amine_left_out_batches[amine][1]
+            self.x_v = amine_cross_validate_samples[amine][0]
+            self.y_v = amine_cross_validate_samples[amine][1]
+
+            self.all_data = np.concatenate((self.x_t, self.x_v))
+            self.all_labels = np.concatenate((self.y_t, self.y_v))
+
+        if self.verbose:
+            print(f'The training data has dimension of {self.x_t.shape}.')
+            print(f'The training labels has dimension of {self.y_t.shape}.')
+            print(f'The testing data has dimension of {self.x_v.shape}.')
             print(f'The testing labels has dimension of {self.y_v.shape}.')
+
 
     def train(self):
         """ Train the SVM model by setting up the ActiveLearner.
@@ -198,10 +225,24 @@ class ActiveSVM:
 
 
 if __name__ == "__main__":
-    iris = load_iris()
+    '''iris = load_iris()
     X = iris['data']
-    y = iris['target']
-    SVM = ActiveSVM()
-    SVM.load_dataset(X, y, random_state=2)
-    SVM.train()
-    SVM.active_learning(to_params=False)
+    y = iris['target']'''
+    meta_batch_size = 10
+    k_shot = 20
+    num_batches = 10
+    amine_left_out_batches, amine_cross_validate_samples, amine_test_samples, counts = dataset.import_full_dataset(
+        k_shot, meta_batch_size, num_batches, verbose=True, cross_validation=True, meta=True)
+    ASVM = ActiveSVM()
+    '''print(amine_left_out_batches)
+    amine = amine_left_out_batches.keys()
+    print(amine[0])
+    x_t = amine_left_out_batches[amine][0]
+    y_t = amine_left_out_batches[amine][1]
+    x_v = amine_cross_validate_samples[amine][0]
+    y_v = amine_cross_validate_samples[amine][1]'''
+    for amine in amine_left_out_batches:
+        print("testing on {}".format(amine))
+        ASVM.load_dataset(amine, amine_left_out_batches, amine_cross_validate_samples, meta=True)
+        ASVM.train()
+        ASVM.active_learning(to_params=False)

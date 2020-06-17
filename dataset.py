@@ -335,4 +335,3 @@ if __name__ == "__main__":
     num_batches = 10
     amine_left_out_batches, amine_cross_validate_samples, amine_test_samples, counts = import_test_dataset(
         k_shot, meta_batch_size, num_batches, verbose=True, cross_validation=True, meta=False)
-    print(amine_left_out_batches.keys())

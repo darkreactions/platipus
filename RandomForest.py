@@ -1,5 +1,7 @@
 import os
 import pickle
+import argparse
+
 
 import numpy as np
 from sklearn.datasets import load_iris
@@ -10,6 +12,7 @@ from sklearn.ensemble import RandomForestClassifier
 
 from modAL.models import ActiveLearner
 
+import dataset
 
 iris = load_iris()
 X = iris['data']
@@ -19,6 +22,17 @@ scaler.fit(X)
 X = scaler.transform(X)
 x_t, x_v, y_t, y_v = train_test_split(X, y, test_size = .8, random_state=2)
 print(x_t.shape, x_v.shape, y_t.shape, y_v.shape)
+
+
+'''def parse_args():
+    parser = argparse.ArgumentParser(
+        description='Setup variables for RandomForest.')
+    parser.add_argument('--meta_batch_size', type=int, default=25,
+                        help='Number of tasks sampled per outer loop')
+    parser.add_argument('--k_shot', type=int, default=1,
+                        help='Number of training samples per class')
+    parser.add_argument('--num_batches', type=int, default=250,
+                        help='Number of tasks sampled per inner loop')'''
 
 
 class ActiveRandomForest:
@@ -56,26 +70,38 @@ class ActiveRandomForest:
         self.verbose = verbose
 
     # TODO: should we load dataset here? what if we are using the model for another dataset
-    def load_dataset(self, data, labels, test_size=None, random_state=None):
+    def load_dataset(self, amine, amine_left_out_batches, amine_cross_validate_samples, meta=False):
         """TODO: Change this to accommodate drp+chem dataset
 
         TODO: Documentation
 
         """
 
-        print('Loading and normalizing dataset')
-        scaler = StandardScaler()
-        scaler.fit(data)
-        normalized_data = scaler.transform(data)
 
-        self.all_data = normalized_data
-        self.all_labels = labels
+        if meta == True:
+            # option 2
+            self.x_t = amine_cross_validate_samples[amine][0]
+            #print(self.x_t.shape)
+            self.y_t = amine_cross_validate_samples[amine][1]
+            self.x_v = amine_cross_validate_samples[amine][2]
+            #print(self.x_v.shape)
+            self.y_v = amine_cross_validate_samples[amine][3]
 
-        self.x_t, self.x_v, self.y_t, self.y_v = train_test_split(
-            self.all_data,
-            self.all_labels,
-            test_size=test_size,
-            random_state=random_state)
+            self.all_data = np.concatenate((self.x_t,self.x_v))
+            self.all_labels = np.concatenate((self.y_t,self.y_v))
+
+        else:
+            self.x_t = amine_left_out_batches[amine][0]
+            #print(self.x_t)
+            self.y_t = amine_left_out_batches[amine][1]
+            #print(self.y_t)
+            self.x_v = amine_cross_validate_samples[amine][0]
+            #print(self.x_v)
+            self.y_v = amine_cross_validate_samples[amine][1]
+            #print(self.y_v)
+
+            self.all_data = x_v
+            self.all_labels = y_v
 
         if self.verbose:
             print(f'The training data has dimension of {self.x_t.shape}.')
@@ -122,6 +148,15 @@ class ActiveRandomForest:
             self.y_t = np.append(self.y_t, uncertain_label)
             self.x_v = np.delete(self.x_v, query_index, axis=0)
             self.y_v = np.delete(self.y_v, query_index)
+
+            '''gpu_id = 0
+            device = torch.device('cuda:{0:d}'.format(
+                gpu_id) if torch.cuda.is_available() else "cpu")
+            
+            self.x_t, self.y_t, self.x_v, self.y_v = torch.from_numpy(val_batch[0]).float().to(params['device']), torch.from_numpy(
+                val_batch[1]).long().to(params['device']), \
+                                 torch.from_numpy(val_batch[2]).float().to(params['device']), torch.from_numpy(
+                val_batch[3]).long().to(params['device'])'''
 
         if to_params:
             self.store_metrics_to_params()
@@ -190,7 +225,7 @@ class ActiveRandomForest:
         Dump the cross validation statistics to a pickle file.
         """
 
-        model = 'KNN'
+        model = "RandomForest"
 
         with open(os.path.join("./data", "cv_statistics.pkl"), "rb") as f:
             stats_dict = pickle.load(f)
@@ -207,10 +242,29 @@ class ActiveRandomForest:
 
 
 if __name__ == "__main__":
-    iris = load_iris()
+    '''iris = load_iris()
     X = iris['data']
-    y = iris['target']
+    y = iris['target']'''
+    # parser
+    meta_batch_size = 10
+    k_shot = 20
+    num_batches = 10
+    amine_left_out_batches, amine_cross_validate_samples, amine_test_samples, counts = dataset.import_full_dataset(
+        k_shot, meta_batch_size, num_batches, verbose=True, cross_validation=True, meta=True)
     ARF = ActiveRandomForest(n_estimator=100, criterion="gini", max_depth=8)
-    ARF.load_dataset(X, y, random_state=2)
-    ARF.train()
-    ARF.active_learning()
+    '''print(amine_left_out_batches)
+    amine = amine_left_out_batches.keys()
+    print(amine[0])
+    x_t = amine_left_out_batches[amine][0]
+    y_t = amine_left_out_batches[amine][1]
+    x_v = amine_cross_validate_samples[amine][0]
+    y_v = amine_cross_validate_samples[amine][1]'''
+    for amine in amine_left_out_batches:
+        print("testing on {}".format(amine))
+        ARF.load_dataset(amine,amine_left_out_batches,amine_cross_validate_samples, meta=True)
+        ARF.train()
+        ARF.active_learning(to_params=False)
+
+        # specific amine as attribute
+        # if not meta,
+        # for option two -- train on amine_cross_validate_samples =
