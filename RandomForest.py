@@ -14,16 +14,6 @@ from modAL.models import ActiveLearner
 
 import dataset
 
-iris = load_iris()
-X = iris['data']
-y = iris['target']
-scaler = StandardScaler()
-scaler.fit(X)
-X = scaler.transform(X)
-x_t, x_v, y_t, y_v = train_test_split(X, y, test_size = .8, random_state=2)
-print(x_t.shape, x_v.shape, y_t.shape, y_v.shape)
-
-
 '''def parse_args():
     parser = argparse.ArgumentParser(
         description='Setup variables for RandomForest.')
@@ -40,7 +30,7 @@ class ActiveRandomForest:
     A class of Random Forest model with active learning
     """
 
-    def __init__(self, n_estimator=100, criterion="gini", max_depth=7, verbose=True):
+    def __init__(self, amine, n_estimator=100, criterion="gini", max_depth=7, verbose=True):
         """initialization of the class
 
         Args:
@@ -56,6 +46,7 @@ class ActiveRandomForest:
                             Default = True
 
         """
+        self.amine = amine
         self.n_estimator = n_estimator
         self.criterion = criterion
         self.max_depth = max_depth
@@ -70,35 +61,29 @@ class ActiveRandomForest:
         self.verbose = verbose
 
     # TODO: should we load dataset here? what if we are using the model for another dataset
-    def load_dataset(self, amine, amine_left_out_batches, amine_cross_validate_samples, meta=False):
+    def load_dataset(self, training_batches, cross_validation_batches, meta=False):
         """TODO: Change this to accommodate drp+chem dataset
 
         TODO: Documentation
 
         """
-
-
-        if meta == True:
+        if meta is True:
             # option 2
-            self.x_t = amine_cross_validate_samples[amine][0]
-            #print(self.x_t.shape)
-            self.y_t = amine_cross_validate_samples[amine][1]
-            self.x_v = amine_cross_validate_samples[amine][2]
-            #print(self.x_v.shape)
-            self.y_v = amine_cross_validate_samples[amine][3]
+            print("Conducting Training under Option 2.")
+            self.x_t = cross_validation_batches[self.amine][0]
+            self.y_t = cross_validation_batches[self.amine][1]
+            self.x_v = cross_validation_batches[self.amine][2]
+            self.y_v = cross_validation_batches[self.amine][3]
 
             self.all_data = np.concatenate((self.x_t,self.x_v))
             self.all_labels = np.concatenate((self.y_t,self.y_v))
 
         else:
-            self.x_t = amine_left_out_batches[amine][0]
-            #print(self.x_t)
-            self.y_t = amine_left_out_batches[amine][1]
-            #print(self.y_t)
-            self.x_v = amine_cross_validate_samples[amine][0]
-            #print(self.x_v)
-            self.y_v = amine_cross_validate_samples[amine][1]
-            #print(self.y_v)
+            print("Conducting Training under Option 1.")
+            self.x_t = training_batches[self.amine][0]
+            self.y_t = training_batches[self.amine][1]
+            self.x_v = cross_validation_batches[self.amine][0]
+            self.y_v = cross_validation_batches[self.amine][1]
 
             self.all_data = np.concatenate((self.x_t, self.x_v))
             self.all_labels = np.concatenate((self.y_t, self.y_v))
@@ -148,15 +133,6 @@ class ActiveRandomForest:
             self.y_t = np.append(self.y_t, uncertain_label)
             self.x_v = np.delete(self.x_v, query_index, axis=0)
             self.y_v = np.delete(self.y_v, query_index)
-
-            '''gpu_id = 0
-            device = torch.device('cuda:{0:d}'.format(
-                gpu_id) if torch.cuda.is_available() else "cpu")
-            
-            self.x_t, self.y_t, self.x_v, self.y_v = torch.from_numpy(val_batch[0]).float().to(params['device']), torch.from_numpy(
-                val_batch[1]).long().to(params['device']), \
-                                 torch.from_numpy(val_batch[2]).float().to(params['device']), torch.from_numpy(
-                val_batch[3]).long().to(params['device'])'''
 
         if to_params:
             self.store_metrics_to_params()
@@ -242,29 +218,20 @@ class ActiveRandomForest:
 
 
 if __name__ == "__main__":
-    '''iris = load_iris()
-    X = iris['data']
-    y = iris['target']'''
-    # parser
+    # parser the under params
     meta_batch_size = 10
     k_shot = 20
     num_batches = 10
-    amine_left_out_batches, amine_cross_validate_samples, amine_test_samples, counts = dataset.import_full_dataset(
-        k_shot, meta_batch_size, num_batches, verbose=True, cross_validation=True, meta=False)
-    ARF = ActiveRandomForest(n_estimator=100, criterion="gini", max_depth=8)
-    '''print(amine_left_out_batches)
-    amine = amine_left_out_batches.keys()
-    print(amine[0])
-    x_t = amine_left_out_batches[amine][0]
-    y_t = amine_left_out_batches[amine][1]
-    x_v = amine_cross_validate_samples[amine][0]
-    y_v = amine_cross_validate_samples[amine][1]'''
-    for amine in amine_left_out_batches:
-        print("testing on {}!".format(amine))
-        ARF.load_dataset(amine,amine_left_out_batches,amine_cross_validate_samples, meta=False)
+    verbose = True
+    cross_validation = True
+    meta = False
+
+    training_batches, validation_batches, testing_batches, counts = dataset.import_full_dataset(
+        k_shot, meta_batch_size, num_batches, verbose=verbose, cross_validation=cross_validation, meta=meta)
+
+    for amine in training_batches:
+        print("Training and cross validation on {} amine.".format(amine))
+        ARF = ActiveRandomForest(amine, n_estimator=100, criterion="gini", max_depth=8)
+        ARF.load_dataset(training_batches,validation_batches, meta=meta)
         ARF.train()
         ARF.active_learning(to_params=False)
-
-        # specific amine as attribute
-        # if not meta,
-        # for option two -- train on amine_cross_validate_samples =
