@@ -100,8 +100,8 @@ class ActiveRandomForest:
             self.y_v = amine_cross_validate_samples[amine][1]
             #print(self.y_v)
 
-            self.all_data = x_v
-            self.all_labels = y_v
+            self.all_data = np.concatenate((self.x_t, self.x_v))
+            self.all_labels = np.concatenate((self.y_t, self.y_v))
 
         if self.verbose:
             print(f'The training data has dimension of {self.x_t.shape}.')
@@ -250,7 +250,7 @@ if __name__ == "__main__":
     k_shot = 20
     num_batches = 10
     amine_left_out_batches, amine_cross_validate_samples, amine_test_samples, counts = dataset.import_full_dataset(
-        k_shot, meta_batch_size, num_batches, verbose=True, cross_validation=True, meta=True)
+        k_shot, meta_batch_size, num_batches, verbose=True, cross_validation=True, meta=False)
     ARF = ActiveRandomForest(n_estimator=100, criterion="gini", max_depth=8)
     '''print(amine_left_out_batches)
     amine = amine_left_out_batches.keys()
@@ -260,8 +260,8 @@ if __name__ == "__main__":
     x_v = amine_cross_validate_samples[amine][0]
     y_v = amine_cross_validate_samples[amine][1]'''
     for amine in amine_left_out_batches:
-        print("testing on {}".format(amine))
-        ARF.load_dataset(amine,amine_left_out_batches,amine_cross_validate_samples, meta=True)
+        print("testing on {}!".format(amine))
+        ARF.load_dataset(amine,amine_left_out_batches,amine_cross_validate_samples, meta=False)
         ARF.train()
         ARF.active_learning(to_params=False)
 
