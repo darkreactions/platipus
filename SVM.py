@@ -31,10 +31,11 @@ class ActiveSVM:
         learner:        An ActiveLearner to conduct active learning with. See modAL documentation for more details.
     """
 
-    def __init__(self, verbose=True):
+    def __init__(self, amine, verbose=True):
         """TODO: Documentation
 
         """
+        self.amine = amine
         self.model = CalibratedClassifierCV(SVC())
         self.metrics = {
             'accuracies': [],
@@ -45,31 +46,30 @@ class ActiveSVM:
         }
         self.verbose = verbose
 
-
-    def load_dataset(self, amine, amine_left_out_batches, amine_cross_validate_samples, meta=False):
+    def load_dataset(self, training_batches, cross_validation_batches, meta=False):
         """TODO: Change this to accommodate drp+chem dataset
 
         TODO: Documentation
 
         """
 
-        if meta == True:
+        if meta is True:
             # option 2
-            self.x_t = amine_cross_validate_samples[amine][0]
-            # print(self.x_t.shape)
-            self.y_t = amine_cross_validate_samples[amine][1]
-            self.x_v = amine_cross_validate_samples[amine][2]
-            # print(self.x_v.shape)
-            self.y_v = amine_cross_validate_samples[amine][3]
+            print("Conducting Training under Option 2.")
+            self.x_t = cross_validation_batches[self.amine][0]
+            self.y_t = cross_validation_batches[self.amine][1]
+            self.x_v = cross_validation_batches[self.amine][2]
+            self.y_v = cross_validation_batches[self.amine][3]
 
             self.all_data = np.concatenate((self.x_t, self.x_v))
             self.all_labels = np.concatenate((self.y_t, self.y_v))
 
         else:
-            self.x_t = amine_left_out_batches[amine][0]
-            self.y_t = amine_left_out_batches[amine][1]
-            self.x_v = amine_cross_validate_samples[amine][0]
-            self.y_v = amine_cross_validate_samples[amine][1]
+            print("Conducting Training under Option 1.")
+            self.x_t = training_batches[self.amine][0]
+            self.y_t = training_batches[self.amine][1]
+            self.x_v = cross_validation_batches[self.amine][0]
+            self.y_v = cross_validation_batches[self.amine][1]
 
             self.all_data = np.concatenate((self.x_t, self.x_v))
             self.all_labels = np.concatenate((self.y_t, self.y_v))
@@ -211,24 +211,19 @@ class ActiveSVM:
 
 
 if __name__ == "__main__":
-    '''iris = load_iris()
-    X = iris['data']
-    y = iris['target']'''
     meta_batch_size = 10
     k_shot = 20
     num_batches = 10
-    amine_left_out_batches, amine_cross_validate_samples, amine_test_samples, counts = dataset.import_full_dataset(
-        k_shot, meta_batch_size, num_batches, verbose=True, cross_validation=True, meta=False)
-    ASVM = ActiveSVM()
-    '''print(amine_left_out_batches)
-    amine = amine_left_out_batches.keys()
-    print(amine[0])
-    x_t = amine_left_out_batches[amine][0]
-    y_t = amine_left_out_batches[amine][1]
-    x_v = amine_cross_validate_samples[amine][0]
-    y_v = amine_cross_validate_samples[amine][1]'''
-    for amine in amine_left_out_batches:
-        print("testing on {}".format(amine))
-        ASVM.load_dataset(amine, amine_left_out_batches, amine_cross_validate_samples, meta=False)
+    verbose = True
+    cross_validation = True
+    meta = False
+
+    training_batches, cross_validation_batches, testing_batches, counts = dataset.import_full_dataset(
+        k_shot, meta_batch_size, num_batches, verbose=verbose, cross_validation=cross_validation, meta=meta)
+
+    for amine in training_batches:
+        print("Training and cross validation on {} amine.".format(amine))
+        ASVM = ActiveSVM(amine)
+        ASVM.load_dataset(training_batches, cross_validation_batches, meta=meta)
         ASVM.train()
         ASVM.active_learning(to_params=False)
