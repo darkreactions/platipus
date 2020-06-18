@@ -2,6 +2,7 @@ import os
 import pickle
 
 import numpy as np
+import dataset
 from sklearn.datasets import load_iris
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix
@@ -44,29 +45,7 @@ class ActiveSVM:
         }
         self.verbose = verbose
 
-    '''def load_dataset(self, data, labels, test_size=None, random_state=None):
-        """TODO: Documentation
 
-        """
-        print('Loading and normalizing dataset')
-        scaler = StandardScaler()
-        scaler.fit(data)
-        normalized_data = scaler.transform(data)
-
-        self.all_data = normalized_data
-        self.all_labels = labels
-
-        self.x_t, self.x_v, self.y_t, self.y_v = train_test_split(
-            self.all_data,
-            self.all_labels,
-            test_size=test_size,
-            random_state=random_state)
-
-        if self.verbose:
-            print(f'The training data has dimension of {self.x_t.shape}.')
-            print(f'The training labels has dimension of {self.y_t.shape}.')
-            print(f'The testing data has dimension of {self.x_v.shape}.')
-            print(f'The testing labels has dimension of {self.y_v.shape}.')'''
     def load_dataset(self, amine, amine_left_out_batches, amine_cross_validate_samples, meta=False):
         """TODO: Change this to accommodate drp+chem dataset
 
@@ -74,10 +53,17 @@ class ActiveSVM:
 
         """
 
-
         if meta == True:
             # option 2
-            pass
+            self.x_t = amine_cross_validate_samples[amine][0]
+            # print(self.x_t.shape)
+            self.y_t = amine_cross_validate_samples[amine][1]
+            self.x_v = amine_cross_validate_samples[amine][2]
+            # print(self.x_v.shape)
+            self.y_v = amine_cross_validate_samples[amine][3]
+
+            self.all_data = np.concatenate((self.x_t, self.x_v))
+            self.all_labels = np.concatenate((self.y_t, self.y_v))
 
         else:
             self.x_t = amine_left_out_batches[amine][0]
@@ -232,7 +218,7 @@ if __name__ == "__main__":
     k_shot = 20
     num_batches = 10
     amine_left_out_batches, amine_cross_validate_samples, amine_test_samples, counts = dataset.import_full_dataset(
-        k_shot, meta_batch_size, num_batches, verbose=True, cross_validation=True, meta=True)
+        k_shot, meta_batch_size, num_batches, verbose=True, cross_validation=True, meta=False)
     ASVM = ActiveSVM()
     '''print(amine_left_out_batches)
     amine = amine_left_out_batches.keys()
@@ -243,6 +229,6 @@ if __name__ == "__main__":
     y_v = amine_cross_validate_samples[amine][1]'''
     for amine in amine_left_out_batches:
         print("testing on {}".format(amine))
-        ASVM.load_dataset(amine, amine_left_out_batches, amine_cross_validate_samples, meta=True)
+        ASVM.load_dataset(amine, amine_left_out_batches, amine_cross_validate_samples, meta=False)
         ASVM.train()
         ASVM.active_learning(to_params=False)
