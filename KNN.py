@@ -213,15 +213,31 @@ class ActiveKNN:
             pickle.dump(stats_dict, f)
             
     def save_model(self, k_shot, n_way, meta):
+        """Save the data used to train, validate and test the model to designated folder
+
+        Args:
+            k_shot:                 An integer representing the number of training samples per class.
+            n_way:                  An integer representing the number of classes per task.
+            meta:                   A boolean representing if it will be trained under option 1 or option 2.
+                                        Option 1 is train with observations of other tasks and validate on the
+                                        task-specific observations.
+                                        Option 2 is to train and validate on the task-specific observations.
+
+        Returns:
+            N/A
+        """
+
+        # Indicate which option we used the data for
         option = 2 if meta else 1
 
+        # Set up the main destination folder for the model
         dst_root = './KNN_few_shot/option_{0:d}'.format(option)
-
         if not os.path.exists(dst_root):
             os.makedirs(dst_root)
             print('No folder for KNN model storage found')
             print(f'Make folder to store KNN model at')
 
+        # Set up the model specific folder
         model_folder = '{0:s}/KNN_{1:d}_shot_{2:d}_way_option_{3:d}_{4:s}'.format(dst_root,
                                                                                   k_shot,
                                                                                   n_way,
@@ -235,7 +251,7 @@ class ActiveKNN:
             print(f'Found existing folder. Model of amine {self.amine} will be stored at')
         print(model_folder)
 
-        # Dump the model
+        # Dump the model into the designated folder
         file_name = "KNN_{0:s}_option_{1:d}.pkl".format(self.amine, option)
         with open(os.path.join(model_folder, file_name), "wb") as f:
             pickle.dump(self, f)
@@ -392,10 +408,26 @@ def iris_test():
 
 
 def save_used_data(training_batches, validation_batches, testing_batches, counts, meta):
-    """TODO: Dcoumentation"""
+    """Save the data used to train, validate and test the model to designated folder
 
+    Args:
+        training_batches:       A dictionary representing the training batches used to train.
+                                    See dataset.py for specific structure.
+        validation_batches:     A dictionary representing the training batches used to train.
+                                    See dataset.py for specific structure.
+        testing_batches:        A dictionary representing the training batches used to train.
+                                    See dataset.py for specific structure.
+        counts:                 A dictionary with 'total' and each available amines as keys and lists of length 2 as
+                                    values in the format of: [# of failed reactions, # of successful reactions]
+
+    Returns:
+        N/A
+    """
+
+    # Indicate which option we used the data for
     option = 2 if meta else 1
 
+    # Set up the destination folder to save the data
     data_folder = './KNN_few_shot/option_{0:d}/data'.format(option)
     if not os.path.exists(data_folder):
         os.makedirs(data_folder)
@@ -405,6 +437,7 @@ def save_used_data(training_batches, validation_batches, testing_batches, counts
         print('Found existing folder. Data used for models will be stored at')
     print(data_folder)
 
+    # Put all data into a dictionary for easier use later
     data = {
         'training_batches': training_batches,
         'validation_batches': validation_batches,
@@ -412,6 +445,7 @@ def save_used_data(training_batches, validation_batches, testing_batches, counts
         'counts': counts
     }
 
+    # Save the file using pickle
     file_name = "KNN_data.pkl"
     with open(os.path.join(data_folder, file_name), "wb") as f:
         pickle.dump(data, f)

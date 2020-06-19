@@ -690,7 +690,6 @@ def active_learning_platipus(preds, sm_loss, all_labels, params, x_t, y_t, x_v, 
     return x_t, y_t, x_v, y_v, prob_pred, correct, cm, accuracy, precision, recall, bcr
 
 
-# TODO: Check validity
 def forward_pass_validate_platipus(params, amine):
     """ The forward pass for validation in the PLATIPUS model
 
