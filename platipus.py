@@ -1,13 +1,10 @@
-import torch
-import numpy as np
-
-import sys
 import os
+import sys
 
-from utils import *
-
-from sklearn.metrics import confusion_matrix
+import numpy as np
+import torch
 from core import *
+from sklearn.metrics import confusion_matrix
 
 
 # Originally "reinitialzie model params" Core line 147 in main function
@@ -590,7 +587,13 @@ def zero_point_platipus(preds, sm_loss, all_labels):
     # Generate confusion matrix using actual labels and predicted labels
     cm = confusion_matrix(all_labels.detach().cpu().numpy(), labels_pred.detach().cpu().numpy())
 
-    precision = cm[1][1] / (cm[1][1] + cm[0][1])
+    # To prevent nan value for precision, we set it to 1 and send out a warning message
+    if cm[1][1] + cm[0][1] != 0:
+        precision = cm[1][1] / (cm[1][1] + cm[0][1])
+    else:
+        precision = 1.0
+        print('WARNING: zero division during precision calculation')
+
     recall = cm[1][1] / (cm[1][1] + cm[1][0])
     true_negative = cm[0][0] / (cm[0][0] + cm[0][1])
     bcr = 0.5 * (recall + true_negative)
@@ -673,7 +676,13 @@ def active_learning_platipus(preds, sm_loss, all_labels, params, x_t, y_t, x_v, 
 
     cm = confusion_matrix(all_labels.detach().cpu().numpy(), labels_pred.detach().cpu().numpy())
 
-    precision = cm[1][1] / (cm[1][1] + cm[0][1])
+    # To prevent nan value for precision, we set it to 1 and send out a warning message
+    if cm[1][1] + cm[0][1] != 0:
+        precision = cm[1][1] / (cm[1][1] + cm[0][1])
+    else:
+        precision = 1.0
+        print('WARNING: zero division during precision calculation')
+
     recall = cm[1][1] / (cm[1][1] + cm[1][0])
     true_negative = cm[0][0] / (cm[0][0] + cm[0][1])
     bcr = 0.5 * (recall + true_negative)

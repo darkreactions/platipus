@@ -1,16 +1,9 @@
 import os
-
-import numpy as np
-import pandas as pd
-from sklearn.preprocessing import StandardScaler
-from pathlib import Path
 import pickle
-import os
+from pathlib import Path
 
+from dataset import (import_test_dataset, import_full_dataset)
 from matplotlib import pyplot as plt
-
-from dataset import (import_chemdata, cross_validation_data, hold_out_data,
-                     import_test_dataset, import_full_dataset)
 
 
 def write_pickle(path, data):
@@ -173,30 +166,24 @@ def plot_metrics_graph(num_examples, stats_dict, dst, amine=None, show=False):
     # From left to right, top to bottom: Accuracy, Precision, Recall, BCR
     acc = plt.subplot(2, 2, 1)
     acc.set_ylabel('Accuracy')
-    acc.set_title(f'Learning curve for {amine}') if amine else acc.set_title(
-        f'Averaged learning curve')
+    acc.set_title(f'Learning curve for {amine}') if amine else acc.set_title(f'Averaged learning curve')
 
     prec = plt.subplot(2, 2, 2)
     prec.set_ylabel('Precision')
-    prec.set_title(f'Precision curve for {amine}') if amine else prec.set_title(
-        f'Averaged precision curve')
+    prec.set_title(f'Precision curve for {amine}') if amine else prec.set_title(f'Averaged precision curve')
 
     rec = plt.subplot(2, 2, 3)
     rec.set_ylabel('Recall')
-    rec.set_title(f'Recall curve for {amine}') if amine else rec.set_title(
-        f'Averaged recall curve')
+    rec.set_title(f'Recall curve for {amine}') if amine else rec.set_title(f'Averaged recall curve')
 
     bcr = plt.subplot(2, 2, 4)
     bcr.set_ylabel('Balanced classification rate')
-    bcr.set_title(f'BCR curve for {amine}') if amine else bcr.set_title(
-        f'Averaged BCR curve')
+    bcr.set_title(f'BCR curve for {amine}') if amine else bcr.set_title(f'Averaged BCR curve')
 
     # Plot each model's metrics
     for model in stats_dict:
-        acc.plot(num_examples, stats_dict[model]
-                 ['accuracies'], 'o-', label=model)
-        prec.plot(num_examples, stats_dict[model]
-                  ['precisions'], 'o-', label=model)
+        acc.plot(num_examples, stats_dict[model]['accuracies'], 'o-', label=model)
+        prec.plot(num_examples, stats_dict[model]['precisions'], 'o-', label=model)
         rec.plot(num_examples, stats_dict[model]['recalls'], 'o-', label=model)
         bcr.plot(num_examples, stats_dict[model]['bcrs'], 'o-', label=model)
 
@@ -209,8 +196,7 @@ def plot_metrics_graph(num_examples, stats_dict, dst, amine=None, show=False):
     fig.text(0.5, 0.04, "Number of samples given", ha="center", va="center")
 
     # Set the metrics graph's name and designated folder
-    graph_name = 'cv_metrics_{0:s}.png'.format(
-        amine) if amine else 'average_metrics.png'
+    graph_name = 'cv_metrics_{0:s}.png'.format(amine) if amine else 'average_metrics.png'
     graph_dst = '{0:s}/{1:s}'.format(dst, graph_name)
 
     # Remove duplicate graphs in case we can't directly overwrite the files

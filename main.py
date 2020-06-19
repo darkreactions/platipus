@@ -24,15 +24,13 @@ python main.py --datasource=drp_chem --k_shot=20 --n_way=2 --inner_lr=1e-3 --met
 '''
 
 import argparse
-import torch
 import os
 import sys
 
-from core import main
+import torch
 from FC_net import FCNet
-from utils import *
+from core import main
 from platipus import *
-from maml import *
 
 
 def parse_args():
