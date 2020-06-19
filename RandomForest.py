@@ -28,25 +28,29 @@ class ActiveRandomForest:
         """initialization of the class
 
         Args:
-            TODO: amine, option
+            amine:          A string representing the amine this model is used for.
+            option:         A dictionary representing the hyper-parameters chosen. For RandomForest, the keys are:
+                                'n_estimators', 'criterion', 'max_depth', 'max_features', 'bootstrap',
+                                'min_samples_leaf', 'min_samples_split', 'ccp_alpha'.
+                                Default = None
             verbose:        A boolean. Output additional information to the
                             terminal for functions with verbose feature.
                             Default = True
-
         """
+
         self.amine = amine
 
         if option:
             self.model = RandomForestClassifier(
-                    n_estimators=option['n_estimators'],
-                    criterion=option['criterion'],
-                    max_depth=option['max_depth'],
-                    min_samples_split=option['min_samples_split'],
-                    min_samples_leaf=option['min_samples_leaf'],
-                    max_features=option['max_features'],
-                    bootstrap=option['bootstrap'],
-                    ccp_alpha=option['ccp_alpha']
-                )
+                n_estimators=option['n_estimators'],
+                criterion=option['criterion'],
+                max_depth=option['max_depth'],
+                min_samples_split=option['min_samples_split'],
+                min_samples_leaf=option['min_samples_leaf'],
+                max_features=option['max_features'],
+                bootstrap=option['bootstrap'],
+                ccp_alpha=option['ccp_alpha']
+            )
         else:
             # Simple baseline model
             self.model = RandomForestClassifier(n_estimators=100, criterion='gini', max_depth=7)
@@ -61,7 +65,6 @@ class ActiveRandomForest:
 
         self.verbose = verbose
 
-    # TODO: should we load dataset here? what if we are using the model for another dataset
     def load_dataset(self, training_batches, cross_validation_batches, meta=False):
         """TODO: Documentation
 
@@ -73,8 +76,8 @@ class ActiveRandomForest:
             self.x_v = cross_validation_batches[self.amine][2]
             self.y_v = cross_validation_batches[self.amine][3]
 
-            self.all_data = np.concatenate((self.x_t,self.x_v))
-            self.all_labels = np.concatenate((self.y_t,self.y_v))
+            self.all_data = np.concatenate((self.x_t, self.x_v))
+            self.all_labels = np.concatenate((self.y_t, self.y_v))
 
             if self.verbose:
                 print("Conducting Training under Option 2.")
@@ -123,7 +126,7 @@ class ActiveRandomForest:
         num_iter = num_iter if num_iter else self.x_v.shape[0]
 
         for _ in range(num_iter):
-            # TODO: Comment
+            # Query the most uncertain point from the active learning pool
             query_index, query_instance = self.learner.query(self.x_v)
 
             # Teach our ActiveLearner model the record it has requested.
@@ -231,7 +234,19 @@ class ActiveRandomForest:
             pickle.dump(stats_dict, f)
 
     def save_model(self, k_shot, n_way, meta):
-        """TODO: Documentation"""
+        """Save the data used to train, validate and test the model to designated folder
+
+        Args:
+            k_shot:                 An integer representing the number of training samples per class.
+            n_way:                  An integer representing the number of classes per task.
+            meta:                   A boolean representing if it will be trained under option 1 or option 2.
+                                        Option 1 is train with observations of other tasks and validate on the
+                                        task-specific observations.
+                                        Option 2 is to train and validate on the task-specific observations.
+
+        Returns:
+            N/A
+        """
 
         option = 2 if meta else 1
 
@@ -262,8 +277,22 @@ class ActiveRandomForest:
 
 
 def fine_tune(training_batches, cross_validation_batches, verbose=False):
-    """TODO: Documentation and comments
+    """Fine tune the model based on average bcr performance to find the best model hyper-parameters.
 
+    Args:
+        training_batches:       A dictionary representing the training batches used to train.
+                                    See dataset.py for specific structure.
+        validation_batches:     A dictionary representing the training batches used to train.
+                                    See dataset.py for specific structure.
+        verbose:                A boolean. Setting it to True will make the function print out additional information
+                                    during the fine-tuning stage.
+                                    Default to False.
+
+    Returns:
+        best_option:            A dictionary representing the hyper-parameters that yields the best performance on
+                                    average. For RandomForest, the current keys are: 'n_estimators', 'criterion',
+                                    'max_depth', 'max_features', 'bootstrap', 'min_samples_leaf', 'min_samples_split',
+                                    'ccp_alpha'.
     """
 
     # Set all possible combinations
@@ -300,17 +329,18 @@ def fine_tune(training_batches, cross_validation_batches, verbose=False):
         base_recalls.append(ASVM.metrics['recalls'][-1])
         base_bcrs.append(ASVM.metrics['bcrs'][-1])
 
+    # Calculated the average baseline performances
     base_avg_accuracy = sum(base_accuracies) / len(base_accuracies)
     base_avg_precision = sum(base_precisions) / len(base_precisions)
     base_avg_recall = sum(base_recalls) / len(base_recalls)
     base_avg_bcr = sum(base_bcrs) / len(base_bcrs)
 
-    print(f'Baseline average bcr is {base_avg_bcr}')
+    if verbose:
+        print(f'Baseline average bcr is {base_avg_bcr}')
     best_bcr = base_avg_bcr
     best_option = {}
 
-    option_no = 1
-
+    # Try out each possible combinations of hyper-parameters
     print(f'There are {len(combinations)} many combinations to try.')
     for option in combinations:
         accuracies = []
@@ -318,7 +348,6 @@ def fine_tune(training_batches, cross_validation_batches, verbose=False):
         recalls = []
         bcrs = []
 
-        # print(f'Trying option {option_no}')
         for amine in training_batches:
             # print("Training and cross validation on {} amine.".format(amine))
             ASVM = ActiveRandomForest(amine=amine, option=option, verbose=verbose)
@@ -336,28 +365,46 @@ def fine_tune(training_batches, cross_validation_batches, verbose=False):
         avg_bcr = sum(bcrs) / len(bcrs)
 
         if avg_bcr > best_bcr:
-            print(f'The previous best option was {best_option}')
+            if verbose:
+                print(f'The previous best option was {best_option}')
             best_bcr = avg_bcr
             best_option = option
-            print(f'The current average accuracy is {avg_accuracy} vs. the base accuracy {base_avg_accuracy}')
-            print(f'The current average precision is {avg_precision} vs. the base precision {base_avg_precision}')
-            print(f'The current average recall rate is {avg_recall} vs. the base recall rate {base_avg_recall}')
-            print(f'The best average bcr by this setting is {avg_bcr} vs. the base bcr {base_avg_bcr}')
-            print(f'The current best setting for amine {amine} is {best_option}')
+            if verbose:
+                print(f'The current average accuracy is {avg_accuracy} vs. the base accuracy {base_avg_accuracy}')
+                print(f'The current average precision is {avg_precision} vs. the base precision {base_avg_precision}')
+                print(f'The current average recall rate is {avg_recall} vs. the base recall rate {base_avg_recall}')
+                print(f'The best average bcr by this setting is {avg_bcr} vs. the base bcr {base_avg_bcr}')
+                print(f'The current best setting for amine {amine} is {best_option}')
 
-        option_no += 1
-
-    print()
-    print(f'The best setting for all amines is {best_option}')
-    print(f'With an average bcr of {best_bcr}')
+    if verbose:
+        print()
+        print(f'The best setting for all amines is {best_option}')
+        print(f'With an average bcr of {best_bcr}')
 
     return best_option
 
 
 def save_used_data(training_batches, validation_batches, testing_batches, counts, meta):
-    """TODO: Dcoumentation"""
+    """Save the data used to train, validate and test the model to designated folder
+
+    Args:
+        training_batches:       A dictionary representing the training batches used to train.
+                                    See dataset.py for specific structure.
+        validation_batches:     A dictionary representing the training batches used to train.
+                                    See dataset.py for specific structure.
+        testing_batches:        A dictionary representing the training batches used to train.
+                                    See dataset.py for specific structure.
+        counts:                 A dictionary with 'total' and each available amines as keys and lists of length 2 as
+                                    values in the format of: [# of failed reactions, # of successful reactions]
+
+    Returns:
+        N/A
+    """
+
+    # Indicate which option we used the data for
     option = 2 if meta else 1
 
+    # Set up the destination folder to save the data
     data_folder = './RandomForest_few_shot/option_{0:d}/data'.format(option)
     if not os.path.exists(data_folder):
         os.makedirs(data_folder)
@@ -367,6 +414,7 @@ def save_used_data(training_batches, validation_batches, testing_batches, counts
         print('Found existing folder. Data used for models will be stored at')
     print(data_folder)
 
+    # Put all data into a dictionary for easier use later
     data = {
         'training_batches': training_batches,
         'validation_batches': validation_batches,
@@ -374,6 +422,7 @@ def save_used_data(training_batches, validation_batches, testing_batches, counts
         'counts': counts
     }
 
+    # Save the file using pickle
     file_name = "RandomForest_data.pkl"
     with open(os.path.join(data_folder, file_name), "wb") as f:
         pickle.dump(data, f)
@@ -399,10 +448,14 @@ if __name__ == "__main__":
     best_hyper_params = fine_tune(training_batches=training_batches, cross_validation_batches=cross_validation_batches)
     """
 
-    #training_batches, validation_batches, testing_batches, counts = dataset.import_full_dataset(
-        # k_shot, meta_batch_size, num_batches, verbose=verbose, cross_validation=cross_validation, meta=meta)
+    # training_batches, validation_batches, testing_batches, counts = dataset.import_full_dataset(
+    # k_shot, meta_batch_size, num_batches, verbose=verbose, cross_validation=cross_validation, meta=meta)
 
-    training_batches, validation_batches, testing_batches, counts = dataset.import_full_dataset(k_shot, meta_batch_size, num_batches, verbose=verbose, cross_validation=cross_validation, meta=meta)
+    training_batches, validation_batches, testing_batches, counts = dataset.import_full_dataset(k_shot, meta_batch_size,
+                                                                                                num_batches,
+                                                                                                verbose=verbose,
+                                                                                                cross_validation=cross_validation,
+                                                                                                meta=meta)
 
     save_used_data(training_batches, validation_batches, testing_batches, counts, meta)
 
@@ -410,8 +463,8 @@ if __name__ == "__main__":
 
     for amine in training_batches:
         print("Training and cross validation on {} amine.".format(amine))
-        ARF = ActiveRandomForest(amine, option=None)    # TODO: Change to best_hyper_params for fine tuned models
+        ARF = ActiveRandomForest(amine, option=None)  # TODO: Change to best_hyper_params for fine tuned models
         ARF.load_dataset(training_batches, validation_batches, meta=meta)
         ARF.train()
         ARF.active_learning(to_params=False)
-        ARF.save_model(k_shot=k_shot, n_way=2, meta=meta)    # TODO: delete this when running full models
+        ARF.save_model(k_shot=k_shot, n_way=2, meta=meta)  # TODO: delete this when running full models
