@@ -1,22 +1,18 @@
-from maml import initialize
-import torch
-import numpy as np
-import pickle
-
 import os
+import pickle
 import sys
 
-from utils import (load_chem_dataset, plot_metrics_graph, create_cv_stats_dict,
-                   update_cv_stats_dict)
-
-from FC_net import FCNet
+import numpy as np
+import torch
 from platipus import (initialzie_theta_platipus, save_model,
                       meta_train_platipus, set_optim_platipus,
-                      load_previous_model_platipus, forward_pass_validate_platipus,
-                      find_avg_metrics, get_task_prediction_platipus,
+                      load_previous_model_platipus, find_avg_metrics, get_task_prediction_platipus,
                       get_naive_prediction_platipus, zero_point_platipus,
                       active_learning_platipus)
-from maml import (initialize, load_previous_model_maml,
+from utils import (plot_metrics_graph, create_cv_stats_dict,
+                   update_cv_stats_dict)
+
+from maml import (load_previous_model_maml,
                   get_naive_task_prediction_maml, zero_point_maml,
                   get_task_prediction_maml, active_learning_maml)
 

@@ -5,10 +5,11 @@ Author: Cuong Nguyen
 Modified By: Gareth Nicholas
 '''
 
-import torch
-import numpy as np
-
 import collections
+
+import numpy as np
+import torch
+
 
 class FCNet(torch.nn.Module):
     """
