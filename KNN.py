@@ -11,17 +11,16 @@ python KNN.py --datasource=drp_chem --k_shot=20 --n_way=2 --meta_batch_size=10 -
 import argparse
 import os
 import pickle
+import sys
 
 import numpy as np
+from dataset import import_full_dataset, import_test_dataset
+from modAL.models import ActiveLearner
 from sklearn.datasets import load_iris
-from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix
+from sklearn.model_selection import train_test_split
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.preprocessing import StandardScaler
-
-from modAL.models import ActiveLearner
-
-from dataset import import_full_dataset, import_test_dataset
 
 
 class ActiveKNN:
@@ -109,7 +108,7 @@ class ActiveKNN:
         num_iter = num_iter if num_iter else self.x_v.shape[0]
 
         for _ in range(num_iter):
-            # TODO: Comment
+            # Query the most uncertain point from the active learning pool
             query_index, query_instance = self.learner.query(self.x_v)
 
             # Teach our ActiveLearner model the record it has requested.
@@ -143,7 +142,13 @@ class ActiveKNN:
         preds = self.learner.predict(self.pool_data)
         cm = confusion_matrix(self.pool_labels, preds)
 
-        precision = cm[1][1] / (cm[1][1] + cm[0][1])
+        # To prevent nan value for precision, we set it to 1 and send out a warning message
+        if cm[1][1] + cm[0][1] != 0:
+            precision = cm[1][1] / (cm[1][1] + cm[0][1])
+        else:
+            precision = 1.0
+            print('WARNING: zero division during precision calculation')
+
         recall = cm[1][1] / (cm[1][1] + cm[1][0])
         true_negative = cm[0][0] / (cm[0][0] + cm[0][1])
         bcr = 0.5 * (recall + true_negative)
@@ -206,10 +211,37 @@ class ActiveKNN:
         # Save this dictionary in case we need it later
         with open(os.path.join("./data", "cv_statistics.pkl"), "wb") as f:
             pickle.dump(stats_dict, f)
+            
+    def save_model(self, k_shot, n_way, meta):
+        option = 2 if meta else 1
 
-    # TODO: Unofficial
+        dst_root = './KNN_few_shot/option_{0:d}'.format(option)
+
+        if not os.path.exists(dst_root):
+            os.makedirs(dst_root)
+            print('No folder for KNN model storage found')
+            print(f'Make folder to store KNN model at')
+
+        model_folder = '{0:s}/KNN_{1:d}_shot_{2:d}_way_option_{3:d}_{4:s}'.format(dst_root,
+                                                                                  k_shot,
+                                                                                  n_way,
+                                                                                  option,
+                                                                                  self.amine)
+        if not os.path.exists(model_folder):
+            os.makedirs(model_folder)
+            print('No folder for KNN model storage found')
+            print(f'Make folder to store KNN model of amine {self.amine} at')
+        else:
+            print(f'Found existing folder. Model of amine {self.amine} will be stored at')
+        print(model_folder)
+
+        # Dump the model
+        file_name = "KNN_{0:s}_option_{1:d}.pkl".format(self.amine, option)
+        with open(os.path.join(model_folder, file_name), "wb") as f:
+            pickle.dump(self, f)
+
     def __str__(self):
-        return 'A {0:d}-neighbor KNN model using active learning'.format(self.n_neighbors)
+        return 'A {0:d}-neighbor KNN model for amine {1:s} using active learning'.format(self.n_neighbors, self.amine)
 
 
 def parse_args():
@@ -234,8 +266,10 @@ def parse_args():
             test:               A train_flag attribute. Including it in the command line will set the train_flag to
                                     False.
             cross_validate:     A boolean. Including it in the command line will run the model with cross-validation.
-            meta:               A boolean. Including it in the command line will load the meta training/testing dataset.
-            # TODO: make the description for meta better
+            meta:               A boolean representing if it will be trained under option 1 or option 2.
+                                        Option 1 is train with observations of other tasks and validate on the
+                                        task-specific observations.
+                                        Option 2 is to train and validate on the task-specific observations.
             verbose:            A boolean. Including it in the command line will output additional information to the
                                     terminal for functions with verbose feature.
     """
@@ -259,7 +293,7 @@ def parse_args():
     parser.set_defaults(train_flag=True)
 
     parser.add_argument('--cross_validate', action='store_true')
-    parser.add_argument('--meta', action='store_true') # TODO: add help and comments
+    parser.add_argument('--meta', action='store_true')
     parser.add_argument('--full', action='store_true')
     parser.add_argument('--verbose', action='store_true')
 
@@ -357,6 +391,32 @@ def iris_test():
     KNN.active_learning(to_params=False)
 
 
+def save_used_data(training_batches, validation_batches, testing_batches, counts, meta):
+    """TODO: Dcoumentation"""
+
+    option = 2 if meta else 1
+
+    data_folder = './KNN_few_shot/option_{0:d}/data'.format(option)
+    if not os.path.exists(data_folder):
+        os.makedirs(data_folder)
+        print('No folder for KNN model data storage found')
+        print('Make folder to store data used for KNN models at')
+    else:
+        print('Found existing folder. Data used for models will be stored at')
+    print(data_folder)
+
+    data = {
+        'training_batches': training_batches,
+        'validation_batches': validation_batches,
+        'testing_batches': testing_batches,
+        'counts': counts
+    }
+
+    file_name = "KNN_data.pkl"
+    with open(os.path.join(data_folder, file_name), "wb") as f:
+        pickle.dump(data, f)
+
+
 def small_scale(KNN_params):
     """A small scale training and validation for debugging using only 3 amines.
 
@@ -383,7 +443,9 @@ def small_scale(KNN_params):
                                                                                         verbose=verbose,
                                                                                         cross_validation=True,
                                                                                         meta=meta)
-
+    
+    save_used_data(training_batches, validation_batches, testing_batches, counts, meta)
+    
     for amine in training_batches:
         print(f'Training and cross-validation amine {amine}')
         # Create the KNN model instance for the specific amine
@@ -410,7 +472,7 @@ def small_scale(KNN_params):
         KNN.train()
 
         # Conduct active learning with all the observations available in the pool
-        KNN.active_learning(to_params=False)
+        KNN.active_learning(to_params=False)    # TODO: delete this when running full models
 
 
 def full_dataset(KNN_params):
@@ -441,6 +503,8 @@ def full_dataset(KNN_params):
                                                                                         cross_validation=cross_validation,
                                                                                         meta=meta)
 
+    save_used_data(training_batches, validation_batches, testing_batches, counts, meta) 
+    
     for amine in training_batches:
         print(f'Training and active learning on amine {amine}')
         # Create the KNN model instance for the specific amine
@@ -459,6 +523,8 @@ def full_dataset(KNN_params):
                 x_t, y_t = validation_batches[amine][0], validation_batches[amine][1]
                 x_v, y_v = validation_batches[amine][2], validation_batches[amine][3]
                 all_data, all_labels = np.concatenate((x_t, x_v)), np.concatenate((y_t, y_v))
+        else:
+            sys.exit('Testing portion not implemented yet.')
 
         # Load the training and validation set into the model
         KNN.load_dataset(x_t, x_v, y_t, y_v, all_data, all_labels)
@@ -467,9 +533,109 @@ def full_dataset(KNN_params):
         KNN.train()
 
         # Conduct active learning with all the observations available in the pool
-        KNN.active_learning(to_params=False)
+        KNN.active_learning(to_params=False)    # TODO: delete this when running full models
+        
+        # Save model to designated folder
+        KNN.save_model(k_shot=k_shot, n_way=2, meta=meta)
 
-    # TODO: testing part not implemented
+    # TODO: model saving and testing part not implemented
+
+"""
+def full_w_plot(KNN_params):
+    # Unload parameters
+    k_shot = KNN_params['k_shot']
+    n_way = KNN_params['n_way']
+    meta_batch_size = KNN_params['meta_batch_size']
+    num_batches = KNN_params['num_batches']
+    cross_validation = KNN_params['cross_validate']
+    verbose = KNN_params['verbose']
+
+    # Load the full dataset for training and validation
+    training_batches_1, validation_batches_1, testing_batches_1, counts_1 = import_full_dataset(k_shot,
+                                                                                                meta_batch_size,
+                                                                                                num_batches,
+                                                                                                verbose=verbose,
+                                                                                                cross_validation=cross_validation,
+                                                                                                meta=False)
+    training_batches_2, validation_batches_2, testing_batches_2, counts_2 = import_full_dataset(k_shot,
+                                                                                        meta_batch_size,
+                                                                                        num_batches,
+                                                                                        verbose=verbose,
+                                                                                        cross_validation=cross_validation,
+                                                                                        meta=True)
+
+    for amine in training_batches_1:
+        print(f'Training and active learning on amine {amine}')
+        # Create the KNN model instance for the specific amine
+        KNN_1 = ActiveKNN(amine=amine, n_neighbors=n_way, verbose=verbose)
+        KNN_2 = ActiveKNN(amine=amine, n_neighbors=n_way, verbose=verbose)
+
+        print('Conducting training under option 1.')
+        x_t_1, y_t_1 = training_batches_1[amine][0], training_batches_1[amine][1]
+        x_v_1, y_v_1 = validation_batches_1[amine][0], validation_batches_1[amine][1]
+        all_data_1, all_labels_1 = x_v_1, y_v_1
+
+        print('Conducting training under option 2.')
+        x_t_2, y_t_2 = validation_batches_2[amine][0], validation_batches_2[amine][1]
+        x_v_2, y_v_2 = validation_batches_2[amine][2], validation_batches_2[amine][3]
+        all_data_2, all_labels_2 = np.concatenate((x_t_2, x_v_2)), np.concatenate((y_t_2, y_v_2))
+
+        # Load the training and validation set into the model
+        KNN_1.load_dataset(x_t_1, x_v_1, y_t_1, y_v_1, all_data_1, all_labels_1)
+        KNN_2.load_dataset(x_t_2, x_v_2, y_t_2, y_v_2, all_data_2, all_labels_2)
+
+        # Train the data on the training set
+        KNN_1.train()
+        KNN_2.train()
+
+        # Conduct active learning with all the observations available in the pool
+        KNN_1.active_learning(to_params=False)
+        KNN_2.active_learning(to_params=False)
+
+        # Set up initial figure for plotting
+        fig = plt.figure(figsize=(16, 12))
+
+        # Setting up each sub-graph as axes
+        # From left to right, top to bottom: Accuracy, Precision, Recall, BCR
+        acc = plt.subplot(2, 2, 1)
+        acc.set_ylabel('Accuracy')
+        acc.set_title(f'Learning curve for {amine}')
+
+        prec = plt.subplot(2, 2, 2)
+        prec.set_ylabel('Precision')
+        prec.set_title(f'Precision curve for {amine}')
+
+        rec = plt.subplot(2, 2, 3)
+        rec.set_ylabel('Recall')
+        rec.set_title(f'Recall curve for {amine}')
+
+        bcr = plt.subplot(2, 2, 4)
+        bcr.set_ylabel('Balanced classification rate')
+        bcr.set_title(f'BCR curve for {amine}')
+
+        num_examples_1 = [i for i in range(len(KNN_1.metrics['accuracies']))]
+        num_examples_2 = [i for i in range(len(KNN_2.metrics['accuracies']))]
+
+        acc.plot(num_examples_1, KNN_1.metrics['accuracies'], 'o-', label='KNN_1')
+        prec.plot(num_examples_1, KNN_1.metrics['precisions'], 'o-', label='KNN_1')
+        rec.plot(num_examples_1, KNN_1.metrics['recalls'], 'o-', label='KNN_1')
+        bcr.plot(num_examples_1, KNN_1.metrics['bcrs'], 'o-', label='KNN_1')
+
+        acc.plot(num_examples_2, KNN_2.metrics['accuracies'], 'o-', label='KNN_2')
+        prec.plot(num_examples_2, KNN_2.metrics['precisions'], 'o-', label='KNN_2')
+        rec.plot(num_examples_2, KNN_2.metrics['recalls'], 'o-', label='KNN_2')
+        bcr.plot(num_examples_2, KNN_2.metrics['bcrs'], 'o-', label='KNN_2')
+
+        # Display subplot legends
+        acc.legend()
+        prec.legend()
+        rec.legend()
+        bcr.legend()
+
+        fig.text(0.5, 0.04, "Number of samples given", ha="center", va="center")
+
+        plt.show()
+"""
 
 
 def main():
