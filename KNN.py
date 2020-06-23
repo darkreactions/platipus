@@ -146,7 +146,7 @@ class ActiveKNN:
         if cm[1][1] + cm[0][1] != 0:
             precision = cm[1][1] / (cm[1][1] + cm[0][1])
         else:
-            precision = 1.0
+            precision = 1.0     # TODO: I still think 0.0 is better
             print('WARNING: zero division during precision calculation')
 
         recall = cm[1][1] / (cm[1][1] + cm[1][0])
@@ -197,7 +197,7 @@ class ActiveKNN:
         Dump the cross validation statistics to a pickle file.
         """
 
-        model = 'KNN'
+        model = 'KNN'   # TODO: Implement a way to identify models under meta or not
 
         with open(os.path.join("./data", "cv_statistics.pkl"), "rb") as f:
             stats_dict = pickle.load(f)
@@ -260,6 +260,7 @@ class ActiveKNN:
         return 'A {0:d}-neighbor KNN model for amine {1:s} using active learning'.format(self.n_neighbors, self.amine)
 
 
+# TODO: may have to change this
 def parse_args():
     """Set up the initial variables for running KNN.
 
@@ -318,6 +319,7 @@ def parse_args():
     return args
 
 
+# TODO: may have to change this
 def initialize():
     """Initializes a dictionary of parameters corresponding to the arguments
 
@@ -377,36 +379,6 @@ def initialize():
     return KNN_params
 
 
-def iris_test():
-    """Test the model on the iris data provided in the scikit-learn package.
-
-    This is used only to test new implementations.
-
-    Args:
-          N/A
-
-    Returns:
-         N/A
-    """
-    iris = load_iris()
-    X = iris['data']
-    y = iris['target']
-    scaler = StandardScaler()
-    scaler.fit(X)
-    normalized_data = scaler.transform(X)
-
-    x_t, x_v, y_t, y_v = train_test_split(
-        normalized_data,
-        y,
-        random_state=2)
-
-    KNN = ActiveKNN(n_neighbors=3)
-    KNN.load_dataset(x_t, x_v, y_t, y_v, normalized_data, y)
-
-    KNN.train()
-    KNN.active_learning(to_params=False)
-
-
 def save_used_data(training_batches, validation_batches, testing_batches, counts, meta):
     """Save the data used to train, validate and test the model to designated folder
 
@@ -449,6 +421,36 @@ def save_used_data(training_batches, validation_batches, testing_batches, counts
     file_name = "KNN_data.pkl"
     with open(os.path.join(data_folder, file_name), "wb") as f:
         pickle.dump(data, f)
+
+
+def iris_test():
+    """Test the model on the iris data provided in the scikit-learn package.
+
+    This is used only to test new implementations.
+
+    Args:
+          N/A
+
+    Returns:
+         N/A
+    """
+    iris = load_iris()
+    X = iris['data']
+    y = iris['target']
+    scaler = StandardScaler()
+    scaler.fit(X)
+    normalized_data = scaler.transform(X)
+
+    x_t, x_v, y_t, y_v = train_test_split(
+        normalized_data,
+        y,
+        random_state=2)
+
+    KNN = ActiveKNN(n_neighbors=3)
+    KNN.load_dataset(x_t, x_v, y_t, y_v, normalized_data, y)
+
+    KNN.train()
+    KNN.active_learning(to_params=False)
 
 
 def small_scale(KNN_params):
@@ -537,7 +539,7 @@ def full_dataset(KNN_params):
                                                                                         cross_validation=cross_validation,
                                                                                         meta=meta)
 
-    save_used_data(training_batches, validation_batches, testing_batches, counts, meta) 
+    save_used_data(training_batches, validation_batches, testing_batches, counts, meta)
     
     for amine in training_batches:
         print(f'Training and active learning on amine {amine}')
@@ -568,108 +570,11 @@ def full_dataset(KNN_params):
 
         # Conduct active learning with all the observations available in the pool
         KNN.active_learning(to_params=False)    # TODO: delete this when running full models
-        
+
         # Save model to designated folder
         KNN.save_model(k_shot=k_shot, n_way=2, meta=meta)
 
     # TODO: model saving and testing part not implemented
-
-"""
-def full_w_plot(KNN_params):
-    # Unload parameters
-    k_shot = KNN_params['k_shot']
-    n_way = KNN_params['n_way']
-    meta_batch_size = KNN_params['meta_batch_size']
-    num_batches = KNN_params['num_batches']
-    cross_validation = KNN_params['cross_validate']
-    verbose = KNN_params['verbose']
-
-    # Load the full dataset for training and validation
-    training_batches_1, validation_batches_1, testing_batches_1, counts_1 = import_full_dataset(k_shot,
-                                                                                                meta_batch_size,
-                                                                                                num_batches,
-                                                                                                verbose=verbose,
-                                                                                                cross_validation=cross_validation,
-                                                                                                meta=False)
-    training_batches_2, validation_batches_2, testing_batches_2, counts_2 = import_full_dataset(k_shot,
-                                                                                        meta_batch_size,
-                                                                                        num_batches,
-                                                                                        verbose=verbose,
-                                                                                        cross_validation=cross_validation,
-                                                                                        meta=True)
-
-    for amine in training_batches_1:
-        print(f'Training and active learning on amine {amine}')
-        # Create the KNN model instance for the specific amine
-        KNN_1 = ActiveKNN(amine=amine, n_neighbors=n_way, verbose=verbose)
-        KNN_2 = ActiveKNN(amine=amine, n_neighbors=n_way, verbose=verbose)
-
-        print('Conducting training under option 1.')
-        x_t_1, y_t_1 = training_batches_1[amine][0], training_batches_1[amine][1]
-        x_v_1, y_v_1 = validation_batches_1[amine][0], validation_batches_1[amine][1]
-        all_data_1, all_labels_1 = x_v_1, y_v_1
-
-        print('Conducting training under option 2.')
-        x_t_2, y_t_2 = validation_batches_2[amine][0], validation_batches_2[amine][1]
-        x_v_2, y_v_2 = validation_batches_2[amine][2], validation_batches_2[amine][3]
-        all_data_2, all_labels_2 = np.concatenate((x_t_2, x_v_2)), np.concatenate((y_t_2, y_v_2))
-
-        # Load the training and validation set into the model
-        KNN_1.load_dataset(x_t_1, x_v_1, y_t_1, y_v_1, all_data_1, all_labels_1)
-        KNN_2.load_dataset(x_t_2, x_v_2, y_t_2, y_v_2, all_data_2, all_labels_2)
-
-        # Train the data on the training set
-        KNN_1.train()
-        KNN_2.train()
-
-        # Conduct active learning with all the observations available in the pool
-        KNN_1.active_learning(to_params=False)
-        KNN_2.active_learning(to_params=False)
-
-        # Set up initial figure for plotting
-        fig = plt.figure(figsize=(16, 12))
-
-        # Setting up each sub-graph as axes
-        # From left to right, top to bottom: Accuracy, Precision, Recall, BCR
-        acc = plt.subplot(2, 2, 1)
-        acc.set_ylabel('Accuracy')
-        acc.set_title(f'Learning curve for {amine}')
-
-        prec = plt.subplot(2, 2, 2)
-        prec.set_ylabel('Precision')
-        prec.set_title(f'Precision curve for {amine}')
-
-        rec = plt.subplot(2, 2, 3)
-        rec.set_ylabel('Recall')
-        rec.set_title(f'Recall curve for {amine}')
-
-        bcr = plt.subplot(2, 2, 4)
-        bcr.set_ylabel('Balanced classification rate')
-        bcr.set_title(f'BCR curve for {amine}')
-
-        num_examples_1 = [i for i in range(len(KNN_1.metrics['accuracies']))]
-        num_examples_2 = [i for i in range(len(KNN_2.metrics['accuracies']))]
-
-        acc.plot(num_examples_1, KNN_1.metrics['accuracies'], 'o-', label='KNN_1')
-        prec.plot(num_examples_1, KNN_1.metrics['precisions'], 'o-', label='KNN_1')
-        rec.plot(num_examples_1, KNN_1.metrics['recalls'], 'o-', label='KNN_1')
-        bcr.plot(num_examples_1, KNN_1.metrics['bcrs'], 'o-', label='KNN_1')
-
-        acc.plot(num_examples_2, KNN_2.metrics['accuracies'], 'o-', label='KNN_2')
-        prec.plot(num_examples_2, KNN_2.metrics['precisions'], 'o-', label='KNN_2')
-        rec.plot(num_examples_2, KNN_2.metrics['recalls'], 'o-', label='KNN_2')
-        bcr.plot(num_examples_2, KNN_2.metrics['bcrs'], 'o-', label='KNN_2')
-
-        # Display subplot legends
-        acc.legend()
-        prec.legend()
-        rec.legend()
-        bcr.legend()
-
-        fig.text(0.5, 0.04, "Number of samples given", ha="center", va="center")
-
-        plt.show()
-"""
 
 
 def main():
