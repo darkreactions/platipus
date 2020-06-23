@@ -53,7 +53,7 @@ class ActiveRandomForest:
             )
         else:
             # Simple baseline model
-            self.model = RandomForestClassifier(n_estimators=100, criterion='gini', max_depth=7)
+            self.model = RandomForestClassifier(n_estimators=1000, criterion='gini', max_depth=8, max_features=None, bootstrap=True, min_samples_leaf=1,min_samples_split=2,ccp_alpha=0.0)
 
         self.metrics = {
             'accuracies': [],
@@ -107,6 +107,7 @@ class ActiveRandomForest:
         self.learner = ActiveLearner(estimator=self.model, X_training=self.x_t, y_training=self.y_t)
         # Evaluate zero-point performance
         self.evaluate()
+
 
     def active_learning(self, num_iter=None, to_params=True):
         """ The active learning loop
@@ -296,15 +297,25 @@ def fine_tune(training_batches, cross_validation_batches, verbose=False):
     """
 
     # Set all possible combinations
-    params = {
-        'n_estimators': [10, 50, 100, 200, 400, 600, 800, 1000, 1200, 1400, 1600, 1800, 2000],
-        'criterion': ['gini', 'entropy'],
-        'max_depth': [i for i in range(1, 11)],
+    '''params = {
+        'n_estimators': [10, 100, 1000, 2000],
+        'criterion': ['gini'],
+        'max_depth': [i for i in range(1, 9)],
         'max_features': ['auto', 'sqrt', 'log2', None],
-        'bootstrap': [True, False],
-        'min_samples_leaf': [1, 2, 4],
+        'bootstrap': [True],
+        'min_samples_leaf': [1],
         'min_samples_split': [2, 5, 10],
-        'ccp_alpha': [.1 * i for i in range(10)]
+        'ccp_alpha': [.1 * i for i in range(1)]
+    }'''
+    params = {
+        'n_estimators': [100, 200, 500, 1000],
+        'criterion': ['gini'],
+        'max_depth': [i for i in range(1, 9)],
+        'max_features': ['auto', 'sqrt', 'log2', None],
+        'bootstrap': [True],
+        'min_samples_leaf': [1, 2, 3],
+        'min_samples_split': [2, 5, 10],
+        'ccp_alpha': [0.0]
     }
 
     combinations = []
@@ -320,14 +331,14 @@ def fine_tune(training_batches, cross_validation_batches, verbose=False):
     base_bcrs = []
 
     for amine in training_batches:
-        ASVM = ActiveRandomForest(amine=amine, verbose=verbose)
-        ASVM.load_dataset(training_batches, cross_validation_batches, meta=meta)
-        ASVM.train()
+        ARF = ActiveRandomForest(amine=amine, verbose=verbose)
+        ARF.load_dataset(training_batches, cross_validation_batches, meta=meta)
+        ARF.train()
 
-        base_accuracies.append(ASVM.metrics['accuracies'][-1])
-        base_precisions.append(ASVM.metrics['precisions'][-1])
-        base_recalls.append(ASVM.metrics['recalls'][-1])
-        base_bcrs.append(ASVM.metrics['bcrs'][-1])
+        base_accuracies.append(ARF.metrics['accuracies'][-1])
+        base_precisions.append(ARF.metrics['precisions'][-1])
+        base_recalls.append(ARF.metrics['recalls'][-1])
+        base_bcrs.append(ARF.metrics['bcrs'][-1])
 
     # Calculated the average baseline performances
     base_avg_accuracy = sum(base_accuracies) / len(base_accuracies)
@@ -338,6 +349,9 @@ def fine_tune(training_batches, cross_validation_batches, verbose=False):
     if verbose:
         print(f'Baseline average bcr is {base_avg_bcr}')
     best_bcr = base_avg_bcr
+    best_acc = base_accuracies
+    best_recall = base_recalls
+    best_precision = base_precisions
     best_option = {}
 
     # Try out each possible combinations of hyper-parameters
@@ -350,14 +364,14 @@ def fine_tune(training_batches, cross_validation_batches, verbose=False):
 
         for amine in training_batches:
             # print("Training and cross validation on {} amine.".format(amine))
-            ASVM = ActiveRandomForest(amine=amine, option=option, verbose=verbose)
-            ASVM.load_dataset(training_batches, cross_validation_batches, meta=meta)
-            ASVM.train()
+            ARF = ActiveRandomForest(amine=amine, option=option, verbose=verbose)
+            ARF.load_dataset(training_batches, cross_validation_batches, meta=meta)
+            ARF.train()
 
-            accuracies.append(ASVM.metrics['accuracies'][-1])
-            precisions.append(ASVM.metrics['precisions'][-1])
-            recalls.append(ASVM.metrics['recalls'][-1])
-            bcrs.append(ASVM.metrics['bcrs'][-1])
+            accuracies.append(ARF.metrics['accuracies'][-1])
+            precisions.append(ARF.metrics['precisions'][-1])
+            recalls.append(ARF.metrics['recalls'][-1])
+            bcrs.append(ARF.metrics['bcrs'][-1])
 
         avg_accuracy = sum(accuracies) / len(accuracies)
         avg_precision = sum(precisions) / len(precisions)
@@ -368,6 +382,9 @@ def fine_tune(training_batches, cross_validation_batches, verbose=False):
             if verbose:
                 print(f'The previous best option was {best_option}')
             best_bcr = avg_bcr
+            best_acc = avg_accuracy
+            best_recall = avg_recall
+            best_precision = avg_precision
             best_option = option
             if verbose:
                 print(f'The current average accuracy is {avg_accuracy} vs. the base accuracy {base_avg_accuracy}')
@@ -380,6 +397,10 @@ def fine_tune(training_batches, cross_validation_batches, verbose=False):
         print()
         print(f'The best setting for all amines is {best_option}')
         print(f'With an average bcr of {best_bcr}')
+        print(f'With an average accuracy of {best_acc}')
+        print(f'With an average recall of {best_recall}')
+        print(f'With an average precision of {best_precision}')
+
 
     return best_option
 
@@ -435,18 +456,18 @@ if __name__ == "__main__":
     num_batches = 10
     verbose = True
     cross_validation = True
-    meta = True
+    meta = False
 
-    """
-    training_batches, cross_validation_batches, testing_batches, counts = dataset.import_test_dataset(k_shot,
+
+    '''training_batches, cross_validation_batches, testing_batches, counts = dataset.import_full_dataset(k_shot,
                                                                                                       meta_batch_size,
                                                                                                       num_batches,
                                                                                                       verbose=verbose,
                                                                                                       cross_validation=cross_validation,
                                                                                                       meta=meta)
 
-    best_hyper_params = fine_tune(training_batches=training_batches, cross_validation_batches=cross_validation_batches)
-    """
+    best_hyper_params = fine_tune(training_batches=training_batches, cross_validation_batches=cross_validation_batches,verbose = True)'''
+
 
     # training_batches, validation_batches, testing_batches, counts = dataset.import_full_dataset(
     # k_shot, meta_batch_size, num_batches, verbose=verbose, cross_validation=cross_validation, meta=meta)
@@ -459,7 +480,7 @@ if __name__ == "__main__":
 
     save_used_data(training_batches, validation_batches, testing_batches, counts, meta)
 
-    # best_hyper_params = fine_tune(training_batches=training_batches, cross_validation_batches=validation_batches)
+    #best_hyper_params = fine_tune(training_batches=training_batches, cross_validation_batches=validation_batches,verbose=True)
 
     for amine in training_batches:
         print("Training and cross validation on {} amine.".format(amine))
