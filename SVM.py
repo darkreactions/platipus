@@ -45,32 +45,18 @@ class ActiveSVM:
         
         self.amine = amine
 
-        if option:
-            if option['kernel'] == 'poly':
-                self.model = CalibratedClassifierCV(SVC(
-                    C=option['C'],
-                    kernel=option['kernel'],
-                    degree=option['degree'],
-                    gamma=option['gammas'],
-                    shrinking=option['shrinking'],
-                    tol=option['tol'],
-                    decision_function_shape=option['decision_function_shape'],
-                    break_ties=option['break_ties']
-                ))
-
-            else:
-                self.model = CalibratedClassifierCV(SVC(
-                    C=option['C'],
-                    kernel=option['kernel'],
-                    gamma=option['gammas'],
-                    shrinking=option['shrinking'],
-                    tol=option['tol'],
-                    decision_function_shape=option['decision_function_shape'],
-                    break_ties=option['break_ties']
-                ))
-        else:
-            # Simple baseline model
-            self.model = CalibratedClassifierCV(SVC())
+        # Optimal hyper parameter after fine tuning.
+        # Run fine_tune function to see the best option for a different dataset
+        self.model = CalibratedClassifierCV(SVC(
+            C=0.1,
+            kernel='poly',
+            degree=1,
+            gamma='scale',
+            shrinking=True,
+            tol=0.5,
+            decision_function_shape='ovo',
+            break_ties=True
+        ))
 
         self.metrics = {
             'accuracies': [],
@@ -301,7 +287,7 @@ class ActiveSVM:
         return 'A SVM model for {0:s} using active learning'.format(self.amine)
 
 
-def fine_tune(training_batches, validation_batches, verbose=False):
+def fine_tune(training_batches, validation_batches, info=False):
     """Fine tune the model based on average bcr performance to find the best model hyper-parameters.
     
     Args:
@@ -309,7 +295,7 @@ def fine_tune(training_batches, validation_batches, verbose=False):
                                     See dataset.py for specific structure.
         validation_batches:     A dictionary representing the training batches used to train. 
                                     See dataset.py for specific structure.
-        verbose:                A boolean. Setting it to True will make the function print out additional information 
+        info:                A boolean. Setting it to True will make the function print out additional information 
                                     during the fine-tuning stage. 
                                     Default to False.
     
@@ -320,22 +306,26 @@ def fine_tune(training_batches, validation_batches, verbose=False):
     """
 
     # Set all possible combinations
+
     params = {
-        'C': [.1, 1.0, 10, 100],
-        'kernel': ['linear', 'poly', 'rbf', 'sigmoid'],
+        'C': [.1, 1.0],
+        'kernel': ['poly', 'rbf', 'sigmoid'],
         'degree': [0, 1, 2, 3, 4, 5, 6],
         'gammas': ['scale', 'auto'],
         'shrinking': [True, False],
         'tol': [1e-3, 1e-2, .1, 1, 10],
         'decision_function_shape': ['ovo', 'ovr'],
         'break_ties': [True, False]
-    }
+        }
 
     combinations = []
 
     keys, values = zip(*params.items())
     for bundle in itertools.product(*values):
         combinations.append(dict(zip(keys, bundle)))
+
+    if info:
+        print(f'There are {len(combinations)} many combinations to try.')
 
     # Set baseline performance
     base_accuracies = []
@@ -344,7 +334,7 @@ def fine_tune(training_batches, validation_batches, verbose=False):
     base_bcrs = []
 
     for amine in training_batches:
-        ASVM = ActiveSVM(amine=amine, verbose=verbose)
+        ASVM = ActiveSVM(amine=amine, verbose=False)
         ASVM.load_dataset(training_batches, validation_batches, meta=meta)
         ASVM.train()
 
@@ -359,23 +349,26 @@ def fine_tune(training_batches, validation_batches, verbose=False):
     base_avg_recall = sum(base_recalls) / len(base_recalls)
     base_avg_bcr = sum(base_bcrs) / len(base_bcrs)
 
-    if verbose:
+    if info:
         print(f'Baseline average bcr is {base_avg_bcr}')
     best_bcr = base_avg_bcr
     best_option = {}
 
+    option_no = 1   # Debug
+
     # Try out each possible combinations of hyper-parameters
-    print(f'There are {len(combinations)} many combinations to try.')
     for option in combinations:
         accuracies = []
         precisions = []
         recalls = []
         bcrs = []
 
-        # print(f'Trying option {option_no}')
+        if info:
+            print(f'Trying option {option_no}')
+
         for amine in training_batches:
             # print("Training and cross validation on {} amine.".format(amine))
-            ASVM = ActiveSVM(amine=amine, option=option, verbose=verbose)
+            ASVM = ActiveSVM(amine=amine, option=option, verbose=False)
             ASVM.load_dataset(training_batches, validation_batches, meta=meta)
             ASVM.train()
 
@@ -392,15 +385,17 @@ def fine_tune(training_batches, validation_batches, verbose=False):
         if avg_bcr > best_bcr:
             best_bcr = avg_bcr
             best_option = option
-            if verbose:
+            if info:
                 print(f'The current average accuracy is {avg_accuracy} vs. the base accuracy {base_avg_accuracy}')
                 print(f'The current average precision is {avg_precision} vs. the base precision {base_avg_precision}')
                 print(f'The current average recall rate is {avg_recall} vs. the base recall rate {base_avg_recall}')
                 print(f'The best average bcr by this setting is {avg_bcr} vs. the base bcr {base_avg_bcr}')
-                print(f'The current best setting for amine {amine} is {best_option}')
+                print(f'The current best setting is {best_option}')
                 print()
 
-    if verbose:
+        option_no += 1
+
+    if info:
         print()
         print(f'The best setting for all amines is {best_option}')
         print(f'With an average bcr of {best_bcr}')
@@ -453,27 +448,35 @@ def save_used_data(training_batches, validation_batches, testing_batches, counts
 
 
 if __name__ == "__main__":
+    # Set up the model parameters
     meta_batch_size = 10
     k_shot = 20
     num_batches = 10
     verbose = True
     cross_validation = True
-    meta = False     # TODO: 0/0 error when set to True
+    meta = False
 
-    # training_batches, validation_batches, testing_batches, counts = dataset.import_test_dataset(k_shot,
-    # meta_batch_size, num_batches, verbose=verbose, cross_validation=cross_validation, meta=meta)
+    # Specify the desired operations
+    test_sample = False
+    fine_tuning = False
+    to_params = False   # Set this to True when running all models for aggregated plots
 
-    # best_hyper_params = fine_tune(training_batches, validation_batches)
+    if test_sample:
+        training_batches, validation_batches, testing_batches, counts = dataset.import_test_dataset(k_shot, meta_batch_size, num_batches, verbose=verbose, cross_validation=cross_validation, meta=meta)
+    else:
+        training_batches, validation_batches, testing_batches, counts = dataset.import_full_dataset(k_shot, meta_batch_size, num_batches, verbose=verbose, cross_validation=cross_validation, meta=meta)
 
-    training_batches, validation_batches, testing_batches, counts = dataset.import_full_dataset(
-        k_shot, meta_batch_size, num_batches, verbose=verbose, cross_validation=cross_validation, meta=meta)
+    if fine_tuning:
+        ft_training_batches, ft_validation_batches, ft_testing_batches, ft_counts = dataset.import_full_dataset(k_shot, meta_batch_size, num_batches, verbose=verbose, cross_validation=cross_validation, meta=False)
+        best_hyper_params = fine_tune(ft_training_batches, ft_validation_batches, info=True)
 
+    # Save the training, validation, testing dataset and the experiment counts to data folder
     save_used_data(training_batches, validation_batches, testing_batches, counts, meta)
 
     for amine in training_batches:
         print("Training and cross validation on {} amine.".format(amine))
-        ASVM = ActiveSVM(amine=amine, option=None)  # TODO: fine tune
+        ASVM = ActiveSVM(amine=amine, option=best_hyper_params) if best_hyper_params else ActiveSVM(amine=amine)
         ASVM.load_dataset(training_batches, validation_batches, meta=meta)
         ASVM.train()
-        ASVM.active_learning(to_params=False)  # TODO: delete this when running full models
+        ASVM.active_learning(to_params=to_params)
         ASVM.save_model(k_shot=k_shot, n_way=2, meta=meta)
