@@ -12,7 +12,7 @@ from sklearn.metrics import confusion_matrix
 import os
 import sys
 
-from FC_net import FCNet
+from models.meta.FC_net import FCNet
 
 import pickle
 
@@ -60,30 +60,42 @@ def parse_args():
     """
     parser = argparse.ArgumentParser(description='Setup variables for MAML.')
 
-    parser.add_argument('--datasource', type=str, default='drp_chem', help='datasource to be used, default is drp_chem')
-    parser.add_argument('--k_shot', type=int, default=5, help='Number of training samples per class or k-shot')
+    parser.add_argument('--datasource', type=str, default='drp_chem',
+                        help='datasource to be used, default is drp_chem')
+    parser.add_argument('--k_shot', type=int, default=5,
+                        help='Number of training samples per class or k-shot')
     parser.add_argument('--n_way', type=int, default=1,
                         help='Number of classes per task, this is 2 for the chemistry data')
-    parser.add_argument('--resume_epoch', type=int, default=0, help='Epoch id to resume learning or perform testing')
+    parser.add_argument('--resume_epoch', type=int, default=0,
+                        help='Epoch id to resume learning or perform testing')
 
     parser.add_argument('--train', dest='train_flag', action='store_true')
     parser.add_argument('--test', dest='train_flag', action='store_false')
     parser.set_defaults(train_flag=True)
 
-    parser.add_argument('--inner_lr', type=float, default=1e-3, help='Learning rate for task-specific parameters')
+    parser.add_argument('--inner_lr', type=float, default=1e-3,
+                        help='Learning rate for task-specific parameters')
     parser.add_argument('--num_inner_updates', type=int, default=5,
                         help='Number of gradient updates for task-specific parameters')
-    parser.add_argument('--meta_lr', type=float, default=1e-3, help='Learning rate of meta-parameters')
-    parser.add_argument('--meta_batch_size', type=int, default=25, help='Number of tasks sampled per outer loop')
-    parser.add_argument('--num_epochs', type=int, default=1000, help='How many outer loops are used to train')
-    parser.add_argument('--num_epochs_save', type=int, default=1000, help='How often should we save')
+    parser.add_argument('--meta_lr', type=float, default=1e-3,
+                        help='Learning rate of meta-parameters')
+    parser.add_argument('--meta_batch_size', type=int, default=25,
+                        help='Number of tasks sampled per outer loop')
+    parser.add_argument('--num_epochs', type=int, default=1000,
+                        help='How many outer loops are used to train')
+    parser.add_argument('--num_epochs_save', type=int,
+                        default=1000, help='How often should we save')
 
-    parser.add_argument('--num_val_tasks', type=int, default=100, help='Number of validation tasks')
-    parser.add_argument('--uncertainty', dest='uncertainty_flag', action='store_true')
-    parser.add_argument('--no_uncertainty', dest='uncertainty_flag', action='store_false')
+    parser.add_argument('--num_val_tasks', type=int,
+                        default=100, help='Number of validation tasks')
+    parser.add_argument(
+        '--uncertainty', dest='uncertainty_flag', action='store_true')
+    parser.add_argument('--no_uncertainty',
+                        dest='uncertainty_flag', action='store_false')
     parser.set_defaults(uncertainty_flag=True)
 
-    parser.add_argument('--p_dropout_base', type=float, default=0., help='Dropout rate for the base network')
+    parser.add_argument('--p_dropout_base', type=float,
+                        default=0., help='Dropout rate for the base network')
     parser.add_argument('--cross_validate', action='store_true')
 
     parser.add_argument('--verbose', action='store_true')
@@ -156,18 +168,21 @@ def initialize():
     """
 
     args = parse_args()
-    params = {}
+    params = vars(args)
+    #params = {}
 
     # Set up training using either GPU or CPU
     gpu_id = 0
-    device = torch.device('cuda:{0:d}'.format(gpu_id) if torch.cuda.is_available() else "cpu")
+    device = torch.device('cuda:{0:d}'.format(
+        gpu_id) if torch.cuda.is_available() else "cpu")
     print('Using device:', device)
     print()
 
     if device.type == 'cuda' and args.verbose:
         print(torch.cuda.get_device_name(0))
         print('Memory Usage:')
-        print('Allocated:', round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1), 'GB')
+        print('Allocated:', round(
+            torch.cuda.memory_allocated(0) / 1024 ** 3, 1), 'GB')
         print('Cached:   ', round(torch.cuda.memory_cached(0) / 1024 ** 3, 1), 'GB')
 
     params['device'] = device
@@ -180,7 +195,7 @@ def initialize():
     print(f'{args.k_shot}-shot')
     params['num_training_samples_per_class'] = args.k_shot
 
-    # Total number of samples per class, need some extra for the outer loop update as well 
+    # Total number of samples per class, need some extra for the outer loop update as well
     if params['train_flag']:
         params['num_total_samples_per_class'] = params['num_training_samples_per_class'] + 15
     else:
@@ -242,10 +257,11 @@ def initialize():
         # See https://discuss.pytorch.org/t/what-is-the-weight-values-mean-in-torch-nn-crossentropyloss/11455/9
         # Do this again just in case we are loading weights
         counts = params['counts']
-        weights = [counts['total'][0] / counts['total'][0], counts['total'][0] / counts['total'][1]]
+        weights = [counts['total'][0] / counts['total']
+                   [0], counts['total'][0] / counts['total'][1]]
         class_weights = torch.tensor(weights, device=device)
         params['loss_fn'] = torch.nn.CrossEntropyLoss(class_weights)
-        # Set up a softmax layer to handle losses later on 
+        # Set up a softmax layer to handle losses later on
         params['sm_loss'] = torch.nn.Softmax(dim=2)
     else:
         sys.exit('Unknown dataset')
@@ -254,7 +270,7 @@ def initialize():
     params['w_shape'] = net.get_weight_shape()
     print(f'Number of parameters of base model = {net.get_num_weights()}')
 
-    # Used in the validation step 
+    # Used in the validation step
     params['num_val_tasks'] = args.num_val_tasks
 
     # Set up the path to save models
@@ -274,7 +290,7 @@ def initialize():
     print(dst_folder)
     params['dst_folder'] = dst_folder
 
-    # In the case that we are loading a model, resume epoch will not be zero 
+    # In the case that we are loading a model, resume epoch will not be zero
     params['resume_epoch'] = args.resume_epoch
 
     if params['resume_epoch'] == 0:
@@ -282,7 +298,8 @@ def initialize():
         theta = {}
         for key in params['w_shape'].keys():
             if 'b' in key:
-                theta[key] = torch.zeros(params['w_shape'][key], device=device, requires_grad=True)
+                theta[key] = torch.zeros(
+                    params['w_shape'][key], device=device, requires_grad=True)
             else:
                 theta[key] = torch.empty(params['w_shape'][key], device=device)
                 torch.nn.init.xavier_normal_(theta[key], gain=1.)
@@ -302,13 +319,13 @@ def initialize():
             saved_checkpoint = torch.load(
                 checkpoint_file,
                 map_location=lambda storage,
-                                    loc: storage.cuda(gpu_id)
+                loc: storage.cuda(gpu_id)
             )
         else:
             saved_checkpoint = torch.load(
                 checkpoint_file,
                 map_location=lambda storage,
-                                    loc: storage
+                loc: storage
             )
 
         theta = saved_checkpoint['theta']
@@ -343,9 +360,11 @@ def reinitialize_model_params(params):
     theta = {}
     for key in params['w_shape'].keys():
         if 'b' in key:
-            theta[key] = torch.zeros(params['w_shape'][key], device=params['device'], requires_grad=True)
+            theta[key] = torch.zeros(
+                params['w_shape'][key], device=params['device'], requires_grad=True)
         else:
-            theta[key] = torch.empty(params['w_shape'][key], device=params['device'])
+            theta[key] = torch.empty(
+                params['w_shape'][key], device=params['device'])
             torch.nn.init.xavier_normal_(theta[key], gain=1.)
             theta[key].requires_grad_()
 
@@ -390,16 +409,20 @@ def main():
                         print('No folder for storage found')
                         print(f'Make folder to store meta-parameters at')
                     else:
-                        print('Found existing folder. Meta-parameters will be stored at')
+                        print(
+                            'Found existing folder. Meta-parameters will be stored at')
                     print(dst_folder)
                     params['dst_folder'] = dst_folder
 
                     # Adjust the loss function for each amine
                     amine_counts = params['counts'][amine]
-                    weights = [amine_counts[0] / amine_counts[0], amine_counts[0] / amine_counts[1]]
+                    weights = [amine_counts[0] / amine_counts[0],
+                               amine_counts[0] / amine_counts[1]]
                     print('Using the following weights for loss function:', weights)
-                    class_weights = torch.tensor(weights, device=params['device'])
-                    params['loss_fn'] = torch.nn.CrossEntropyLoss(class_weights)
+                    class_weights = torch.tensor(
+                        weights, device=params['device'])
+                    params['loss_fn'] = torch.nn.CrossEntropyLoss(
+                        class_weights)
 
                     # Train the model then reinitialize a new one
                     meta_train(params, amine)
@@ -461,14 +484,14 @@ def load_previous_model_maml(dst_folder_root, params, amine=None):
             os.path.join(maml_folder, maml_filename.format(
                 i - num_epochs_save)),
             map_location=lambda storage,
-                                loc: storage.cuda(gpu_id)
+            loc: storage.cuda(gpu_id)
         )
     else:
         maml_checkpoint = torch.load(
             os.path.join(maml_folder, maml_filename.format(
                 i - num_epochs_save)),
             map_location=lambda storage,
-                                loc: storage
+            loc: storage
         )
     return maml_checkpoint
 
@@ -519,7 +542,7 @@ def meta_train(params, amine=None):
                 batch = training_batches[b_num]
             x_train, y_train, x_val, y_val = torch.from_numpy(batch[0]).float().to(params['device']), torch.from_numpy(
                 batch[1]).long().to(params['device']), \
-                                             torch.from_numpy(batch[2]).float().to(params['device']), torch.from_numpy(
+                torch.from_numpy(batch[2]).float().to(params['device']), torch.from_numpy(
                 batch[3]).long().to(params['device'])
 
         # variables used to store information of each epoch for monitoring purpose
@@ -571,7 +594,8 @@ def meta_train(params, amine=None):
                 # Printing losses
                 num_meta_updates_count += 1
                 if (num_meta_updates_count % num_meta_updates_print == 0):
-                    meta_loss_avg_save.append(meta_loss_avg_print / num_meta_updates_count)
+                    meta_loss_avg_save.append(
+                        meta_loss_avg_print / num_meta_updates_count)
                     print('{0:d}, {1:2.4f}'.format(
                         task_count,
                         meta_loss_avg_save[-1]
@@ -607,7 +631,8 @@ def meta_train(params, amine=None):
                         epoch + 1)
             print(checkpoint_filename)
             dst_folder = params['dst_folder']
-            torch.save(checkpoint, os.path.join(dst_folder, checkpoint_filename))
+            torch.save(checkpoint, os.path.join(
+                dst_folder, checkpoint_filename))
         print()
 
 
@@ -654,7 +679,7 @@ def get_task_prediction(x_t, y_t, x_v, params, y_v=None):
     )
     gradients = dict(zip(theta.keys(), grads))
 
-    # Obtain the weights for the updated model 
+    # Obtain the weights for the updated model
     for key in theta.keys():
         q[key] = theta[key] - inner_lr * gradients[key]
 
@@ -683,6 +708,7 @@ def get_task_prediction(x_t, y_t, x_v, params, y_v=None):
     else:
         loss_NLL = loss_fn(y_pred_v, y_v)
         return loss_NLL
+
 
 def get_naive_task_prediction_maml(x_vals, meta_params, params):
     """Get the naive task prediction for MAML model
@@ -734,7 +760,8 @@ def zero_point_maml(preds, sm_loss, all_labels):
 
     accuracy = torch.sum(correct, dim=0).item() / len(all_labels)
 
-    cm = confusion_matrix(all_labels.detach().cpu().numpy(), labels_pred.detach().cpu().numpy())
+    cm = confusion_matrix(all_labels.detach().cpu().numpy(),
+                          labels_pred.detach().cpu().numpy())
 
     precision = cm[1][1] / (cm[1][1] + cm[0][1])
     recall = cm[1][1] / (cm[1][1] + cm[1][0])
@@ -802,7 +829,8 @@ def active_learning_maml(preds, sm_loss, all_labels, x_t, y_t, x_v, y_v):
     y_v = torch.cat([y_v[0:index], y_v[index + 1:]])
     print('length of x_v is now', len(x_v))
 
-    cm = confusion_matrix(all_labels.detach().cpu().numpy(), labels_pred.detach().cpu().numpy())
+    cm = confusion_matrix(all_labels.detach().cpu().numpy(),
+                          labels_pred.detach().cpu().numpy())
 
     precision = cm[1][1] / (cm[1][1] + cm[0][1])
     recall = cm[1][1] / (cm[1][1] + cm[1][0])

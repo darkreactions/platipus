@@ -1,4 +1,4 @@
-from maml import initialize
+#from maml import initialize
 import torch
 import numpy as np
 import pickle
@@ -6,19 +6,20 @@ import pickle
 import os
 import sys
 
-from utils import (load_chem_dataset, plot_metrics_graph, create_cv_stats_dict,
+from utils import (load_chem_dataset, create_cv_stats_dict,
                    update_cv_stats_dict)
+from utils.plot import plot_metrics_graph
 
-from FC_net import FCNet
-from platipus import (initialzie_theta_platipus, save_model,
-                      meta_train_platipus, set_optim_platipus,
-                      load_previous_model_platipus, forward_pass_validate_platipus,
-                      find_avg_metrics, get_task_prediction_platipus,
-                      get_naive_prediction_platipus, zero_point_platipus,
-                      active_learning_platipus)
-from maml import (initialize, load_previous_model_maml,
-                  get_naive_task_prediction_maml, zero_point_maml,
-                  get_task_prediction_maml, active_learning_maml)
+from models.meta.FC_net import FCNet
+from models.meta.platipus import (initialzie_theta_platipus, save_model,
+                                  meta_train_platipus, set_optim_platipus,
+                                  load_previous_model_platipus, forward_pass_validate_platipus,
+                                  find_avg_metrics, get_task_prediction_platipus,
+                                  get_naive_prediction_platipus, zero_point_platipus,
+                                  active_learning_platipus)
+from models.meta.maml import (initialize, load_previous_model_maml,
+                              get_naive_task_prediction_maml, zero_point_maml,
+                              get_task_prediction_maml, active_learning_maml)
 
 
 def main(params):
@@ -102,7 +103,7 @@ def main(params):
                 val_batch = validation_batches[amine]
                 x_t, y_t, x_v, y_v = torch.from_numpy(val_batch[0]).float().to(params['device']), torch.from_numpy(
                     val_batch[1]).long().to(params['device']), \
-                                     torch.from_numpy(val_batch[2]).float().to(params['device']), torch.from_numpy(
+                    torch.from_numpy(val_batch[2]).float().to(params['device']), torch.from_numpy(
                     val_batch[3]).long().to(params['device'])
 
                 accuracies = []
@@ -132,11 +133,11 @@ def main(params):
 
                 print('accuracy for model is', accuracies)
                 print('probabilities for predictions are', probability_pred)
-                test_model_actively(params, amine)
+                params = test_model_actively(params, amine)
 
-            # Save this dictionary in case we need it later
-            with open(os.path.join("./data", "cv_statistics.pkl"), "wb") as f:
-                pickle.dump(params['cv_statistics'], f)
+                # Save this dictionary in case we need it later
+                with open(os.path.join("./data", "cv_statistics.pkl"), "wb") as f:
+                    pickle.dump(params['cv_statistics'], f)
 
             with open(os.path.join("./data", "cv_statistics.pkl"), "rb") as f:
                 params['cv_statistics'] = pickle.load(f)
@@ -145,11 +146,12 @@ def main(params):
 
             # Do some deletion so the average graph has no nan's
             # changed this to the new stats dict format
+            """
             for key in stats_dict.keys():
                 for k in stats_dict[key].keys():
                     del stats_dict[key][k][10]
                     del stats_dict[key][k][11]
-
+            """
             for key in stats_dict.keys():
                 for stat_list in stats_dict[key]["precisions"]:
                     print(stat_list[0])
@@ -212,7 +214,7 @@ def main(params):
 
                 print('accuracy for model is', accuracies)
                 # print('probabilities for predictions are', probability_pred)
-                test_model_actively(params, amine)
+                params = test_model_actively(params, amine)
 
     else:
         sys.exit('Unknown action')
@@ -233,7 +235,8 @@ def test_model_actively(params, amine=None):
     # Running cross validation for a specific amine
     if params['cross_validate']:
         # List out the models we want to conduct active learning
-        models = ['PLATIPUS', 'MAML']
+        #models = ['PLATIPUS', 'MAML']
+        models = ['PLATIPUS']
 
         # Create the stats dictionary to store performance metrics
         cv_stats_dict = create_cv_stats_dict(models)
@@ -405,6 +408,8 @@ def test_model_actively(params, amine=None):
         # Plot the metric graphs and save it in the designated folder
         plot_metrics_graph(num_examples, cv_stats_dict,
                            params['active_learning_graph_folder'], amine=amine)
+
+    return params
 
 
 if __name__ == "__main__":
