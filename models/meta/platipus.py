@@ -1,15 +1,17 @@
-import os
-import sys
-
-import numpy as np
 import torch
-from core import *
+import numpy as np
+
+import sys
+import os
+
+from utils import *
+
 from sklearn.metrics import confusion_matrix
+#from models.meta.core import *
 
 
 # Originally "reinitialzie model params" Core line 147 in main function
 def initialzie_theta_platipus(params):
-
     """This function is to initialize Theta
 
     Args:
@@ -52,8 +54,7 @@ def initialzie_theta_platipus(params):
     return Theta
 
 
-def set_optim_platipus(Theta,meta_lr):
-
+def set_optim_platipus(Theta, meta_lr):
     """This function is to set up the optimizer for Theta
 
     Args:
@@ -109,13 +110,13 @@ def load_previous_model_platipus(params):
         saved_checkpoint = torch.load(
             checkpoint_file,
             map_location=lambda storage,
-                                loc: storage.cuda(params['gpu_id'])
+            loc: storage.cuda(params['gpu_id'])
         )
     else:
         saved_checkpoint = torch.load(
             checkpoint_file,
             map_location=lambda storage,
-                                loc: storage
+            loc: storage
         )
     return saved_checkpoint
 
@@ -132,7 +133,7 @@ def meta_train_platipus(params, amine=None):
     Returns:
         params: A dictionary of updated parameters
     """
-    
+
     # Start by unpacking the params we need
     # Messy but it does eliminate global variables and make things easier to trace
     datasource = params['datasource']
@@ -196,7 +197,8 @@ def meta_train_platipus(params, amine=None):
             else:
                 sys.exit('Unknown dataset')
 
-            loss_i, KL_q_p = get_training_loss_platipus(x_t, y_t, x_v, y_v, params)
+            loss_i, KL_q_p = get_training_loss_platipus(
+                x_t, y_t, x_v, y_v, params)
             KL_q_p = KL_q_p * KL_reweight
 
             if torch.isnan(loss_i).item():
@@ -277,10 +279,10 @@ def meta_train_platipus(params, amine=None):
             torch.save(checkpoint, os.path.join(
                 dst_folder, checkpoint_filename))
         print()
-        
+
     return params
 
-        
+
 def generate_weights_platipus(meta_params, params):
     """Generate a set of weights
 
@@ -585,7 +587,8 @@ def zero_point_platipus(preds, sm_loss, all_labels):
     accuracy = torch.sum(correct, dim=0).item() / len(all_labels)
 
     # Generate confusion matrix using actual labels and predicted labels
-    cm = confusion_matrix(all_labels.detach().cpu().numpy(), labels_pred.detach().cpu().numpy())
+    cm = confusion_matrix(all_labels.detach().cpu().numpy(),
+                          labels_pred.detach().cpu().numpy())
 
     # To prevent nan value for precision, we set it to 1 and send out a warning message
     if cm[1][1] + cm[0][1] != 0:
@@ -658,7 +661,8 @@ def active_learning_platipus(preds, sm_loss, all_labels, params, x_t, y_t, x_v, 
     y_pred_v_update = sm_loss(torch.stack(preds_update))
     y_pred_update = torch.mean(input=y_pred_v_update, dim=0, keepdim=False)
 
-    prob_pred_update, labels_pred_update = torch.max(input=y_pred_update, dim=1)
+    prob_pred_update, labels_pred_update = torch.max(
+        input=y_pred_update, dim=1)
 
     print(y_v)
     print(labels_pred_update)
@@ -674,7 +678,8 @@ def active_learning_platipus(preds, sm_loss, all_labels, params, x_t, y_t, x_v, 
     y_v = torch.cat([y_v[0:index], y_v[index + 1:]])
     print('length of x_v is now', len(x_v))
 
-    cm = confusion_matrix(all_labels.detach().cpu().numpy(), labels_pred.detach().cpu().numpy())
+    cm = confusion_matrix(all_labels.detach().cpu().numpy(),
+                          labels_pred.detach().cpu().numpy())
 
     # To prevent nan value for precision, we set it to 1 and send out a warning message
     if cm[1][1] + cm[0][1] != 0:
@@ -702,7 +707,7 @@ def forward_pass_validate_platipus(params, amine):
     val_batch = validation_batches[amine]
     x_t, y_t, x_v, y_v = torch.from_numpy(val_batch[0]).float().to(params['device']), torch.from_numpy(
         val_batch[1]).long().to(params['device']), \
-                         torch.from_numpy(val_batch[2]).float().to(params['device']), torch.from_numpy(
+        torch.from_numpy(val_batch[2]).float().to(params['device']), torch.from_numpy(
         val_batch[3]).long().to(params['device'])
 
     accuracies = []

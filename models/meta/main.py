@@ -24,16 +24,18 @@ python main.py --datasource=drp_chem --k_shot=20 --n_way=2 --inner_lr=1e-3 --met
 '''
 
 import argparse
+import torch
 import os
 import sys
 
-import torch
-from FC_net import FCNet
-from core import main
-from platipus import *
+from .core import main
+from .FC_net import FCNet
+from utils import *
+from .platipus import *
+#from models.meta.maml import *
 
 
-def parse_args():
+def parse_args(args):
     """Set up the initial variables for running PLATIPUS.
 
     Retrieves argument values from the terminal command line to create an argparse.Namespace object for
@@ -124,11 +126,11 @@ def parse_args():
 
     parser.add_argument('--verbose', action='store_true')
 
-    args = parser.parse_args()
+    args = parser.parse_args(args)
     return args
 
 
-def initialize(models_list):
+def initialize(models_list, args):
     """Initializes a dictionary of parameters corresponding to the arguments
 
     The purpose of this function is trying to use a parameters dictionary without blowing up the number of
@@ -213,17 +215,17 @@ def initialize(models_list):
                                                     Theta. Currently using Adam as suggested in the PLATIPUS paper.
         """
 
-    args = parse_args()
+    #args = parse_args()
     params = {}
 
     # Set up training using either GPU or CPU
-    gpu_id = 0
+    gpu_id = args.get('gpu_id', 0)
     device = torch.device('cuda:{0:d}'.format(
         gpu_id) if torch.cuda.is_available() else "cpu")
     print('Using device:', device)
     print()
 
-    if device.type == 'cuda' and args.verbose:
+    if device.type == 'cuda' and args.get('verbose', False):
         print(torch.cuda.get_device_name(0))
         print('Memory Usage:')
         print('Allocated:', round(
@@ -234,11 +236,12 @@ def initialize(models_list):
     params['gpu_id'] = gpu_id
 
     # Set up PLATIPUS using user inputs
-    params['train_flag'] = args.train_flag
-    params['cross_validate'] = args.cross_validate
+    params['train_flag'] = args['train_flag']
+    params['cross_validate'] = args['cross_validate']
     # Set up the value of k in k-shot learning
-    print(f'{args.k_shot}-shot')
-    params['num_training_samples_per_class'] = args.k_shot
+
+    print(f'{args["k_shot"]}-shot')
+    params['num_training_samples_per_class'] = args['k_shot']
 
     # Total number of samples per class, need some extra for the outer loop update as well
     if params['train_flag']:
@@ -247,41 +250,43 @@ def initialize(models_list):
         params['num_total_samples_per_class'] = params['num_training_samples_per_class'] + 20
 
     # n-way: 2 for the chemistry data
-    print(f"{args.n_way}-way")
-    params['num_classes_per_task'] = args.n_way
+    print(f"{args['n_way']}-way")
+    params['num_classes_per_task'] = args['n_way']
 
     # Initialize the datasource and learning rate
-    print(f'Dataset = {args.datasource}')
-    params['datasource'] = args.datasource
-    print(f'Inner learning rate = {args.inner_lr}')
-    params['inner_lr'] = args.inner_lr
-    params['pred_lr'] = args.pred_lr
+    print(f'Dataset = {args["datasource"]}')
+    params['datasource'] = args['datasource']
+    params['test_data'] = args.get('test_data', False)
+
+    print(f'Inner learning rate = {args["inner_lr"]}')
+    params['inner_lr'] = args['inner_lr']
+    params['pred_lr'] = args['pred_lr']
 
     # Set up the meta learning rate
-    print(f'Meta learning rate = {args.meta_lr}')
-    params['meta_lr'] = args.meta_lr
+    print(f'Meta learning rate = {args["meta_lr"]}')
+    params['meta_lr'] = args['meta_lr']
 
     # Reducing this to 25 like in Finn et al.
     # Tells us how many tasks are per epoch and after how many tasks we should save the values of the losses
-    params['num_tasks_per_epoch'] = args.meta_batch_size
-    params['num_tasks_save_loss'] = args.meta_batch_size
-    params['num_epochs'] = args.num_epochs
+    params['num_tasks_per_epoch'] = args['meta_batch_size']
+    params['num_tasks_save_loss'] = args['meta_batch_size']
+    params['num_epochs'] = args['num_epochs']
 
     # How often should we save?
-    params['num_epochs_save'] = args.num_epochs_save
+    params['num_epochs_save'] = args['num_epochs_save']
 
     # How many gradient updates we run on the inner loop
-    print(f'Number of inner updates = {args.num_inner_updates}')
-    params['num_inner_updates'] = args.num_inner_updates
+    print(f'Number of inner updates = {args["num_inner_updates"]}')
+    params['num_inner_updates'] = args['num_inner_updates']
 
     # Dropout rate for the neural network
-    params['p_dropout_base'] = args.p_dropout_base
+    params['p_dropout_base'] = args['p_dropout_base']
 
     # L as how many models we sample in the inner update and K as how many models we sample in validation
-    print(f'L = {args.Lt}, K = {args.Lv}')
-    params['L'] = args.Lt
-    params['K'] = args.Lv
-    params['verbose'] = args.verbose
+    print(f'L = {args["Lt"]}, K = {args["Lv"]}')
+    params['L'] = args['Lt']
+    params['K'] = args['Lv']
+    params['verbose'] = args['verbose']
 
     # Set up the stats dictionary for later use
     stats_dict = create_stats_dict(models_list)
@@ -305,9 +310,11 @@ def initialize(models_list):
                 training_batches, validation_batches, testing_batches, counts = load_chem_dataset(k_shot=20,
                                                                                                   cross_validation=params[
                                                                                                       'cross_validate'],
-                                                                                                  meta_batch_size=args.meta_batch_size,
+                                                                                                  meta_batch_size=args[
+                                                                                                      'meta_batch_size'],
                                                                                                   num_batches=250,
-                                                                                                  verbose=args.verbose)
+                                                                                                  verbose=args['verbose'],
+                                                                                                  test=params.get('test_data', False))
                 params['training_batches'] = training_batches
                 params['validation_batches'] = validation_batches
                 params['testing_batches'] = testing_batches
@@ -322,9 +329,10 @@ def initialize(models_list):
             else:
                 training_batches, testing_batches, counts = load_chem_dataset(k_shot=20,
                                                                               cross_validation=params['cross_validate'],
-                                                                              meta_batch_size=args.meta_batch_size,
+                                                                              meta_batch_size=args['meta_batch_size'],
                                                                               num_batches=250,
-                                                                              verbose=args.verbose)
+                                                                              verbose=args['verbose'],
+                                                                              test=params.get('test_data', False))
                 params['training_batches'] = training_batches
                 params['testing_batches'] = testing_batches
                 params['counts'] = counts
@@ -378,8 +386,8 @@ def initialize(models_list):
     params['num_weights'] = net.get_num_weights()
 
     # Weight on the KL loss
-    print(f'KL reweight = {args.kl_reweight}')
-    params['KL_reweight'] = args.kl_reweight
+    print(f'KL reweight = {args["kl_reweight"]}')
+    params['KL_reweight'] = args['kl_reweight']
 
     # Set up the path to save models
     params['dst_folder'] = save_model("PLATIPUS", params)
@@ -408,7 +416,7 @@ def initialize(models_list):
     params['active_learning_graph_folder'] = active_learning_graph_folder
 
     # In the case that we are loading a model, resume epoch will not be zero
-    params['resume_epoch'] = args.resume_epoch
+    params['resume_epoch'] = args['resume_epoch']
     if params['resume_epoch'] == 0:
         # Initialize meta-parameters
         # Theta is capital theta in the PLATIPUS paper, it holds everything we need
@@ -468,5 +476,6 @@ def initialize(models_list):
 
 if __name__ == "__main__":
     models_list = ["PLATIPUS", "MAML", "SVM", "KNN", "RandomForest"]
-    params = initialize(models_list)
+    args = vars(parse_args(sys.argv[1:]))
+    params = initialize(models_list, args)
     main(params)
