@@ -15,8 +15,50 @@ common_params = {
 }
 
 knn_params = {
+    'train_size': 20,
     'neighbors': 2,
-    'model_name': 'Knn-2'
+    'config': None,
+    'model_name': 'KNN'
+}
+
+"""
+The format for KNN's config should be a dictionary in the following form
+{
+    'n_neighbors': 2,
+    'weights': 'uniform',
+    'algorithm': 'auto',
+    'leaf_size': 20,
+    'p': 2,
+    'metric': 'minkowski'
+}
+"""
+
+svm_params = {
+    'train_size': 20,
+    'config': None,
+    'model_name': 'SVM'
+}
+
+"""
+The format for SVM config should be a dictionary in the following form
+{
+    'C':0.01,
+    'kernel':'poly',
+    'degree': 1,
+    'gammas': 'scale',
+    'shrinking': True,
+    'tol': 0.01,
+    'decision_function_shape': 'ovo',
+    'break_ties': True,
+    'class_weight': 'balanced'
+}
+"""
+
+# TODO: change this to adhere to the name in RandomForest.py
+randomforest_params = {
+    'train_size': 20,
+    'config': None,
+    'model_name': 'Random_Forest'
 }
 
 randomforest_params = {

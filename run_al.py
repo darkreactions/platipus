@@ -1,33 +1,17 @@
-from models.non_meta import KNN
+import os
+
 import models.meta.main as platipus
 from pathlib import Path
 import os
 
-from models.non_meta import RandomForest
+from models.non_meta import RandomForest, KNN, SVM
 from utils.plot import plot_metrics_graph
 from utils import read_pickle, write_pickle, define_non_meta_model_name
-from model_params import common_params, knn_params, randomforest_params, meta_train, meta_test
+from model_params import common_params, knn_params, svm_params, randomforest_params, meta_train, meta_test
+
 
 
 if __name__ == '__main__':
-    #platipus_train_params = {**common_params, **meta_params, **meta_train}
-    #params = platipus.initialize(["PLATIPUS"], platipus_train_params)
-    # platipus.main(params)
-
-    #platipus_test_params = {**common_params, **meta_params, **meta_test}
-    #params = platipus.initialize(["PLATIPUS"], platipus_test_params)
-    # platipus.main(params)
-
-    """
-    KNN_params = {**common_params, **knn_params}
-    KNN.run_model(KNN_params)
-
-    knn_params['neighbors'] = 1
-    knn_params['model_name'] = 'Knn-1'
-    KNN1_params = {**common_params, **knn_params}
-    KNN.run_model(KNN1_params)
-    """
-
     # Set up the results directory
     results_folder = './results'
 
@@ -64,7 +48,7 @@ if __name__ == '__main__':
 
     # KNN w/ active learning
     # Trained under option 1
-    '''KNN1_params = {**common_params, **knn_params}
+    KNN1_params = {**common_params, **knn_params}
     KNN1_params['model_name'] = define_non_meta_model_name(KNN1_params['model_name'], KNN1_params['pretrain'])
     models_to_plot.append(KNN1_params['model_name'])
     KNN.run_model(KNN1_params)
@@ -88,7 +72,7 @@ if __name__ == '__main__':
     SVM2_params['pretrain'] = False
     SVM2_params['model_name'] = define_non_meta_model_name(SVM2_params['model_name'], SVM2_params['pretrain'])
     models_to_plot.append(SVM2_params['model_name'])
-    SVM.run_model(SVM2_params)'''
+    SVM.run_model(SVM2_params)
 
     # Random Forest w/ active learning
     # Trained under option 1

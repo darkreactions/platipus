@@ -12,7 +12,6 @@ from matplotlib import pyplot as plt
 from utils.dataset import (import_chemdata, cross_validation_data, hold_out_data,
                            import_test_dataset, import_full_dataset)
 
-
 def write_pickle(path, data):
     """Write pickle file
 
@@ -330,6 +329,20 @@ def define_non_meta_model_name(model_name, pretrain):
         model_name:     A string representing the base model name of the non-meta model.
         pretrain:       A boolean representing whether we are training/testing the model under option 1 or option 2.
                             See non-meta models for more details on option 1 and option 2.
+    returns:
+        A string representing the model name with proper suffix
+    """
+
+    return model_name + '_option_1' if pretrain else model_name + '_option_2'
+
+
+def define_non_meta_model_name(model_name, pretrain):
+    """ Function to define the suffix of non-meta model
+    Args:
+        model_name:     A string representing the base model name of the non-meta model.
+        pretrain:       A boolean representing whether we are training/testing the model under option 1 or option 2.
+                            See non-meta models for more details on option 1 and option 2.
+
     returns:
         A string representing the model name with proper suffix
     """
