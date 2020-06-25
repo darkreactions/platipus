@@ -10,12 +10,19 @@ common_params = {
     'meta': False,
     'full_dataset': False,
     'pretrain': True,
-    'stats_path': Path('./results/cv_statistics.pkl')
+    'stats_path': Path('./results/cv_statistics.pkl'),
+    'cv_stats_overwrite': True
 }
 
 knn_params = {
     'neighbors': 2,
     'model_name': 'Knn-2'
+}
+
+randomforest_params = {
+    'train_size': 20,
+    'config': None,
+    'model_name': 'Random Forest'
 }
 
 meta_params = {

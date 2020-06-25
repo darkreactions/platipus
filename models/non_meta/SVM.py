@@ -2,7 +2,7 @@ import os
 import pickle
 
 import numpy as np
-import dataset
+from utils.dataset import import_full_dataset, import_test_dataset
 from sklearn.datasets import load_iris
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix
