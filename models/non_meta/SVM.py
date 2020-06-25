@@ -1,13 +1,28 @@
+"""
+Run the following command lines for full dataset training:
+python SVM.py --datasource=drp_chem --train_size=20 --cross_validate --full --verbose
+python SVM.py --datasource=drp_chem --train_size=20 --cross_validate --pretrain --full --verbose
+
+Run the following command lines for test dataset training (debug):
+python SVM.py --datasource=drp_chem ---train_size=20 -cross_validate --verbose
+python SVM.py --datasource=drp_chem --train_size=20 --cross_validate --pretrain --verbose
+"""
+
+import argparse
 import itertools
 import os
 import pickle
+from collections import defaultdict
+from pathlib import Path
 
-import dataset
 import numpy as np
-from modAL.models import ActiveLearner
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.metrics import confusion_matrix
 from sklearn.svm import SVC
+
+from modAL.models import ActiveLearner
+
+from utils.dataset import import_full_dataset, import_test_dataset
 
 
 class ActiveSVM:
@@ -20,6 +35,8 @@ class ActiveSVM:
         metrics:        A dictionary to store the performance metrics locally. It has the format of
                             {'metric_name': [metric_value]}.
         verbose:        A boolean representing whether it will prints out additional information to the terminal or not.
+        stats_path:     A Path object representing the directory of the stats dictionary.
+        model_name:     A string representing the name of the model for future plotting.
         all_data:       A numpy array representing all the data from the dataset.
         all_labels:     A numpy array representing all the labels from the dataset.
         x_t:            A numpy array representing the training data used for model training.
@@ -29,45 +46,59 @@ class ActiveSVM:
         learner:        An ActiveLearner to conduct active learning with. See modAL documentation for more details.
     """
 
-    def __init__(self, amine, option=None, verbose=True):
-        """Initialization of the class
-        
-        Args:
-            amine:          A string representing the amine this model is used for.
-            option:         A dictionary representing the hyper-parameters chosen. For SVM, the current keys are: 
-                                'C', 'kernel', 'degree', 'gammas', 'shrinking', 'tol', 'decision_function_shape', 
-                                'break_ties'.
-                                Default = None 
-            verbose:        A boolean. Output additional information to the
-                            terminal for functions with verbose feature.
-                            Default = True
-        """
-        
+    def __init__(self, amine=None, config=None,
+                 verbose=True, stats_path=Path('./results/stats.pkl'),
+                 model_name='SVM'):
+        """Initialization of the ActiveSVM model"""
+
         self.amine = amine
 
-        # Optimal hyper parameter after fine tuning.
-        # Run fine_tune function to see the best option for a different dataset
-        self.model = CalibratedClassifierCV(SVC(
-            C=0.1,
-            kernel='poly',
-            degree=1,
-            gamma='scale',
-            shrinking=True,
-            tol=0.5,
-            decision_function_shape='ovo',
-            break_ties=True
-        ))
+        # Load customized model or use the default fine-tuned setting
+        if config:
+            if config['kernel'] == 'poly':
+                self.model = CalibratedClassifierCV(SVC(
+                    C=config['C'],
+                    kernel=config['kernel'],
+                    degree=config['degree'],
+                    gamma=config['gammas'],
+                    shrinking=config['shrinking'],
+                    tol=config['tol'],
+                    decision_function_shape=config['decision_function_shape'],
+                    break_ties=config['break_ties'],
+                    class_weight=config['class_weight']
+                ))
 
-        self.metrics = {
-            'accuracies': [],
-            'precisions': [],
-            'recalls': [],
-            'bcrs': [],
-            'confusion_matrices': []
-        }
+            else:
+                self.model = CalibratedClassifierCV(SVC(
+                    C=config['C'],
+                    kernel=config['kernel'],
+                    gamma=config['gammas'],
+                    shrinking=config['shrinking'],
+                    tol=config['tol'],
+                    decision_function_shape=config['decision_function_shape'],
+                    break_ties=config['break_ties'],
+                    class_weight=config['class_weight']
+                ))
+        else:
+            # Fine tuned model
+            self.model = CalibratedClassifierCV(SVC(
+                C=.06,
+                kernel='poly',
+                degree=1,
+                gamma='scale',
+                shrinking=True,
+                tol=.01,
+                decision_function_shape='ovo',
+                break_ties=True,
+                class_weight=None
+            ))
 
+        self.metrics = defaultdict(list)
         self.verbose = verbose
+        self.stats_path = stats_path
+        self.model_name = model_name
 
+    # TODO: find out what to do with this part
     def load_dataset(self, training_batches, validation_batches, meta=False):
         """
 
@@ -76,7 +107,7 @@ class ActiveSVM:
         """
 
         if meta is True:
-            # option 2
+            # config 2
             self.x_t = validation_batches[self.amine][0]
             self.y_t = validation_batches[self.amine][1]
             self.x_v = validation_batches[self.amine][2]
@@ -164,7 +195,8 @@ class ActiveSVM:
 
         # Find model predictions
         self.y_preds = self.learner.predict(self.all_data)
-
+        
+        # TODO: move the following parts into utils maybe?
         # Calculated confusion matrix
         cm = confusion_matrix(self.all_labels, self.y_preds)
 
@@ -190,16 +222,16 @@ class ActiveSVM:
         precisions, recalls and balanced classification rates.
 
         Args:
-           cm:              A numpy array representing the confusion matrix given our predicted labels and the actual
-                            corresponding labels. It's a 2x2 matrix for the drp_chem model.
-            accuracy:       A float representing the accuracy rate of the model: the rate of correctly predicted reactions
-                            out of all reactions.
+            cm:             A numpy array representing the confusion matrix given our predicted labels and the actual
+                                corresponding labels. It's a 2x2 matrix for the drp_chem model.
+            accuracy:       A float representing the accuracy rate of the model: the rate of correctly predicted 
+                                reactions out of all reactions.
             precision:      A float representing the precision rate of the model: the rate of the number of actually
-                            successful reactions out of all the reactions predicted to be successful.
-            recall:         A float representing the recall rate of the model: the rate of the number of reactions predicted
-                            to be successful out of all the acutal successful reactions.
-            bcr:            A float representing the balanced classification rate of the model. It's the average value of
-                            recall rate and true negative rate.
+                                successful reactions out of all the reactions predicted to be successful.
+            recall:         A float representing the recall rate of the model: the rate of the number of reactions 
+                                predicted to be successful out of all the actual successful reactions.
+            bcr:            A float representing the balanced classification rate of the model. It's the average value 
+                                of recall rate and true negative rate.
 
         return: N/A
         """
@@ -224,22 +256,31 @@ class ActiveSVM:
         Dump the cross validation statistics to a pickle file.
         """
 
-        model = 'SVM'
+        model = self.model_name
 
-        with open(os.path.join("./data", "cv_statistics.pkl"), "rb") as f:
-            stats_dict = pickle.load(f)
+        if self.stats_path.exists():
+            with open(self.stats_path, "rb") as f:
+                stats_dict = pickle.load(f)
+        else:
+            stats_dict = {}
 
+        if model not in stats_dict:
+            stats_dict[model] = defaultdict(list)
+
+        # TODO: may have to change this once the structure of stats_dict changes
+        stats_dict[model]['amine'].append(self.amine)
         stats_dict[model]['accuracies'].append(self.metrics['accuracies'])
-        stats_dict[model]['confusion_matrices'].append(self.metrics['confusion_matrices'])
+        stats_dict[model]['confusion_matrices'].append(
+            self.metrics['confusion_matrices'])
         stats_dict[model]['precisions'].append(self.metrics['precisions'])
         stats_dict[model]['recalls'].append(self.metrics['recalls'])
         stats_dict[model]['bcrs'].append(self.metrics['bcrs'])
 
         # Save this dictionary in case we need it later
-        with open(os.path.join("./data", "cv_statistics.pkl"), "wb") as f:
+        with open(self.stats_path, "wb") as f:
             pickle.dump(stats_dict, f)
 
-    def save_model(self, k_shot, n_way, meta):
+    def save_model(self, k_shot, n_way, pretrain):
         """Save the data used to train, validate and test the model to designated folder
 
         Args:
@@ -254,11 +295,11 @@ class ActiveSVM:
             N/A
         """
 
-        # Indicate which option we used the data for
-        option = 2 if meta else 1
+        # Indicate which config we used the data for
+        option = 1 if pretrain else 2
 
         # Set up the main destination folder for the model
-        dst_root = './SVM_few_shot/option_{0:d}'.format(option)
+        dst_root = './results/SVM_few_shot/option_{0:d}'.format(option)
         if not os.path.exists(dst_root):
             os.makedirs(dst_root)
             print('No folder for SVM model storage found')
@@ -287,36 +328,83 @@ class ActiveSVM:
         return 'A SVM model for {0:s} using active learning'.format(self.amine)
 
 
+def parse_args():
+    """Set up the initial variables for running KNN.
+
+    Retrieves argument values from the terminal command line to create an argparse.Namespace object for
+        initialization.
+
+    Args:
+        N/A
+
+    Returns:
+        args: Namespace object with the following attributes:
+            datasource:         A string identifying the datasource to be used, with default datasource set to drp_chem.
+            train_size          An integer representing the number of samples use for training. Default set to 1.
+            train:              A train_flag attribute. Including it in the command line will set the train_flag to
+                                    True by default.
+            test:               A train_flag attribute. Including it in the command line will set the train_flag to
+                                    False.
+            cross_validate:     A boolean. Including it in the command line will run the model with cross-validation.
+            pretrain:               A boolean representing if it will be trained under option 1 or option 2.
+                                        Option 1 is train with observations of other tasks and validate on the
+                                        task-specific observations.
+                                        Option 2 is to train and validate on the task-specific observations.
+            verbose:            A boolean. Including it in the command line will output additional information to the
+                                    terminal for functions with verbose feature.
+    """
+
+    parser = argparse.ArgumentParser(description='Setup variables for active learning SVM.')
+    parser.add_argument('--datasource', type=str, default='drp_chem', help='datasource to be used')
+
+    parser.add_argument('--train_size', dest='train_size', default=1, help='number of samples used for training')
+
+    parser.add_argument('--train', dest='train_flag', action='store_true')
+    parser.add_argument('--test', dest='train_flag', action='store_false')
+    parser.set_defaults(train_flag=True)
+
+    parser.add_argument('--cross_validate', action='store_true', help='use cross-validation for training')
+    parser.add_argument('--pretrain', action='store_true', help='load the dataset under option 1. Not include this will'
+                                                                ' load the dataset under option 2. See documentation in'
+                                                                ' codes for details.')
+    parser.add_argument('--full', action='store_true', help='load the full dataset or the test sample dataset')
+    parser.add_argument('--verbose', action='store_true')
+
+    args = parser.parse_args()
+
+    return args
+
+
 def fine_tune(training_batches, validation_batches, info=False):
     """Fine tune the model based on average bcr performance to find the best model hyper-parameters.
-    
+
     Args:
-        training_batches:       A dictionary representing the training batches used to train. 
+        training_batches:       A dictionary representing the training batches used to train.
                                     See dataset.py for specific structure.
-        validation_batches:     A dictionary representing the training batches used to train. 
+        validation_batches:     A dictionary representing the training batches used to train.
                                     See dataset.py for specific structure.
-        info:                A boolean. Setting it to True will make the function print out additional information 
-                                    during the fine-tuning stage. 
+        info:                A boolean. Setting it to True will make the function print out additional information
+                                    during the fine-tuning stage.
                                     Default to False.
-    
+
     Returns:
-        best_option:            A dictionary representing the hyper-parameters that yields the best performance on 
+        best_option:            A dictionary representing the hyper-parameters that yields the best performance on
                                     average. For SVM, the current keys are: 'C', 'kernel', 'degree', 'gammas',
                                     'shrinking', 'tol', 'decision_function_shape', 'break_ties'.
     """
 
     # Set all possible combinations
-
     params = {
-        'C': [.1, 1.0],
+        'C': [1e-2, .1, 1, 10],
         'kernel': ['poly', 'rbf', 'sigmoid'],
-        'degree': [0, 1, 2, 3, 4, 5, 6],
+        'degree': [0, 1, 2, 3],
         'gammas': ['scale', 'auto'],
-        'shrinking': [True, False],
-        'tol': [1e-3, 1e-2, .1, 1, 10],
+        'shrinking': [True],
+        'tol': [1e-2, .1, 1, 10],
         'decision_function_shape': ['ovo', 'ovr'],
-        'break_ties': [True, False]
-        }
+        'break_ties': [True],
+        'class_weight': ['balanced', None]
+    }
 
     combinations = []
 
@@ -335,7 +423,7 @@ def fine_tune(training_batches, validation_batches, info=False):
 
     for amine in training_batches:
         ASVM = ActiveSVM(amine=amine, verbose=False)
-        ASVM.load_dataset(training_batches, validation_batches, meta=meta)
+        ASVM.load_dataset(training_batches, validation_batches)
         ASVM.train()
 
         base_accuracies.append(ASVM.metrics['accuracies'][-1])
@@ -351,10 +439,11 @@ def fine_tune(training_batches, validation_batches, info=False):
 
     if info:
         print(f'Baseline average bcr is {base_avg_bcr}')
-    best_bcr = base_avg_bcr
+        print(f'Baseline average accuracy is {base_avg_accuracy}')
+    best_metric = base_avg_bcr + base_avg_accuracy
     best_option = {}
 
-    option_no = 1   # Debug
+    option_no = 1  # Debug
 
     # Try out each possible combinations of hyper-parameters
     for option in combinations:
@@ -368,8 +457,8 @@ def fine_tune(training_batches, validation_batches, info=False):
 
         for amine in training_batches:
             # print("Training and cross validation on {} amine.".format(amine))
-            ASVM = ActiveSVM(amine=amine, option=option, verbose=False)
-            ASVM.load_dataset(training_batches, validation_batches, meta=meta)
+            ASVM = ActiveSVM(amine=amine, config=option, verbose=False)
+            ASVM.load_dataset(training_batches, validation_batches)
             ASVM.train()
 
             accuracies.append(ASVM.metrics['accuracies'][-1])
@@ -382,9 +471,9 @@ def fine_tune(training_batches, validation_batches, info=False):
         avg_recall = sum(recalls) / len(recalls)
         avg_bcr = sum(bcrs) / len(bcrs)
 
-        if avg_bcr > best_bcr:
-            best_bcr = avg_bcr
-            best_option = option
+        if avg_bcr + avg_accuracy > best_metric:
+            best_metric = avg_bcr + avg_accuracy
+            best_option = option_no
             if info:
                 print(f'The current average accuracy is {avg_accuracy} vs. the base accuracy {base_avg_accuracy}')
                 print(f'The current average precision is {avg_precision} vs. the base precision {base_avg_precision}')
@@ -398,12 +487,12 @@ def fine_tune(training_batches, validation_batches, info=False):
     if info:
         print()
         print(f'The best setting for all amines is {best_option}')
-        print(f'With an average bcr of {best_bcr}')
+        print(f'With an average performance metric of {best_metric}')
 
     return best_option
 
 
-def save_used_data(training_batches, validation_batches, testing_batches, counts, meta):
+def save_used_data(training_batches, validation_batches, testing_batches, counts, pretrain):
     """Save the data used to train, validate and test the model to designated folder
 
     Args:
@@ -415,16 +504,20 @@ def save_used_data(training_batches, validation_batches, testing_batches, counts
                                     See dataset.py for specific structure.
         counts:                 A dictionary with 'total' and each available amines as keys and lists of length 2 as
                                     values in the format of: [# of failed reactions, # of successful reactions]
-
+        pretrain:               A boolean representing if it will be trained under option 1 or option 2.
+                                    Option 1 is train with observations of other tasks and validate on the
+                                    task-specific observations.
+                                    Option 2 is to train and validate on the task-specific observations.
+                                    
     Returns:
         N/A
     """
 
     # Indicate which option we used the data for
-    option = 2 if meta else 1
+    option = 1 if pretrain else 2
 
     # Set up the destination folder to save the data
-    data_folder = './SVM_few_shot/option_{0:d}/data'.format(option)
+    data_folder = './results/SVM_few_shot/option_{0:d}/data'.format(option)
     if not os.path.exists(data_folder):
         os.makedirs(data_folder)
         print('No folder for SVM model data storage found')
@@ -447,36 +540,92 @@ def save_used_data(training_batches, validation_batches, testing_batches, counts
         pickle.dump(data, f)
 
 
-if __name__ == "__main__":
-    # Set up the model parameters
-    meta_batch_size = 10
-    k_shot = 20
-    num_batches = 10
-    verbose = True
-    cross_validation = True
-    meta = False
+def run_model(SVM_params):
+    """Full-scale training, validation and testing using all amines.
 
-    # Specify the desired operations
-    test_sample = False
+    Args:
+        SVM_params:         A dictionary of the parameters for the SVM model. See initialize() for more information.
+
+    Returns:
+        N/A
+     """
+    
+    # Unload the model parameters
+    config = SVM_params['config']
+    cross_validation = SVM_params['cross_validate']
+    verbose = SVM_params['verbose']
+    pretrain = SVM_params['pretrain']
+    stats_path = SVM_params['stats_path']
+
+    model_name = SVM_params['model_name']
+    print(f'Running model {model_name}')
+
+    # Set up if we want to load the meta dataset for option 2 or not
+    meta = not pretrain
+
+    # Set up the number of samples used for training under option 2
+    train_size = SVM_params['train_size']
+
+    # Specify the desired operation
     fine_tuning = False
-    to_params = False   # Set this to True when running all models for aggregated plots
-
-    if test_sample:
-        training_batches, validation_batches, testing_batches, counts = dataset.import_test_dataset(k_shot, meta_batch_size, num_batches, verbose=verbose, cross_validation=cross_validation, meta=meta)
-    else:
-        training_batches, validation_batches, testing_batches, counts = dataset.import_full_dataset(k_shot, meta_batch_size, num_batches, verbose=verbose, cross_validation=cross_validation, meta=meta)
+    to_params = True
 
     if fine_tuning:
-        ft_training_batches, ft_validation_batches, ft_testing_batches, ft_counts = dataset.import_full_dataset(k_shot, meta_batch_size, num_batches, verbose=verbose, cross_validation=cross_validation, meta=False)
-        best_hyper_params = fine_tune(ft_training_batches, ft_validation_batches, info=True)
+        ft_training_batches, ft_validation_batches, ft_testing_batches, ft_counts = import_full_dataset(
+            train_size, meta_batch_size=25, num_batches=250, verbose=verbose, cross_validation=cross_validation, meta=False)
+        best_config = fine_tune(ft_training_batches, ft_validation_batches, info=True)
 
-    # Save the training, validation, testing dataset and the experiment counts to data folder
-    save_used_data(training_batches, validation_batches, testing_batches, counts, meta)
+    else:
+        # Load the full dataset for training and validation
+        if SVM_params['full_dataset']:
+            training_batches, validation_batches, testing_batches, counts = import_full_dataset(train_size,
+                                                                                                meta_batch_size=25,
+                                                                                                num_batche=250,
+                                                                                                verbose=verbose,
+                                                                                                cross_validation=cross_validation,
+                                                                                                meta=meta)
+        else:
+            training_batches, validation_batches, testing_batches, counts = import_test_dataset(train_size,
+                                                                                                meta_batch_size=25,
+                                                                                                num_batches=250,
+                                                                                                verbose=verbose,
+                                                                                                cross_validation=cross_validation,
+                                                                                                meta=meta)
 
-    for amine in training_batches:
-        print("Training and cross validation on {} amine.".format(amine))
-        ASVM = ActiveSVM(amine=amine, option=best_hyper_params) if best_hyper_params else ActiveSVM(amine=amine)
-        ASVM.load_dataset(training_batches, validation_batches, meta=meta)
-        ASVM.train()
-        ASVM.active_learning(to_params=to_params)
-        ASVM.save_model(k_shot=k_shot, n_way=2, meta=meta)
+        # Save the data used for training and testing for reproducibility
+        save_used_data(training_batches, validation_batches, testing_batches, counts, pretrain)
+
+        # print(training_batches.keys())
+        for amine in training_batches:
+            if cross_validation:
+                print("Training and cross validation on {} amine.".format(amine))
+
+                # Create the KNN model instance for the specific amine
+                ASVM = ActiveSVM(amine=amine, config=config, verbose=verbose, stats_path=stats_path, model_name=model_name)
+
+                # Load the training and validation set into the model
+                ASVM.load_dataset(training_batches, validation_batches, meta=meta)
+
+                # Train the data on the training set
+                ASVM.train()
+
+                # Conduct active learning with all the observations available in the pool
+                ASVM.active_learning(to_params=to_params)
+
+                # Save the model for future reproducibility
+                ASVM.save_model(k_shot=train_size, n_way=2, pretrain=pretrain)
+
+            # TODO: testing part not implemented: might need to change the logic loading things in
+
+
+def main():
+    """Main driver function"""
+
+    # This converts the args into a dictionary
+    SVM_params = vars(parse_args())
+
+    run_model(SVM_params)
+
+
+if __name__ == "__main__":
+    main()
