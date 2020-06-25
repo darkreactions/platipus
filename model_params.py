@@ -61,12 +61,6 @@ randomforest_params = {
     'model_name': 'Random_Forest'
 }
 
-randomforest_params = {
-    'train_size': 20,
-    'config': None,
-    'model_name': 'Random Forest'
-}
-
 meta_params = {
     'k_shot': 20,
     'n_way': 2,
