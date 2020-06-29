@@ -17,7 +17,7 @@ from pathlib import Path
 
 import numpy as np
 from sklearn.calibration import CalibratedClassifierCV
-from sklearn.metrics import confusion_matrix
+from sklearn.metrics import confusion_matrix, roc_auc_score
 from sklearn.svm import SVC
 
 from modAL.models import ActiveLearner
@@ -82,12 +82,12 @@ class ActiveSVM:
         else:
             # Fine tuned model
             self.model = CalibratedClassifierCV(SVC(
-                C=.06,
+                C=.003,
                 kernel='poly',
-                degree=1,
+                degree=3,
                 gamma='scale',
                 shrinking=True,
-                tol=.01,
+                tol=1,
                 decision_function_shape='ovo',
                 break_ties=True,
                 class_weight=None
@@ -346,10 +346,10 @@ def parse_args():
             test:               A train_flag attribute. Including it in the command line will set the train_flag to
                                     False.
             cross_validate:     A boolean. Including it in the command line will run the model with cross-validation.
-            pretrain:               A boolean representing if it will be trained under option 1 or option 2.
-                                        Option 1 is train with observations of other tasks and validate on the
-                                        task-specific observations.
-                                        Option 2 is to train and validate on the task-specific observations.
+            pretrain:           A boolean representing if it will be trained under option 1 or option 2.
+                                    Option 1 is train with observations of other tasks and validate on the
+                                    task-specific observations.
+                                    Option 2 is to train and validate on the task-specific observations.
             verbose:            A boolean. Including it in the command line will output additional information to the
                                     terminal for functions with verbose feature.
     """
@@ -395,15 +395,15 @@ def fine_tune(training_batches, validation_batches, info=False):
 
     # Set all possible combinations
     params = {
-        'C': [1e-2, .1, 1, 10],
-        'kernel': ['poly', 'rbf', 'sigmoid'],
+        'C': [i / 1000 for i in range(1, 51)],
+        'kernel': ['poly', 'sigmoid'],
         'degree': [0, 1, 2, 3],
-        'gammas': ['scale', 'auto'],
+        'gammas': ['scale'],
         'shrinking': [True],
-        'tol': [1e-2, .1, 1, 10],
-        'decision_function_shape': ['ovo', 'ovr'],
+        'tol': [.1, 1, 2],
+        'decision_function_shape': ['ovo'],
         'break_ties': [True],
-        'class_weight': ['balanced', None]
+        'class_weight': [None]
     }
 
     combinations = []
@@ -420,27 +420,38 @@ def fine_tune(training_batches, validation_batches, info=False):
     base_precisions = []
     base_recalls = []
     base_bcrs = []
+    base_aucs = []
 
     for amine in training_batches:
         ASVM = ActiveSVM(amine=amine, verbose=False)
         ASVM.load_dataset(training_batches, validation_batches)
         ASVM.train()
 
+        # Calculate AUC
+        auc = roc_auc_score(ASVM.all_labels, ASVM.y_preds)
+
         base_accuracies.append(ASVM.metrics['accuracies'][-1])
         base_precisions.append(ASVM.metrics['precisions'][-1])
         base_recalls.append(ASVM.metrics['recalls'][-1])
         base_bcrs.append(ASVM.metrics['bcrs'][-1])
+        base_aucs.append(auc)
 
     # Calculated the average baseline performances
     base_avg_accuracy = sum(base_accuracies) / len(base_accuracies)
     base_avg_precision = sum(base_precisions) / len(base_precisions)
     base_avg_recall = sum(base_recalls) / len(base_recalls)
     base_avg_bcr = sum(base_bcrs) / len(base_bcrs)
+    base_avg_auc = sum(base_aucs) / len(base_aucs)
+
+    best_metric = base_avg_auc
 
     if info:
-        print(f'Baseline average bcr is {base_avg_bcr}')
         print(f'Baseline average accuracy is {base_avg_accuracy}')
-    best_metric = base_avg_bcr + base_avg_accuracy
+        print(f'Baseline average precision is {base_avg_precision}')
+        print(f'Baseline average recall is {base_avg_recall}')
+        print(f'Baseline average bcr is {base_avg_bcr}')
+        print(f'Baseline average auc is {base_avg_auc}')
+
     best_option = {}
 
     option_no = 1  # Debug
@@ -451,6 +462,7 @@ def fine_tune(training_batches, validation_batches, info=False):
         precisions = []
         recalls = []
         bcrs = []
+        aucs = []
 
         if info:
             print(f'Trying option {option_no}')
@@ -461,24 +473,31 @@ def fine_tune(training_batches, validation_batches, info=False):
             ASVM.load_dataset(training_batches, validation_batches)
             ASVM.train()
 
+            # Calculate AUC
+            auc = roc_auc_score(ASVM.all_labels, ASVM.y_preds)
+
             accuracies.append(ASVM.metrics['accuracies'][-1])
             precisions.append(ASVM.metrics['precisions'][-1])
             recalls.append(ASVM.metrics['recalls'][-1])
             bcrs.append(ASVM.metrics['bcrs'][-1])
+            aucs.append(auc)
 
         avg_accuracy = sum(accuracies) / len(accuracies)
         avg_precision = sum(precisions) / len(precisions)
         avg_recall = sum(recalls) / len(recalls)
         avg_bcr = sum(bcrs) / len(bcrs)
+        avg_auc = sum(aucs) / len(aucs)
 
-        if avg_bcr + avg_accuracy > best_metric:
-            best_metric = avg_bcr + avg_accuracy
-            best_option = option_no
+        if avg_auc > best_metric:
+            best_metric = avg_auc
+            best_option = option
             if info:
-                print(f'The current average accuracy is {avg_accuracy} vs. the base accuracy {base_avg_accuracy}')
-                print(f'The current average precision is {avg_precision} vs. the base precision {base_avg_precision}')
-                print(f'The current average recall rate is {avg_recall} vs. the base recall rate {base_avg_recall}')
-                print(f'The best average bcr by this setting is {avg_bcr} vs. the base bcr {base_avg_bcr}')
+                print(f'The fine-tuned average accuracy is {avg_accuracy} vs. the base accuracy {base_avg_accuracy}')
+                print(
+                    f'The fine-tuned average precision is {avg_precision} vs. the base precision {base_avg_precision}')
+                print(f'The fine-tuned average recall rate is {avg_recall} vs. the base recall rate {base_avg_recall}')
+                print(f'The fine-tuned average bcr is {avg_bcr} vs. the base bcr {base_avg_bcr}')
+                print(f'The fine-tuned average auc is {avg_auc} vs. the base auc {base_avg_auc}')
                 print(f'The current best setting is {best_option}')
                 print()
 
@@ -487,7 +506,7 @@ def fine_tune(training_batches, validation_batches, info=False):
     if info:
         print()
         print(f'The best setting for all amines is {best_option}')
-        print(f'With an average performance metric of {best_metric}')
+        print(f'With an average auc of {best_metric}')
 
     return best_option
 
@@ -567,7 +586,7 @@ def run_model(SVM_params):
     train_size = SVM_params['train_size']
 
     # Specify the desired operation
-    fine_tuning = False
+    fine_tuning = SVM_params['fine_tuning']
     to_params = True
 
     if fine_tuning:
@@ -580,7 +599,7 @@ def run_model(SVM_params):
         if SVM_params['full_dataset']:
             training_batches, validation_batches, testing_batches, counts = import_full_dataset(train_size,
                                                                                                 meta_batch_size=25,
-                                                                                                num_batche=250,
+                                                                                                num_batches=250,
                                                                                                 verbose=verbose,
                                                                                                 cross_validation=cross_validation,
                                                                                                 meta=meta)

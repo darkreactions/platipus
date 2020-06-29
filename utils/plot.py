@@ -24,7 +24,7 @@ def plot_metrics_graph(num_examples, stats_dict, dst, amine=None, amine_index=0,
     """
 
     # Set up initial figure for plotting
-    fig = plt.figure(figsize=(16, 12))
+    fig = plt.figure(figsize=(24, 18))
 
     # Setting up each sub-graph as axes
     # From left to right, top to bottom: Accuracy, Precision, Recall, BCR
