@@ -16,7 +16,7 @@ from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
-from sklearn.metrics import confusion_matrix
+from sklearn.metrics import confusion_matrix, roc_auc_score
 from sklearn.neighbors import KNeighborsClassifier
 
 from modAL.models import ActiveLearner
@@ -59,13 +59,12 @@ class ActiveKNN:
                 weights=config['weights'],
                 algorithm=config['algorithm'],
                 leaf_size=config['leaf_size'],
-                p=config['p'],
-                metric=config['metric']
+                p=config['p']
             )
             self.n_neighbors = config['n_neighbors']
         else:
-            self.model = KNeighborsClassifier(n_neighbors=2, p=1)
-            self.n_neighbors = 2
+            self.model = KNeighborsClassifier(n_neighbors=3, p=1)
+            self.n_neighbors = 3
 
         self.metrics = defaultdict(list)
         self.verbose = verbose
@@ -156,10 +155,10 @@ class ActiveKNN:
         # Calculate and report our model's accuracy.
         accuracy = self.learner.score(self.pool_data, self.pool_labels)
 
-        preds = self.learner.predict(self.pool_data)
+        self.y_preds = self.learner.predict(self.pool_data)
 
         # TODO: move this into utils maybe?
-        cm = confusion_matrix(self.pool_labels, preds)
+        cm = confusion_matrix(self.pool_labels, self.y_preds)
 
         # To prevent nan value for precision, we set it to 1 and send out a warning message
         if cm[1][1] + cm[0][1] != 0:
@@ -355,12 +354,11 @@ def fine_tune(info=False):
     # Set all possible combinations
 
     params = {
-        'n_neighbors': [1, 2],
+        'n_neighbors': [i for i in range(1, 11)],
         'weights': ['uniform', 'distance'],
         'algorithm': ['auto'],
-        'leaf_size': [i for i in range(1, 21)],
-        'p': [i for i in range(1, 3)],
-        'metric': ['chebyshev', 'minkowski']
+        'leaf_size': [i for i in range(10, 21)],
+        'p': [i for i in range(1, 4)]
     }
 
     combinations = []
@@ -384,6 +382,7 @@ def fine_tune(info=False):
     base_precisions = []
     base_recalls = []
     base_bcrs = []
+    base_aucs = []
 
     for amine in training_batches:
         KNN = ActiveKNN(amine=amine, verbose=False)
@@ -397,22 +396,30 @@ def fine_tune(info=False):
 
         KNN.train()
 
+        # Calculate AUC
+        auc = roc_auc_score(all_labels, KNN.y_preds)
+
         base_accuracies.append(KNN.metrics['accuracies'][-1])
         base_precisions.append(KNN.metrics['precisions'][-1])
         base_recalls.append(KNN.metrics['recalls'][-1])
         base_bcrs.append(KNN.metrics['bcrs'][-1])
+        base_aucs.append(auc)
 
     # Calculated the average baseline performances
     base_avg_accuracy = sum(base_accuracies) / len(base_accuracies)
     base_avg_precision = sum(base_precisions) / len(base_precisions)
     base_avg_recall = sum(base_recalls) / len(base_recalls)
     base_avg_bcr = sum(base_bcrs) / len(base_bcrs)
+    base_avg_auc = sum(base_aucs) / len(base_aucs)
 
-    best_metric = base_avg_bcr + base_avg_accuracy
+    best_metric = base_avg_auc
+
     if info:
-        print(f'Baseline average bcr is {base_avg_bcr}')
         print(f'Baseline average accuracy is {base_avg_accuracy}')
-        print(f'Average of the two is {best_metric}')
+        print(f'Baseline average precision is {base_avg_precision}')
+        print(f'Baseline average recall is {base_avg_recall}')
+        print(f'Baseline average bcr is {base_avg_bcr}')
+        print(f'Baseline average auc is {base_avg_auc}')
 
     best_option = {}
 
@@ -424,6 +431,7 @@ def fine_tune(info=False):
         precisions = []
         recalls = []
         bcrs = []
+        aucs = []
 
         if info:
             print(f'Trying config {option_no}')
@@ -441,24 +449,30 @@ def fine_tune(info=False):
 
             KNN.train()
 
+            # Calculate AUC
+            auc = roc_auc_score(all_labels, KNN.y_preds)
+
             accuracies.append(KNN.metrics['accuracies'][-1])
             precisions.append(KNN.metrics['precisions'][-1])
             recalls.append(KNN.metrics['recalls'][-1])
             bcrs.append(KNN.metrics['bcrs'][-1])
+            aucs.append(auc)
 
         avg_accuracy = sum(accuracies) / len(accuracies)
         avg_precision = sum(precisions) / len(precisions)
         avg_recall = sum(recalls) / len(recalls)
         avg_bcr = sum(bcrs) / len(bcrs)
+        avg_auc = sum(aucs) / len(aucs)
 
-        if avg_bcr + avg_accuracy > best_metric:
-            best_metric = avg_bcr + avg_accuracy
+        if avg_auc > best_metric:
+            best_metric = avg_auc
             best_option = option
             if info:
-                print(f'The current average accuracy is {avg_accuracy} vs. the base accuracy {base_avg_accuracy}')
-                print(f'The current average precision is {avg_precision} vs. the base precision {base_avg_precision}')
-                print(f'The current average recall rate is {avg_recall} vs. the base recall rate {base_avg_recall}')
-                print(f'The best average bcr by this setting is {avg_bcr} vs. the base bcr {base_avg_bcr}')
+                print(f'The fine-tuned average accuracy is {avg_accuracy} vs. the base accuracy {base_avg_accuracy}')
+                print(f'The fine-tuned average precision is {avg_precision} vs. the base precision {base_avg_precision}')
+                print(f'The fine-tuned average recall rate is {avg_recall} vs. the base recall rate {base_avg_recall}')
+                print(f'The fine-tuned average bcr is {avg_bcr} vs. the base bcr {base_avg_bcr}')
+                print(f'The fine-tuned average auc is {avg_auc} vs. the base auc {base_avg_auc}')
                 print(f'The current best setting is {best_option}')
                 print()
 
@@ -467,7 +481,7 @@ def fine_tune(info=False):
     if info:
         print()
         print(f'The best setting for all amines is {best_option}')
-        print(f'With an average bcr of {best_metric}')
+        print(f'With an average auc of {best_metric}')
 
     return best_option
 
@@ -548,7 +562,7 @@ def run_model(KNN_params):
     train_size = KNN_params['train_size']
 
     # Specify the desired operation
-    fine_tuning = False
+    fine_tuning = KNN_params['fine_tuning']
     to_params = True
 
     if fine_tuning:
@@ -559,7 +573,7 @@ def run_model(KNN_params):
         if KNN_params['full_dataset']:
             training_batches, validation_batches, testing_batches, counts = import_full_dataset(train_size,
                                                                                                 meta_batch_size=25,
-                                                                                                num_batche=250,
+                                                                                                num_batches=250,
                                                                                                 verbose=verbose,
                                                                                                 cross_validation=cross_validation,
                                                                                                 meta=meta)
