@@ -30,8 +30,7 @@ class ActiveSVM:
 
     Attributes: 
         amine:          A string representing the amine this model is used for.
-        model:          A KNeighborClassifier object as the classifier model given the number of neighbors to classify
-                            with.
+        model:          A CalibratedClassifierCV + SVM object as the classifier model.
         metrics:        A dictionary to store the performance metrics locally. It has the format of
                             {'metric_name': [metric_value]}.
         verbose:        A boolean representing whether it will prints out additional information to the terminal or not.
@@ -44,6 +43,7 @@ class ActiveSVM:
         x_v:            A numpy array representing the testing data used for active learning.
         y_v:            A numpy array representing the testing labels used for active learning.
         learner:        An ActiveLearner to conduct active learning with. See modAL documentation for more details.
+        y_preds:        A numpy array representing the predicted labels given all data input.
     """
 
     def __init__(self, amine=None, config=None,
@@ -100,10 +100,21 @@ class ActiveSVM:
 
     # TODO: find out what to do with this part
     def load_dataset(self, training_batches, validation_batches, meta=False):
-        """
+        """Load the dataset for training and testing into model under option 1 or option 2
 
-        TODO: Documentation
+        Option 1 is train with observations of other tasks and validate on the task-specific observations.
+        Option 2 is to train and validate on the task-specific observations.
 
+        Args:
+            training_batches:           A dictionary representing the training batches used to train.
+                                            See dataset.py for specific structure.
+            validation_batches:         A dictionary representing the training batches used to train.
+                                            See dataset.py for specific structure.
+            meta:                       A boolean representing if it will be trained under option 1 or option 2.
+                                            Option 1 is train with observations of other tasks and validate on the
+                                            task-specific observations.
+                                            Option 2 is to train and validate on the task-specific observations.
+                                            Default to option 1.
         """
 
         if meta is True:
@@ -157,8 +168,6 @@ class ActiveSVM:
             to_params:  A boolean that decide if to store the metrics to the dictionary,
                         detail see "store_metrics_to_params" function.
                         Default = True
-
-        return: N/A
         """
         num_iter = num_iter if num_iter else self.x_v.shape[0]
 
@@ -187,8 +196,6 @@ class ActiveSVM:
         Args:
             store:  A boolean that decides if to store the metrics of the performance of the model.
                     Default = True
-
-        return: N/A
         """
         # Calculate and report our model's accuracy.
         accuracy = self.learner.score(self.all_data, self.all_labels)
@@ -232,8 +239,6 @@ class ActiveSVM:
                                 predicted to be successful out of all the actual successful reactions.
             bcr:            A float representing the balanced classification rate of the model. It's the average value 
                                 of recall rate and true negative rate.
-
-        return: N/A
         """
 
         self.metrics['confusion_matrices'].append(cm)
@@ -286,13 +291,10 @@ class ActiveSVM:
         Args:
             k_shot:                 An integer representing the number of training samples per class.
             n_way:                  An integer representing the number of classes per task.
-            meta:                   A boolean representing if it will be trained under option 1 or option 2.
+            pretrain:               A boolean representing if it will be trained under option 1 or option 2.
                                         Option 1 is train with observations of other tasks and validate on the
                                         task-specific observations.
                                         Option 2 is to train and validate on the task-specific observations.
-
-        Returns:
-            N/A
         """
 
         # Indicate which config we used the data for
@@ -329,7 +331,7 @@ class ActiveSVM:
 
 
 def parse_args():
-    """Set up the initial variables for running KNN.
+    """Set up the initial variables for running SVM.
 
     Retrieves argument values from the terminal command line to create an argparse.Namespace object for
         initialization.
@@ -350,6 +352,7 @@ def parse_args():
                                     Option 1 is train with observations of other tasks and validate on the
                                     task-specific observations.
                                     Option 2 is to train and validate on the task-specific observations.
+            full_dataset:       A boolean representing if we want to load the full dataset or the test sample dataset.
             verbose:            A boolean. Including it in the command line will output additional information to the
                                     terminal for functions with verbose feature.
     """
@@ -367,7 +370,8 @@ def parse_args():
     parser.add_argument('--pretrain', action='store_true', help='load the dataset under option 1. Not include this will'
                                                                 ' load the dataset under option 2. See documentation in'
                                                                 ' codes for details.')
-    parser.add_argument('--full', action='store_true', help='load the full dataset or the test sample dataset')
+    parser.add_argument('--full', dest='full_dataset', action='store_true', help='load the full dataset or the test '
+                                                                                 'sample dataset')
     parser.add_argument('--verbose', action='store_true')
 
     args = parser.parse_args()
@@ -390,7 +394,7 @@ def fine_tune(training_batches, validation_batches, info=False):
     Returns:
         best_option:            A dictionary representing the hyper-parameters that yields the best performance on
                                     average. For SVM, the current keys are: 'C', 'kernel', 'degree', 'gammas',
-                                    'shrinking', 'tol', 'decision_function_shape', 'break_ties'.
+                                    'shrinking', 'tol', 'decision_function_shape', 'break_ties', 'class_weight'.
     """
 
     # Set all possible combinations
@@ -527,9 +531,6 @@ def save_used_data(training_batches, validation_batches, testing_batches, counts
                                     Option 1 is train with observations of other tasks and validate on the
                                     task-specific observations.
                                     Option 2 is to train and validate on the task-specific observations.
-                                    
-    Returns:
-        N/A
     """
 
     # Indicate which option we used the data for
@@ -563,10 +564,8 @@ def run_model(SVM_params):
     """Full-scale training, validation and testing using all amines.
 
     Args:
-        SVM_params:         A dictionary of the parameters for the SVM model. See initialize() for more information.
-
-    Returns:
-        N/A
+        SVM_params:         A dictionary of the parameters for the SVM model.
+                                See initialize() for more information.
      """
     
     # Unload the model parameters
@@ -593,7 +592,6 @@ def run_model(SVM_params):
         ft_training_batches, ft_validation_batches, ft_testing_batches, ft_counts = import_full_dataset(
             train_size, meta_batch_size=25, num_batches=250, verbose=verbose, cross_validation=cross_validation, meta=False)
         best_config = fine_tune(ft_training_batches, ft_validation_batches, info=True)
-
     else:
         # Load the full dataset for training and validation
         if SVM_params['full_dataset']:
@@ -619,7 +617,7 @@ def run_model(SVM_params):
             if cross_validation:
                 print("Training and cross validation on {} amine.".format(amine))
 
-                # Create the KNN model instance for the specific amine
+                # Create the SVM model instance for the specific amine
                 ASVM = ActiveSVM(amine=amine, config=config, verbose=verbose, stats_path=stats_path, model_name=model_name)
 
                 # Load the training and validation set into the model
