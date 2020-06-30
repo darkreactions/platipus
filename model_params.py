@@ -55,11 +55,16 @@ The format for SVM config should be a dictionary in the following form
 }
 """
 
-# TODO: change this to adhere to the name in RandomForest.py
 randomforest_params = {
     'train_size': 20,
     'config': None,
     'model_name': 'Random_Forest'
+}
+
+decisiontree_params = {
+    'train_size': 20,
+    'config': None,
+    'model_name': 'Decision_Tree'
 }
 
 meta_params = {
