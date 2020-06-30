@@ -30,8 +30,7 @@ class ActiveKNN:
     Attributes:
         amine:          A string representing the amine that the KNN model is used for predictions.
         n_neighbors:    An integer representing the number of neighbors to classify using KNN model.
-        model:          A KNeighborClassifier object as the classifier model given the number of neighbors to classify
-                            with.
+        model:          A KNeighborClassifier object as the classifier model.
         metrics:        A dictionary to store the performance metrics locally. It has the format of
                             {'metric_name': [metric_value]}.
         verbose:        A boolean representing whether it will prints out additional information to the terminal or not.
@@ -310,6 +309,7 @@ def parse_args():
                                     Option 1 is train with observations of other tasks and validate on the
                                     task-specific observations.
                                     Option 2 is to train and validate on the task-specific observations.
+            full_dataset:       A boolean representing if we want to load the full dataset or the test sample dataset.
             verbose:            A boolean. Including it in the command line will output additional information to the
                                     terminal for functions with verbose feature.
     """
