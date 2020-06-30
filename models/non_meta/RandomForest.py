@@ -1,3 +1,13 @@
+"""
+Run the following command lines for full dataset training:
+python RandomForest.py --datasource=drp_chem --train_size=20 --cross_validate --full --verbose
+python RandomForest.py --datasource=drp_chem --train_size=20 --cross_validate --pretrain --full --verbose
+
+Run the following command lines for test dataset training (debug):
+python RandomForest.py --datasource=drp_chem ---train_size=20 -cross_validate --verbose
+python RandomForest.py --datasource=drp_chem --train_size=20 --cross_validate --pretrain --verbose
+"""
+
 import os
 import pickle
 import argparse
@@ -13,39 +23,32 @@ from modAL.models import ActiveLearner
 
 from utils.dataset import import_full_dataset, import_test_dataset
 
-'''def parse_args():
-    parser = argparse.ArgumentParser(
-        description='Setup variables for RandomForest.')
-    parser.add_argument('--meta_batch_size', type=int, default=25,
-                        help='Number of tasks sampled per outer loop')
-    parser.add_argument('--k_shot', type=int, default=1,
-                        help='Number of training samples per class')
-    parser.add_argument('--num_batches', type=int, default=250,
-                        help='Number of tasks sampled per inner loop')'''
-
 
 class ActiveRandomForest:
-    """
-    A class of Random Forest model with active learning
+    """ A class of Random Forest model with active learning
+    
+    Attributes: 
+        amine:          A string representing the amine this model is used for.
+        model:          A RandomForestClassifier object as the classifier model.
+        metrics:        A dictionary to store the performance metrics locally. It has the format of
+                            {'metric_name': [metric_value]}.
+        verbose:        A boolean representing whether it will prints out additional information to the terminal or not.
+        stats_path:     A Path object representing the directory of the stats dictionary.
+        model_name:     A string representing the name of the model for future plotting.
+        all_data:       A numpy array representing all the data from the dataset.
+        all_labels:     A numpy array representing all the labels from the dataset.
+        x_t:            A numpy array representing the training data used for model training.
+        y_t:            A numpy array representing the training labels used for model training.
+        x_v:            A numpy array representing the testing data used for active learning.
+        y_v:            A numpy array representing the testing labels used for active learning.
+        learner:        An ActiveLearner to conduct active learning with. See modAL documentation for more details.
+        y_preds:        A numpy array representing the predicted labels given all data input.
     """
 
     def __init__(self, amine=None, config=None, verbose=True, stats_path=Path('./results/stats.pkl'),
-                 model_name='Random Forest'):
-        """initialization of the class
+                 model_name='Random_Forest'):
+        """initialization of the active learning random forest model"""
 
-        Args:
-            n_estimator:    An integer. The number of estimators in the random forest model.
-                            Default = 100
-            criterion:      A string. The criterion used for the random forest model,
-                            can be "gini" or "entropy".
-                            Default = "gini".
-            max_depth:      An integer. The max_depth of the decision tress in the random forest model.
-                            Default = 7
-            verbose:        A boolean. Output additional information to the
-                            terminal for functions with verbose feature.
-                            Default = True
-
-        """
         self.amine = amine
         if config:
             self.model = RandomForestClassifier(n_estimators=config['n_estimators'],
@@ -57,7 +60,7 @@ class ActiveRandomForest:
                                                 bootstrap=config['bootstrap'],
                                                 ccp_alpha=config['ccp_alpha'])
         else:
-            self.model = RandomForestClassifier(n_estimators=1000, criterion='gini', max_depth=8, min_samples_split=2,
+            self.model = RandomForestClassifier(n_estimators=100, criterion='gini', max_depth=8, min_samples_split=2,
                                                 min_samples_leaf=1, max_features=None, bootstrap=True, ccp_alpha=0.0)
         self.metrics = defaultdict(list)
         self.verbose = verbose
@@ -65,18 +68,31 @@ class ActiveRandomForest:
         self.model_name = model_name
 
     # TODO: find out what to do with this part
-    def load_dataset(self, training_batches, cross_validation_batches, meta=False):
-        """TODO: Documentation
+    def load_dataset(self, training_batches, validation_batches, meta=False):
+        """Load the dataset for training and testing into model under option 1 or option 2
 
+        Option 1 is train with observations of other tasks and validate on the task-specific observations.
+        Option 2 is to train and validate on the task-specific observations.
+
+        Args:
+            training_batches:           A dictionary representing the training batches used to train.
+                                            See dataset.py for specific structure.
+            validation_batches:         A dictionary representing the training batches used to train.
+                                            See dataset.py for specific structure.
+            meta:                       A boolean representing if it will be trained under option 1 or option 2.
+                                            Option 1 is train with observations of other tasks and validate on the
+                                            task-specific observations.
+                                            Option 2 is to train and validate on the task-specific observations.
+                                            Default to option 1.
         """
 
         if meta is True:
             # option 2
             print("Conducting Training under Option 2.")
-            self.x_t = cross_validation_batches[self.amine][0]
-            self.y_t = cross_validation_batches[self.amine][1]
-            self.x_v = cross_validation_batches[self.amine][2]
-            self.y_v = cross_validation_batches[self.amine][3]
+            self.x_t = validation_batches[self.amine][0]
+            self.y_t = validation_batches[self.amine][1]
+            self.x_v = validation_batches[self.amine][2]
+            self.y_v = validation_batches[self.amine][3]
 
             self.all_data = np.concatenate((self.x_t, self.x_v))
             self.all_labels = np.concatenate((self.y_t, self.y_v))
@@ -85,8 +101,8 @@ class ActiveRandomForest:
             print("Conducting Training under Option 1.")
             self.x_t = training_batches[self.amine][0]
             self.y_t = training_batches[self.amine][1]
-            self.x_v = cross_validation_batches[self.amine][0]
-            self.y_v = cross_validation_batches[self.amine][1]
+            self.x_v = validation_batches[self.amine][0]
+            self.y_v = validation_batches[self.amine][1]
 
             self.all_data = self.x_v
             self.all_labels = self.y_v
@@ -116,9 +132,8 @@ class ActiveRandomForest:
             to_params:  A boolean that decide if to store the metrics to the dictionary,
                         detail see "store_metrics_to_params" function.
                         Default = True
-
-        return: N/A
         """
+
         num_iter = num_iter if num_iter else self.x_v.shape[0]
 
         for _ in range(num_iter):
@@ -146,9 +161,8 @@ class ActiveRandomForest:
         Args:
             store:  A boolean that decides if to store the metrics of the performance of the model.
                     Default = True
-
-        return: N/A
         """
+
         # Calculate and report our model's accuracy.
         accuracy = self.learner.score(self.all_data, self.all_labels)
 
@@ -179,18 +193,16 @@ class ActiveRandomForest:
         precisions, recalls and balanced classification rates.
 
         Args:
-           cm:              A numpy array representing the confusion matrix given our predicted labels and the actual
-                            corresponding labels. It's a 2x2 matrix for the drp_chem model.
-            accuracy:       A float representing the accuracy rate of the model: the rate of correctly predicted reactions
-                            out of all reactions.
+            cm:             A numpy array representing the confusion matrix given our predicted labels and the actual
+                                corresponding labels. It's a 2x2 matrix for the drp_chem model.
+            accuracy:       A float representing the accuracy rate of the model: the rate of correctly predicted
+                                reactions out of all reactions.
             precision:      A float representing the precision rate of the model: the rate of the number of actually
-                            successful reactions out of all the reactions predicted to be successful.
-            recall:         A float representing the recall rate of the model: the rate of the number of reactions predicted
-                            to be successful out of all the acutal successful reactions.
-            bcr:            A float representing the balanced classification rate of the model. It's the average value of
-                            recall rate and true negative rate.
-
-        return: N/A
+                                successful reactions out of all the reactions predicted to be successful.
+            recall:         A float representing the recall rate of the model: the rate of the number of reactions
+                                predicted to be successful out of all the actual successful reactions.
+            bcr:            A float representing the balanced classification rate of the model. It's the average value
+                                of recall rate and true negative rate.
         """
 
         self.metrics['confusion_matrices'].append(cm)
@@ -236,17 +248,16 @@ class ActiveRandomForest:
             pickle.dump(stats_dict, f)
 
     def save_model(self, train_size, n_way, pretrain):
-        """Save the data used to train, validate and test the model to designated folder
-                Args:
-                    k_shot:                 An integer representing the number of training samples per class.
-                    n_way:                  An integer representing the number of classes per task.
-                    meta:                   A boolean representing if it will be trained under option 1 or option 2.
-                                                Option 1 is train with observations of other tasks and validate on the
-                                                task-specific observations.
-                                                Option 2 is to train and validate on the task-specific observations.
-                Returns:
-                    N/A
-                """
+        """Save the data used to train, validate and test the model to designated folder.
+
+        Args:
+            k_shot:                 An integer representing the number of training samples per class.
+            n_way:                  An integer representing the number of classes per task.
+            pretrain:               A boolean representing if it will be trained under option 1 or option 2.
+                                        Option 1 is train with observations of other tasks and validate on the
+                                        task-specific observations.
+                                        Option 2 is to train and validate on the task-specific observations.
+        """
 
         option = 1 if pretrain else 2
 
@@ -276,14 +287,14 @@ class ActiveRandomForest:
             pickle.dump(self, f)
 
 
-def fine_tune(training_batches, cross_validation_batches, info=False):
+def fine_tune(training_batches, validation_batches, info=False):
     """Fine tune the model based on average bcr performance to find the best model hyper-parameters.
     Args:
         training_batches:       A dictionary representing the training batches used to train.
                                     See dataset.py for specific structure.
-        cross_validation_batches:     A dictionary representing the training batches used to train.
+        validation_batches:     A dictionary representing the training batches used to train.
                                     See dataset.py for specific structure.
-        info:                A boolean. Setting it to True will make the function print out additional information
+        info:                   A boolean. Setting it to True will make the function print out additional information
                                     during the fine-tuning stage.
                                     Default to False.
     Returns:
@@ -321,7 +332,7 @@ def fine_tune(training_batches, cross_validation_batches, info=False):
 
     for amine in training_batches:
         ARF = ActiveRandomForest(amine=amine, verbose=False)
-        ARF.load_dataset(training_batches, cross_validation_batches)
+        ARF.load_dataset(training_batches, validation_batches)
         ARF.train()
 
         # Calculate AUC
@@ -368,7 +379,7 @@ def fine_tune(training_batches, cross_validation_batches, info=False):
         for amine in training_batches:
             # print("Training and cross validation on {} amine.".format(amine))
             ARF = ActiveRandomForest(amine=amine, config=option, verbose=False)
-            ARF.load_dataset(training_batches, cross_validation_batches)
+            ARF.load_dataset(training_batches, validation_batches)
             ARF.train()
 
             # Calculate AUC
@@ -420,8 +431,6 @@ def save_used_data(training_batches, validation_batches, testing_batches, counts
                                     See dataset.py for specific structure.
         counts:                 A dictionary with 'total' and each available amines as keys and lists of length 2 as
                                     values in the format of: [# of failed reactions, # of successful reactions]
-    Returns:
-        N/A
     """
 
     # Indicate which option we used the data for
@@ -452,7 +461,7 @@ def save_used_data(training_batches, validation_batches, testing_batches, counts
 
 
 def parse_args():
-    """Set up the initial variables for running KNN.
+    """Set up the initial variables for running SVM.
 
     Retrieves argument values from the terminal command line to create an argparse.Namespace object for
         initialization.
@@ -463,11 +472,7 @@ def parse_args():
     Returns:
         args: Namespace object with the following attributes:
             datasource:         A string identifying the datasource to be used, with default datasource set to drp_chem.
-            k_shot:             An integer representing the number of training samples per class, with default set to 1.
-            n_way:              An integer representing the number of classes per task, with default set to 1.
-            num_batches:        An integer representing the number of meta-batches per task, with default set to 250.
-            meta_batch_size:    An integer representing the number of tasks sampled per outer loop.
-                                    It is set to 25 by default.
+            train_size          An integer representing the number of samples use for training. Default set to 1.
             train:              A train_flag attribute. Including it in the command line will set the train_flag to
                                     True by default.
             test:               A train_flag attribute. Including it in the command line will set the train_flag to
@@ -477,11 +482,12 @@ def parse_args():
                                     Option 1 is train with observations of other tasks and validate on the
                                     task-specific observations.
                                     Option 2 is to train and validate on the task-specific observations.
+            full_dataset:       A boolean representing if we want to load the full dataset or the test sample dataset.
             verbose:            A boolean. Including it in the command line will output additional information to the
                                     terminal for functions with verbose feature.
     """
 
-    parser = argparse.ArgumentParser(description='Setup variables for active learning RandomForest.')
+    parser = argparse.ArgumentParser(description='Setup variables for active learning SVM.')
     parser.add_argument('--datasource', type=str, default='drp_chem', help='datasource to be used')
 
     parser.add_argument('--train_size', dest='train_size', default=1, help='number of samples used for training')
@@ -494,7 +500,8 @@ def parse_args():
     parser.add_argument('--pretrain', action='store_true', help='load the dataset under option 1. Not include this will'
                                                                 ' load the dataset under option 2. See documentation in'
                                                                 ' codes for details.')
-    parser.add_argument('--full', action='store_true', help='load the full dataset or the test sample dataset')
+    parser.add_argument('--full', dest='full_dataset', action='store_true', help='load the full dataset or the test '
+                                                                                 'sample dataset')
     parser.add_argument('--verbose', action='store_true')
 
     args = parser.parse_args()
@@ -505,11 +512,10 @@ def parse_args():
 def run_model(RandomForest_params):
     """Full-scale training, validation and testing using all amines.
     Args:
-        RandomForest_params:         A dictionary of the parameters for the RandonForest model.
-                                See initialize() for more information.
-    Returns:
-        N/A
+        RandomForest_params:         A dictionary of the parameters for the random forest model.
+                                        See initialize() for more information.
     """
+
     # Unload parameters
     config = RandomForest_params['config']
     cross_validation = RandomForest_params['cross_validate']
@@ -551,7 +557,7 @@ def run_model(RandomForest_params):
         # print(training_batches.keys())
         for amine in training_batches:
             print(f'Training and active learning on amine {amine}')
-            # Create the KNN model instance for the specific amine
+            # Create the random forest model instance for the specific amine
             ARF = ActiveRandomForest(amine=amine, config=config, verbose=verbose, stats_path=stats_path,
                                      model_name=model_name)
             # Load the training and validation set into the model
