@@ -505,7 +505,7 @@ def run_model(DecisionTree_params):
         DecisionTree_params:         A dictionary of the parameters for the decision tree model.
                                         See initialize() for more information.
     """
-    '''
+
     # For visualization, may need deletion
     features = ['_rxn_M_acid', '_rxn_M_inorganic', '_rxn_M_organic', '_solv_GBL', '_solv_DMSO', '_solv_DMF',
                 '_stoich_mmol_org', '_stoich_mmol_inorg', '_stoich_mmol_acid', '_stoich_mmol_solv', '_stoich_org/solv',
@@ -520,7 +520,6 @@ def run_model(DecisionTree_params):
                 '_feat_AtomCount_N', '_feat_BondCount', '_feat_ChainAtomCount', '_feat_RingAtomCount',
                 '_feat_primaryAmine', '_feat_secondaryAmine', '_rxn_plateEdgeQ', '_feat_maxproj_per_N',
                 '_raw_RelativeHumidity']
-    '''
 
     # Unload parameters
     config = DecisionTree_params['config']
@@ -537,6 +536,9 @@ def run_model(DecisionTree_params):
     train_size = DecisionTree_params['train_size']
     # Specify the desired operation
     fine_tuning = DecisionTree_params['fine_tuning']
+    save_model = DecisionTree_params['save_model']
+    visualize = False
+
     if fine_tuning:
         ft_training_batches, ft_validation_batches, ft_testing_batches, ft_counts = import_full_dataset(
             train_size, meta_batch_size=25, num_batches=250, verbose=verbose, cross_validation=cross_validation,
@@ -558,8 +560,10 @@ def run_model(DecisionTree_params):
                                                                                                 verbose=verbose,
                                                                                                 cross_validation=cross_validation,
                                                                                                 meta=meta)
+
         # Save the data used for training and testing for reproducibility
         save_used_data(training_batches, validation_batches, testing_batches, counts, pretrain)
+
         # print(training_batches.keys())
         for amine in training_batches:
             print(f'Training and active learning on amine {amine}')
@@ -572,19 +576,25 @@ def run_model(DecisionTree_params):
             ADT.train()
             # Conduct active learning with all the observations available in the pool
             ADT.active_learning(to_params=True)
-            '''
-            # Plot the decision tree
-            file_name = './results/{}_dt_op1.dot'.format(amine) if pretrain else './results/{}_dt_op2.dot'.format(amine)
-            export_graphviz(ADT.model,
-                            feature_names=features,
-                            class_names=['FAILURE', 'SUCCESS'],
-                            out_file=file_name,
-                            filled=True,
-                            rounded=True,
-                            special_characters=True)
-            '''
+
+            if visualize:
+                # Plot the decision tree
+                # To compile the graph, use the following command in terminal
+                # dot -Tpng "{amine_name}_dt_{op1 or op2}.dot" -o "{desired file name}.png"
+                # If using Jupyter Notebook, add ! in front to run command lines
+                file_name = './results/{}_dt_op1.dot'.format(amine) if pretrain else './results/{}_dt_op2.dot'.format(amine)
+                export_graphviz(ADT.model,
+                                feature_names=features,
+                                class_names=['FAILURE', 'SUCCESS'],
+                                out_file=file_name,
+                                filled=True,
+                                rounded=True,
+                                special_characters=True)
+
             # Save the model for future reproducibility
-            ADT.save_model(train_size, 2, pretrain)
+            if save_model:
+                ADT.save_model(train_size, 2, pretrain)
+
             # TODO: testing part not implemented
 
 

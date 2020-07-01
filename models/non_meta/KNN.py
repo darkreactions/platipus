@@ -564,6 +564,7 @@ def run_model(KNN_params):
     # Specify the desired operation
     fine_tuning = KNN_params['fine_tuning']
     to_params = True
+    save_model = KNN_params['save_model']
 
     if fine_tuning:
         best_config = fine_tune(info=True)
@@ -619,7 +620,8 @@ def run_model(KNN_params):
             KNN.active_learning(to_params=to_params)
 
             # Save the model for future reproducibility
-            KNN.save_model(train_size, 2, pretrain)
+            if save_model:
+                KNN.save_model(train_size, 2, pretrain)
 
             # TODO: testing part not implemented
 
