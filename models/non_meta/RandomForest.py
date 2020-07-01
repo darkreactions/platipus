@@ -531,6 +531,8 @@ def run_model(RandomForest_params):
     train_size = RandomForest_params['train_size']
     # Specify the desired operation
     fine_tuning = RandomForest_params['fine_tuning']
+    save_model = RandomForest_params['save_model']
+
     if fine_tuning:
         ft_training_batches, ft_validation_batches, ft_testing_batches, ft_counts = import_full_dataset(
             train_size, meta_batch_size=25, num_batches=250, verbose=verbose, cross_validation=cross_validation,
@@ -552,8 +554,10 @@ def run_model(RandomForest_params):
                                                                                                 verbose=verbose,
                                                                                                 cross_validation=cross_validation,
                                                                                                 meta=meta)
+
         # Save the data used for training and testing for reproducibility
         save_used_data(training_batches, validation_batches, testing_batches, counts, pretrain)
+
         # print(training_batches.keys())
         for amine in training_batches:
             print(f'Training and active learning on amine {amine}')
@@ -567,7 +571,9 @@ def run_model(RandomForest_params):
             # Conduct active learning with all the observations available in the pool
             ARF.active_learning(to_params=True)
             # Save the model for future reproducibility
-            ARF.save_model(train_size, 2, pretrain)
+            if save_model:
+                ARF.save_model(train_size, 2, pretrain)
+
             # TODO: testing part not implemented
 
 

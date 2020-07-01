@@ -587,6 +587,7 @@ def run_model(SVM_params):
     # Specify the desired operation
     fine_tuning = SVM_params['fine_tuning']
     to_params = True
+    save_model = SVM_params['save_model']
 
     if fine_tuning:
         ft_training_batches, ft_validation_batches, ft_testing_batches, ft_counts = import_full_dataset(
@@ -630,7 +631,8 @@ def run_model(SVM_params):
                 ASVM.active_learning(to_params=to_params)
 
                 # Save the model for future reproducibility
-                ASVM.save_model(k_shot=train_size, n_way=2, pretrain=pretrain)
+                if save_model:
+                    ASVM.save_model(k_shot=train_size, n_way=2, pretrain=pretrain)
 
             # TODO: testing part not implemented: might need to change the logic loading things in
 
