@@ -24,47 +24,44 @@ def plot_metrics_graph(num_examples, stats_dict, dst, amine=None, amine_index=No
     """
 
     # Set up initial figure for plotting
-    fig = plt.figure(figsize=(24, 18))
+    fig = plt.figure(figsize=(24, 20))
 
     # Setting up each sub-graph as axes
     # From left to right, top to bottom: Accuracy, Precision, Recall, BCR
     acc = plt.subplot(2, 2, 1)
-    acc.set_ylabel('Accuracy')
-    acc.set_title(f'Learning curve for {amine}') if amine else acc.set_title(
-        f'Averaged learning curve')
+    acc.set_ylabel('Accuracy', fontsize=20)
+    acc.set_title(f'Learning curve for {amine}', fontsize=20) if amine else acc.set_title(
+        f'Averaged learning curve', fontsize=20)
 
     prec = plt.subplot(2, 2, 2)
-    prec.set_ylabel('Precision')
-    prec.set_title(f'Precision curve for {amine}') if amine else prec.set_title(
-        f'Averaged precision curve')
+    prec.set_ylabel('Precision', fontsize=20)
+    prec.set_title(f'Precision curve for {amine}', fontsize=20) if amine else prec.set_title(
+        f'Averaged precision curve', fontsize=20)
 
     rec = plt.subplot(2, 2, 3)
-    rec.set_ylabel('Recall')
-    rec.set_title(f'Recall curve for {amine}') if amine else rec.set_title(
-        f'Averaged recall curve')
+    rec.set_ylabel('Recall', fontsize=20)
+    rec.set_title(f'Recall curve for {amine}', fontsize=20) if amine else rec.set_title(
+        f'Averaged recall curve', fontsize=20)
 
     bcr = plt.subplot(2, 2, 4)
-    bcr.set_ylabel('Balanced classification rate')
-    bcr.set_title(f'BCR curve for {amine}') if amine else bcr.set_title(
-        f'Averaged BCR curve')
+    bcr.set_ylabel('Balanced Classification Rate', fontsize=20)
+    bcr.set_title(f'BCR curve for {amine}', fontsize=20) if amine else bcr.set_title(
+        f'Averaged BCR curve', fontsize=20)
 
+    # Exact all models available for plotting
     if not models:
         models = list(stats_dict.keys())
 
-    random_model = models[0]
-
-    if amine:
-        # Plotting amine-specific graphs
-        num_examples = [i for i in range(
-            len(stats_dict[random_model]['accuracies'][amine_index]))]
-    else:
-        # Plotting avg metrics graph
-        num_examples = [i for i in range(num_examples)]
+    """# Find the number of points on the x-axis to plot with for avg graph
+    if not amine:
+        num_examples = [i for i in range(num_examples)]"""
 
     # Plot each model's metrics
     for model in models:
         if amine:
             # Plotting amine-specific graphs
+            num_examples = [i for i in range(
+                len(stats_dict[model]['accuracies'][amine_index]))]
             acc.plot(num_examples, stats_dict[model]
             ['accuracies'][amine_index], 'o-', label=model)
             prec.plot(num_examples, stats_dict[model]
@@ -75,22 +72,57 @@ def plot_metrics_graph(num_examples, stats_dict, dst, amine=None, amine_index=No
             ['bcrs'][amine_index], 'o-', label=model)
         else:
             # Plotting avg metrics graph
+            num_examples = [i for i in range(len(stats_dict[model]['accuracies']))]
             acc.plot(num_examples, stats_dict[model]
-            ['accuracies'], 'o-', label=model)
+            ['accuracies'], 'o-', label=model, alpha=0.6)
             prec.plot(num_examples, stats_dict[model]
-            ['precisions'], 'o-', label=model)
+            ['precisions'], 'o-', label=model, alpha=0.6)
             rec.plot(num_examples, stats_dict[model]
-            ['recalls'], 'o-', label=model)
+            ['recalls'], 'o-', label=model, alpha=0.6)
             bcr.plot(num_examples, stats_dict[model]
-            ['bcrs'], 'o-', label=model)
+            ['bcrs'], 'o-', label=model, alpha=0.6)
 
-    # Display subplot legends
-    acc.legend()
-    prec.legend()
-    rec.legend()
-    bcr.legend()
+    # Make the graph more readable
+    """# PLATIPUS BASELINE TODO: TEMPORARY FOR AVG GRAPH
+    acc.axhline(y=.88, linestyle='-.', linewidth=4, color='r')
+    acc.axvline(x=32, linestyle='-.', linewidth=4, color='r')
+    acc.annotate('PLATIPUS', (90, .86), fontsize='x-large')
 
-    fig.text(0.5, 0.04, "Number of samples given", ha="center", va="center")
+    prec.axhline(y=.62, linestyle='-.', linewidth=4, color='r')
+    prec.axvline(x=32, linestyle='-.', linewidth=4, color='r')
+    prec.annotate('PLATIPUS', (90, .58), fontsize='x-large')
+
+    rec.axhline(y=.91, linestyle='-.', linewidth=4, color='r')
+    rec.axvline(x=32, linestyle='-.', linewidth=4, color='r')
+    rec.annotate('PLATIPUS', (90, .87), fontsize='x-large')
+
+    bcr.axhline(y=.87, linestyle='-.', linewidth=4, color='r')
+    bcr.axvline(x=32, linestyle='-.', linewidth=4, color='r')
+    bcr.annotate('PLATIPUS', (90, .85), fontsize='x-large')"""
+
+    # Get rid of top and right spines for subplots
+    # TODO: BULKY
+    acc.spines['top'].set_visible(False)
+    acc.spines['right'].set_visible(False)
+    prec.spines['top'].set_visible(False)
+    prec.spines['right'].set_visible(False)
+    rec.spines['top'].set_visible(False)
+    rec.spines['right'].set_visible(False)
+    bcr.spines['top'].set_visible(False)
+    bcr.spines['right'].set_visible(False)
+
+    # Increase the font size of the x/y labels
+    acc.tick_params(axis='both', labelsize=20)
+    prec.tick_params(axis='both', labelsize=20)
+    rec.tick_params(axis='both', labelsize=20)
+    bcr.tick_params(axis='both', labelsize=20)
+
+    # Display legends for all subplots
+    handles, labels = acc.get_legend_handles_labels()
+    fig.legend(handles, labels, loc=(.15, .04), ncol=int(len(labels)/2), fontsize=18)
+
+    # Put x-axis label at the bottom
+    fig.text(0.5, 0.02, "Number of samples given", ha="center", va="center", fontsize=28)
 
     # Set the metrics graph's name and designated folder
     graph_name = 'cv_metrics_{0:s}.png'.format(
