@@ -61,6 +61,12 @@ randomforest_params = {
     'model_name': 'Random_Forest'
 }
 
+logisticregression_params = {
+    'train_size': 20,
+    'config': None,
+    'model_name': 'Logistic_Regression'
+}
+
 decisiontree_params = {
     'train_size': 20,
     'config': None,
