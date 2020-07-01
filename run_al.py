@@ -9,6 +9,7 @@ from model_params import common_params, knn_params, svm_params, randomforest_par
 
 
 if __name__ == '__main__':
+
     # Set up the results directory
     results_folder = './results'
 
@@ -65,8 +66,8 @@ if __name__ == '__main__':
     models_to_plot.append(SVM1_params['model_name'])
     SVM.run_model(SVM1_params)
 
+    # TODO: CAN'T RUN DUE TO INSUFFICIENT SUCCESSES
     '''
-    TODO: CAN'T RUN DUE TO INSUFFICIENT SUCCESSES
     # Trained under option 2
     SVM2_params = {**common_params, **svm_params}
     SVM2_params['pretrain'] = False
@@ -89,14 +90,16 @@ if __name__ == '__main__':
     models_to_plot.append(RF2_params['model_name'])
     RandomForest.run_model(RF2_params)
 
+    # Logistic Regression w/ active learning
+    # Trained under option 1
     LR1_params = {**common_params, **logisticregression_params}
     LR1_params['model_name'] = define_non_meta_model_name(LR1_params['model_name'], LR1_params['pretrain'])
     models_to_plot.append(LR1_params['model_name'])
     LogisticRegression.run_model(LR1_params)
 
     # Trained under option 2
+    # TODO: CAN'T RUN DUE TO INSUFFICIENT SUCCESSES
     '''
-    TODO: CAN'T RUN DUE TO INSUFFICIENT SUCCESSES
     LR2_params = {**common_params, **logisticregression_params}
     LR2_params['pretrain'] = False
     LR2_params['model_name'] = define_non_meta_model_name(LR2_params['model_name'], LR2_params['pretrain'])
@@ -104,7 +107,7 @@ if __name__ == '__main__':
     LogisticRegression.run_model(LR2_params)
     '''
 
-    # Random Forest w/ active learning
+    # Decision Tree w/ active learning
     # Trained under option 1
     DT1_params = {**common_params, **decisiontree_params}
     DT1_params['model_name'] = define_non_meta_model_name(DT1_params['model_name'], DT1_params['pretrain'])
