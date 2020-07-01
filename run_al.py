@@ -4,10 +4,10 @@ import models.meta.main as platipus
 from pathlib import Path
 import os
 
-from models.non_meta import RandomForest, KNN, SVM
+from models.non_meta import RandomForest, KNN, SVM, LogisticRegression
 from utils.plot import plot_metrics_graph
 from utils import read_pickle, write_pickle, define_non_meta_model_name
-from model_params import common_params, knn_params, svm_params, randomforest_params, meta_train, meta_test
+from model_params import common_params, knn_params, svm_params, randomforest_params, logisticregression_params, meta_train, meta_test
 
 
 
@@ -48,7 +48,7 @@ if __name__ == '__main__':
 
     # KNN w/ active learning
     # Trained under option 1
-    KNN1_params = {**common_params, **knn_params}
+    '''KNN1_params = {**common_params, **knn_params}
     KNN1_params['model_name'] = define_non_meta_model_name(KNN1_params['model_name'], KNN1_params['pretrain'])
     models_to_plot.append(KNN1_params['model_name'])
     KNN.run_model(KNN1_params)
@@ -86,7 +86,19 @@ if __name__ == '__main__':
     RF2_params['pretrain'] = False
     RF2_params['model_name'] = define_non_meta_model_name(RF2_params['model_name'], RF2_params['pretrain'])
     models_to_plot.append(RF2_params['model_name'])
-    RandomForest.run_model(RF2_params)
+    RandomForest.run_model(RF2_params)'''
+
+    LR1_params = {**common_params, **logisticregression_params}
+    LR1_params['model_name'] = define_non_meta_model_name(LR1_params['model_name'], LR1_params['pretrain'])
+    models_to_plot.append(LR1_params['model_name'])
+    LogisticRegression.run_model(LR1_params)
+
+    # Trained under option 2
+    '''LR2_params = {**common_params, **logisticregression_params}
+    LR2_params['pretrain'] = False
+    LR2_params['model_name'] = define_non_meta_model_name(LR2_params['model_name'], LR2_params['pretrain'])
+    models_to_plot.append(LR2_params['model_name'])
+    LogisticRegression.run_model(LR2_params)'''
 
     cv_stats = read_pickle(common_params['stats_path'])
     amines = cv_stats[models_to_plot[0]]['amine']
