@@ -90,7 +90,7 @@ def load_chem_dataset(k_shot, cross_validation=True, meta_batch_size=32,
         return import_full_dataset(k_shot, meta_batch_size, num_batches, verbose=verbose, cross_validation=cross_validation)
 
 
-def find_avg_metrics(stats_dict, min_length):
+def find_avg_metrics(stats_dict, min_length=None):
     """Calculate the average metrics of several models' performances
 
     Args:
@@ -104,45 +104,53 @@ def find_avg_metrics(stats_dict, min_length):
     """
 
     # Set up default dictionary to store average metrics for each model
-    metrics = {
-        'accuracies': [],
-        'precisions': [],
-        'recalls': [],
-        'bcrs': []
-    }
-
     avg_stat = {}
+    
+    all_models = list(stats_dict.keys())
+    random_model = all_models[0]
+
+    if not min_length:
+        min_length = len(stats_dict[random_model]['accuracies'][0])
+        for model in all_models:
+            length = len(min(stats_dict[model]['accuracies'], key=len))
+            if min_length > length:
+                min_length = length
 
     # Calculate average metrics by model
-    for model in stats_dict:
+    for model in all_models:
         # Pre-fill each model's value with standard metrics dictionary
-        avg_stat.setdefault(model, metrics)
+        avg_stat[model] = {
+            'accuracies': [],
+            'precisions': [],
+            'recalls': [],
+            'bcrs': []
+        }
+
         for i in range(min_length):
-            # Go by amine, this code is bulky but it's good for debugging
+
             total = 0
-            for acc_list in stats_dict[model]['accuracies']:
-                total += acc_list[i]
+            for amine_metric in stats_dict[model]['accuracies']:
+                total += amine_metric[i]
             avg_acc = total / len(stats_dict[model]['accuracies'])
             avg_stat[model]['accuracies'].append(avg_acc)
 
             total = 0
-            for prec_list in stats_dict[model]['precisions']:
-                total += prec_list[i]
+            for amine_metric in stats_dict[model]['precisions']:
+                total += amine_metric[i]
             avg_prec = total / len(stats_dict[model]['precisions'])
             avg_stat[model]['precisions'].append(avg_prec)
 
             total = 0
-            for rec_list in stats_dict[model]['recalls']:
-                total += rec_list[i]
-            avg_recall = total / len(stats_dict[model]['recalls'])
-            avg_stat[model]['recalls'].append(avg_recall)
+            for amine_metric in stats_dict[model]['recalls']:
+                total += amine_metric[i]
+            avg_rec = total / len(stats_dict[model]['recalls'])
+            avg_stat[model]['recalls'].append(avg_rec)
 
             total = 0
-            for bcr_list in stats_dict[model]['bcrs']:
-                total += bcr_list[i]
-            avg_brc = total / \
-                len(stats_dict[model]['bcrs'])
-            avg_stat[model]['bcrs'].append(avg_brc)
+            for amine_metric in stats_dict[model]['bcrs']:
+                total += amine_metric[i]
+            avg_bcr = total / len(stats_dict[model]['bcrs'])
+            avg_stat[model]['bcrs'].append(avg_bcr)
 
     return avg_stat
 

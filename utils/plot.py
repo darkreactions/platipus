@@ -1,9 +1,9 @@
 from matplotlib import pyplot as plt
-#import os
+# import os
 from pathlib import Path
 
 
-def plot_metrics_graph(num_examples, stats_dict, dst, amine=None, amine_index=0, show=False, models=[]):
+def plot_metrics_graph(num_examples, stats_dict, dst, amine=None, amine_index=None, show=False, models=[]):
     """Plot metrics graphs for all models in comparison
 
     The graph will have 4 subplots, which are for: accuracy, precision, recall, and bcr, from left to right,
@@ -49,20 +49,40 @@ def plot_metrics_graph(num_examples, stats_dict, dst, amine=None, amine_index=0,
         f'Averaged BCR curve')
 
     if not models:
-        models = stats_dict.keys()
+        models = list(stats_dict.keys())
+
+    random_model = models[0]
+
+    if amine:
+        # Plotting amine-specific graphs
+        num_examples = [i for i in range(
+            len(stats_dict[random_model]['accuracies'][amine_index]))]
+    else:
+        # Plotting avg metrics graph
+        num_examples = [i for i in range(num_examples)]
 
     # Plot each model's metrics
     for model in models:
-        num_examples = [i for i in range(
-            len(stats_dict[model]['accuracies'][amine_index]))]
-        acc.plot(num_examples, stats_dict[model]
-                 ['accuracies'][amine_index], 'o-', label=model)
-        prec.plot(num_examples, stats_dict[model]
-                  ['precisions'][amine_index], 'o-', label=model)
-        rec.plot(num_examples, stats_dict[model]
-                 ['recalls'][amine_index], 'o-', label=model)
-        bcr.plot(num_examples, stats_dict[model]
-                 ['bcrs'][amine_index], 'o-', label=model)
+        if amine:
+            # Plotting amine-specific graphs
+            acc.plot(num_examples, stats_dict[model]
+            ['accuracies'][amine_index], 'o-', label=model)
+            prec.plot(num_examples, stats_dict[model]
+            ['precisions'][amine_index], 'o-', label=model)
+            rec.plot(num_examples, stats_dict[model]
+            ['recalls'][amine_index], 'o-', label=model)
+            bcr.plot(num_examples, stats_dict[model]
+            ['bcrs'][amine_index], 'o-', label=model)
+        else:
+            # Plotting avg metrics graph
+            acc.plot(num_examples, stats_dict[model]
+            ['accuracies'], 'o-', label=model)
+            prec.plot(num_examples, stats_dict[model]
+            ['precisions'], 'o-', label=model)
+            rec.plot(num_examples, stats_dict[model]
+            ['recalls'], 'o-', label=model)
+            bcr.plot(num_examples, stats_dict[model]
+            ['bcrs'], 'o-', label=model)
 
     # Display subplot legends
     acc.legend()
@@ -77,7 +97,7 @@ def plot_metrics_graph(num_examples, stats_dict, dst, amine=None, amine_index=0,
         amine) if amine else 'average_metrics.png'
 
     graph_dst = Path(dst) / Path(graph_name)
-    #graph_dst = '{0:s}/{1:s}'.format(dst, graph_name)
+    # graph_dst = '{0:s}/{1:s}'.format(dst, graph_name)
 
     # Remove duplicate graphs in case we can't directly overwrite the files
     # if os.path.isfile(graph_dst):

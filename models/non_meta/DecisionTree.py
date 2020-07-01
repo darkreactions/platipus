@@ -1,94 +1,101 @@
-"""
-Run the following command lines for full dataset training:
-python KNN.py --datasource=drp_chem --train_size=20 --cross_validate --full --verbose
-python KNN.py --datasource=drp_chem --train_size=20 --cross_validate --pretrain --full --verbose
-
-Run the following command lines for test dataset training (debug):
-python KNN.py --datasource=drp_chem ---train_size=20 -cross_validate --verbose
-python KNN.py --datasource=drp_chem --train_size=20 --cross_validate --pretrain --verbose
-"""
-
-import argparse
-import itertools
 import os
 import pickle
-from collections import defaultdict
-from pathlib import Path
+import argparse
+import itertools
 
 import numpy as np
+from pathlib import Path
+from collections import defaultdict
 from sklearn.metrics import confusion_matrix, roc_auc_score
-from sklearn.neighbors import KNeighborsClassifier
+from sklearn.tree import DecisionTreeClassifier, export_graphviz
 
 from modAL.models import ActiveLearner
 
 from utils.dataset import import_full_dataset, import_test_dataset
 
 
-class ActiveKNN:
-    """A KNN machine learning model using active learning with modAL package
-
-    Attributes:
-        amine:          A string representing the amine that the KNN model is used for predictions.
-        n_neighbors:    An integer representing the number of neighbors to classify using KNN model.
-        model:          A KNeighborClassifier object as the classifier model.
+class ActiveDecisionTree:
+    """ A class of decision tree model with active learning.
+    
+    Attributes: 
+        amine:          A string representing the amine this model is used for.
+        model:          A RandomForestClassifier object as the classifier model.
         metrics:        A dictionary to store the performance metrics locally. It has the format of
                             {'metric_name': [metric_value]}.
         verbose:        A boolean representing whether it will prints out additional information to the terminal or not.
         stats_path:     A Path object representing the directory of the stats dictionary.
         model_name:     A string representing the name of the model for future plotting.
-        pool_data:      A numpy array representing all the data from the dataset.
-        pool_labels:    A numpy array representing all the labels from the dataset.
+        all_data:       A numpy array representing all the data from the dataset.
+        all_labels:     A numpy array representing all the labels from the dataset.
         x_t:            A numpy array representing the training data used for model training.
         y_t:            A numpy array representing the training labels used for model training.
         x_v:            A numpy array representing the testing data used for active learning.
         y_v:            A numpy array representing the testing labels used for active learning.
         learner:        An ActiveLearner to conduct active learning with. See modAL documentation for more details.
+        y_preds:        A numpy array representing the predicted labels given all data input.
     """
 
-    def __init__(self, amine=None, config=None,
-                 verbose=True, stats_path=Path('./results/stats.pkl'),
-                 model_name='KNN'):
-        """Initialize the ActiveKNN object."""
+    def __init__(self, amine=None, config=None, verbose=True, stats_path=Path('./results/stats.pkl'),
+                 model_name='Decision_Tree'):
+        """initialization of the class"""
+
         self.amine = amine
 
-        # Load customized model or use the default fine-tuned setting
         if config:
-            self.model = KNeighborsClassifier(
-                n_neighbors=config['n_neighbors'],
-                weights=config['weights'],
-                algorithm=config['algorithm'],
-                leaf_size=config['leaf_size'],
-                p=config['p']
-            )
-            self.n_neighbors = config['n_neighbors']
+            self.model = DecisionTreeClassifier(max_depth=config['max_depth'],
+                                                min_samples_split=config['min_samples_split'],
+                                                min_samples_leaf=config['min_samples_leaf'],
+                                                max_leaf_nodes=config['max_leaf_nodes'])
         else:
-            self.model = KNeighborsClassifier(n_neighbors=3, p=1)
-            self.n_neighbors = 3
+            self.model = DecisionTreeClassifier()
 
         self.metrics = defaultdict(list)
         self.verbose = verbose
         self.stats_path = stats_path
         self.model_name = model_name
 
-    def load_dataset(self, x_t, y_t, x_v, y_v, all_data, all_labels):
-        """Load the input training and validation data and labels into the model.
-
+    # TODO: find out what to do with this part
+    def load_dataset(self, training_batches, validation_batches, meta=False):
+        """Load the dataset for training and testing into model under option 1 or option 2
+        
+        Option 1 is train with observations of other tasks and validate on the task-specific observations.
+        Option 2 is to train and validate on the task-specific observations.
+        
         Args:
-            x_t:                A 2-D numpy array representing the training data.
-            y_t:                A 2-D numpy array representing the training labels.
-            x_v:                A 2-D numpy array representing the validation data.
-            y_v:                A 2-D numpy array representing the validation labels.
-            all_data:           A 2-D numpy array representing all the data in the active learning pool.
-            all_labels:         A 2-D numpy array representing all the labels in the active learning pool.
-
-        Returns:
-            N/A
+            training_batches:           A dictionary representing the training batches used to train.
+                                            See dataset.py for specific structure.
+            validation_batches:         A dictionary representing the training batches used to train.
+                                            See dataset.py for specific structure.
+            meta:                       A boolean representing if it will be trained under option 1 or option 2.
+                                            Option 1 is train with observations of other tasks and validate on the
+                                            task-specific observations.
+                                            Option 2 is to train and validate on the task-specific observations.
         """
 
-        self.x_t, self.x_v, self.y_t, self.y_v = x_t, y_t, x_v, y_v
+        if meta is True:
+            # option 2
+            self.x_t = validation_batches[self.amine][0]
+            self.y_t = validation_batches[self.amine][1]
+            self.x_v = validation_batches[self.amine][2]
+            self.y_v = validation_batches[self.amine][3]
 
-        self.pool_data = all_data
-        self.pool_labels = all_labels
+            self.all_data = np.concatenate((self.x_t, self.x_v))
+            self.all_labels = np.concatenate((self.y_t, self.y_v))
+
+            if self.verbose:
+                print("Conducting Training under Option 2.")
+
+        else:
+            self.x_t = training_batches[self.amine][0]
+            self.y_t = training_batches[self.amine][1]
+            self.x_v = validation_batches[self.amine][0]
+            self.y_v = validation_batches[self.amine][1]
+
+            self.all_data = self.x_v
+            self.all_labels = self.y_v
+
+            if self.verbose:
+                print("Conducting Training under Option 1.")
 
         if self.verbose:
             print(f'The training data has dimension of {self.x_t.shape}.')
@@ -97,16 +104,16 @@ class ActiveKNN:
             print(f'The testing labels has dimension of {self.y_v.shape}.')
 
     def train(self):
-        """Train the KNN model by setting up the ActiveLearner."""
+        """Train the decision tree model by setting up the ActiveLearner."""
 
         self.learner = ActiveLearner(estimator=self.model, X_training=self.x_t, y_training=self.y_t)
         # Evaluate zero-point performance
         self.evaluate()
 
     def active_learning(self, num_iter=None, to_params=True):
-        """ The active learning loop
+        """The active learning loop
 
-        This is the active learning model that loops around the KNN model
+        This is the active learning model that loops around the decision tree model
         to look for the most uncertain point and give the model the label to train
 
         Args:
@@ -115,9 +122,8 @@ class ActiveKNN:
             to_params:  A boolean that decide if to store the metrics to the dictionary,
                         detail see "store_metrics_to_params" function.
                         Default = True
-
-        return: N/A
         """
+
         num_iter = num_iter if num_iter else self.x_v.shape[0]
 
         for _ in range(num_iter):
@@ -125,15 +131,13 @@ class ActiveKNN:
             query_index, query_instance = self.learner.query(self.x_v)
 
             # Teach our ActiveLearner model the record it has requested.
-            uncertain_data, uncertain_label = self.x_v[query_index].reshape(
-                1, -1), self.y_v[query_index].reshape(1, )
+            uncertain_data, uncertain_label = self.x_v[query_index].reshape(1, -1), self.y_v[query_index].reshape(1, )
             self.learner.teach(X=uncertain_data, y=uncertain_label)
 
             self.evaluate()
 
             # Remove the queried instance from the unlabeled pool.
-            self.x_t = np.append(
-                self.x_t, uncertain_data).reshape(-1, self.pool_data.shape[1])
+            self.x_t = np.append(self.x_t, uncertain_data).reshape(-1, self.all_data.shape[1])
             self.y_t = np.append(self.y_t, uncertain_label)
             self.x_v = np.delete(self.x_v, query_index, axis=0)
             self.y_v = np.delete(self.y_v, query_index)
@@ -142,29 +146,29 @@ class ActiveKNN:
             self.store_metrics_to_params()
 
     def evaluate(self, store=True):
-        """Evaluation of the model
+        """ Evaluation of the model
 
         Args:
             store:  A boolean that decides if to store the metrics of the performance of the model.
                     Default = True
-
-        return: N/A
         """
 
         # Calculate and report our model's accuracy.
-        accuracy = self.learner.score(self.pool_data, self.pool_labels)
+        accuracy = self.learner.score(self.all_data, self.all_labels)
 
-        self.y_preds = self.learner.predict(self.pool_data)
+        self.y_preds = self.learner.predict(self.all_data)
 
-        # TODO: move this into utils maybe?
-        cm = confusion_matrix(self.pool_labels, self.y_preds)
+        # TODO: move the following parts into utils maybe?
+        # Calculated confusion matrix
+        cm = confusion_matrix(self.all_labels, self.y_preds)
 
         # To prevent nan value for precision, we set it to 1 and send out a warning message
         if cm[1][1] + cm[0][1] != 0:
             precision = cm[1][1] / (cm[1][1] + cm[0][1])
         else:
-            precision = 1.0  # TODO: I still think 0.0 is better
-            print('WARNING: zero division during precision calculation')
+            precision = 1.0
+            if self.verbose:
+                print('WARNING: zero division during precision calculation')
 
         recall = cm[1][1] / (cm[1][1] + cm[1][0])
         true_negative = cm[0][0] / (cm[0][0] + cm[0][1])
@@ -190,8 +194,6 @@ class ActiveKNN:
                                 predicted to be successful out of all the actual successful reactions.
             bcr:            A float representing the balanced classification rate of the model. It's the average value
                                 of recall rate and true negative rate.
-
-        return: N/A
         """
 
         self.metrics['confusion_matrices'].append(cm)
@@ -225,11 +227,9 @@ class ActiveKNN:
         if model not in stats_dict:
             stats_dict[model] = defaultdict(list)
 
-        # TODO: may have to change this once the structure of stats_dict changes
         stats_dict[model]['amine'].append(self.amine)
         stats_dict[model]['accuracies'].append(self.metrics['accuracies'])
-        stats_dict[model]['confusion_matrices'].append(
-            self.metrics['confusion_matrices'])
+        stats_dict[model]['confusion_matrices'].append(self.metrics['confusion_matrices'])
         stats_dict[model]['precisions'].append(self.metrics['precisions'])
         stats_dict[model]['recalls'].append(self.metrics['recalls'])
         stats_dict[model]['bcrs'].append(self.metrics['bcrs'])
@@ -238,127 +238,69 @@ class ActiveKNN:
         with open(self.stats_path, "wb") as f:
             pickle.dump(stats_dict, f)
 
-    def save_model(self, k_shot, n_way, pretrain):
-        """Save the data used to train, validate and test the model to designated folder
+    def save_model(self, train_size, n_way, pretrain):
+        """Save the data used to train, validate and test the model to designated folder.
 
         Args:
             k_shot:                 An integer representing the number of training samples per class.
             n_way:                  An integer representing the number of classes per task.
-            pretrain:                   A boolean representing if it will be trained under option 1 or option 2.
+            pretrain:               A boolean representing if it will be trained under option 1 or option 2.
                                         Option 1 is train with observations of other tasks and validate on the
                                         task-specific observations.
                                         Option 2 is to train and validate on the task-specific observations.
-
-        Returns:
-            N/A
         """
 
-        # Indicate which option we used the data for
         option = 1 if pretrain else 2
 
-        # Set up the main destination folder for the model
-        dst_root = './results/KNN_few_shot/option_{0:d}'.format(option)
+        dst_root = './results/DecisionTree_few_shot/option_{0:d}'.format(option)
+
         if not os.path.exists(dst_root):
             os.makedirs(dst_root)
-            print('No folder for KNN model storage found')
-            print(f'Make folder to store KNN model at')
+            print('No folder for decision tree model storage found')
+            print(f'Make folder to store model at')
 
-        # Set up the model specific folder
-        model_folder = '{0:s}/KNN_{1:d}_shot_{2:d}_way_option_{3:d}_{4:s}'.format(dst_root,
-                                                                                  k_shot,
-                                                                                  n_way,
-                                                                                  option,
-                                                                                  self.amine)
+        model_folder = '{0:s}/DecisionTree_{1:d}_shot_{2:d}_way_option_{3:d}_{4:s}'.format(dst_root,
+                                                                                           train_size,
+                                                                                           n_way,
+                                                                                           option,
+                                                                                           self.amine)
         if not os.path.exists(model_folder):
             os.makedirs(model_folder)
-            print('No folder for KNN model storage found')
-            print(f'Make folder to store KNN model of amine {self.amine} at')
+            print('No folder for decision tree model storage found')
+            print(f'Make folder to store model of amine {self.amine} at')
         else:
             print(f'Found existing folder. Model of amine {self.amine} will be stored at')
         print(model_folder)
 
-        # Dump the model into the designated folder
-        file_name = "KNN_{0:s}_option_{1:d}.pkl".format(self.amine, option)
+        # Dump the model
+        file_name = "DecisionTree_{0:s}_option_{1:d}.pkl".format(self.amine, option)
         with open(os.path.join(model_folder, file_name), "wb") as f:
             pickle.dump(self, f)
 
-    def __str__(self):
-        return 'A {0:d}-neighbor KNN model for amine {1:s} using active learning'.format(self.n_neighbors, self.amine)
 
-
-def parse_args():
-    """Set up the initial variables for running KNN.
-
-    Retrieves argument values from the terminal command line to create an argparse.Namespace object for
-        initialization.
-
-    Args:
-        N/A
-
-    Returns:
-        args: Namespace object with the following attributes:
-            datasource:         A string identifying the datasource to be used, with default datasource set to drp_chem.
-            neighbors:          An integer representing the number of neighbors used for KNN. Default set to 1.
-            train_size          An integer representing the number of samples use for training. Default set to 1.
-            train:              A train_flag attribute. Including it in the command line will set the train_flag to
-                                    True by default.
-            test:               A train_flag attribute. Including it in the command line will set the train_flag to
-                                    False.
-            cross_validate:     A boolean. Including it in the command line will run the model with cross-validation.
-            pretrain:           A boolean representing if it will be trained under option 1 or option 2.
-                                    Option 1 is train with observations of other tasks and validate on the
-                                    task-specific observations.
-                                    Option 2 is to train and validate on the task-specific observations.
-            full_dataset:       A boolean representing if we want to load the full dataset or the test sample dataset.
-            verbose:            A boolean. Including it in the command line will output additional information to the
-                                    terminal for functions with verbose feature.
-    """
-
-    parser = argparse.ArgumentParser(description='Setup variables for active learning KNN.')
-    parser.add_argument('--datasource', type=str, default='drp_chem', help='datasource to be used')
-
-    parser.add_argument('--neighbors', dest='neighbors', default=1, help='number of neighbors for KNN')
-    parser.add_argument('--train_size', dest='train_size', default=1, help='number of samples used for training')
-
-    parser.add_argument('--train', dest='train_flag', action='store_true')
-    parser.add_argument('--test', dest='train_flag', action='store_false')
-    parser.set_defaults(train_flag=True)
-
-    parser.add_argument('--cross_validate', action='store_true', help='use cross-validation for training')
-    parser.add_argument('--pretrain', action='store_true', help='load the dataset under option 1. Not include this will'
-                                                                ' load the dataset under option 2. See documentation in'
-                                                                ' codes for details.')
-    parser.add_argument('--full', dest='full_dataset', action='store_true', help='load the full dataset or the test '
-                                                                                 'sample dataset')
-    parser.add_argument('--verbose', action='store_true')
-
-    args = parser.parse_args()
-
-    return args
-
-
-def fine_tune(info=False):
+def fine_tune(training_batches, validation_batches, info=False):
     """Fine tune the model based on average bcr performance to find the best model hyper-parameters.
-
     Args:
-        info:                A boolean. Setting it to True will make the function print out additional information
+        training_batches:       A dictionary representing the training batches used to train.
+                                    See dataset.py for specific structure.
+        validation_batches:     A dictionary representing the training batches used to train.
+                                    See dataset.py for specific structure.
+        info:                   A boolean. Setting it to True will make the function print out additional information
                                     during the fine-tuning stage.
                                     Default to False.
-
     Returns:
         best_option:            A dictionary representing the hyper-parameters that yields the best performance on
-                                    average. For KNN, the current keys are: n_neighbors', 'weights', 'algorithm',
-                                    'leaf_size', 'p', 'metric'.
+                                    average. For DecisionTree, the current keys are: 'criterion', 'splitter',
+                                    'max_depth', 'min_samples_split', 'min_samples_leaf', 'max_features',
+                                    'max_leaf_nodes', 'class_weight', 'ccp_alpha'.
     """
 
     # Set all possible combinations
-
     params = {
-        'n_neighbors': [i for i in range(1, 11)],
-        'weights': ['uniform', 'distance'],
-        'algorithm': ['auto'],
-        'leaf_size': [i for i in range(10, 21)],
-        'p': [i for i in range(1, 4)]
+        'max_depth': [i for i in range(1, 11)],
+        'min_samples_split': [i for i in range(2, 11)],
+        'min_samples_leaf': [i for i in range(1, 6)],
+        'max_leaf_nodes': []
     }
 
     combinations = []
@@ -366,16 +308,6 @@ def fine_tune(info=False):
     keys, values = zip(*params.items())
     for bundle in itertools.product(*values):
         combinations.append(dict(zip(keys, bundle)))
-
-    if info:
-        print(f'There are {len(combinations)} many combinations to try.')
-
-    training_batches, validation_batches, testing_batches, counts = import_full_dataset(k_shot=20,
-                                                                                        meta_batch_size=10,
-                                                                                        num_batches=250,
-                                                                                        verbose=True,
-                                                                                        cross_validation=True,
-                                                                                        meta=False)
 
     # Set baseline performance
     base_accuracies = []
@@ -385,24 +317,17 @@ def fine_tune(info=False):
     base_aucs = []
 
     for amine in training_batches:
-        KNN = ActiveKNN(amine=amine, verbose=False)
-
-        x_t, y_t = training_batches[amine][0], training_batches[amine][1]
-        x_v, y_v = validation_batches[amine][0], validation_batches[amine][1]
-        all_data, all_labels = x_v, y_v
-
-        # Load the training and validation set into the model
-        KNN.load_dataset(x_t, x_v, y_t, y_v, all_data, all_labels)
-
-        KNN.train()
+        ADT = ActiveDecisionTree(amine=amine, verbose=False)
+        ADT.load_dataset(training_batches, validation_batches)
+        ADT.train()
 
         # Calculate AUC
-        auc = roc_auc_score(all_labels, KNN.y_preds)
+        auc = roc_auc_score(ADT.all_labels, ADT.y_preds)
 
-        base_accuracies.append(KNN.metrics['accuracies'][-1])
-        base_precisions.append(KNN.metrics['precisions'][-1])
-        base_recalls.append(KNN.metrics['recalls'][-1])
-        base_bcrs.append(KNN.metrics['bcrs'][-1])
+        base_accuracies.append(ADT.metrics['accuracies'][-1])
+        base_precisions.append(ADT.metrics['precisions'][-1])
+        base_recalls.append(ADT.metrics['recalls'][-1])
+        base_bcrs.append(ADT.metrics['bcrs'][-1])
         base_aucs.append(auc)
 
     # Calculated the average baseline performances
@@ -426,6 +351,7 @@ def fine_tune(info=False):
     option_no = 1  # Debug
 
     # Try out each possible combinations of hyper-parameters
+    print(f'There are {len(combinations)} many combinations to try.')
     for option in combinations:
         accuracies = []
         precisions = []
@@ -434,28 +360,21 @@ def fine_tune(info=False):
         aucs = []
 
         if info:
-            print(f'Trying config {option_no}')
+            print(f'Trying option {option_no}')
 
         for amine in training_batches:
             # print("Training and cross validation on {} amine.".format(amine))
-            KNN = ActiveKNN(amine=amine, config=option, verbose=False)
-
-            x_t, y_t = training_batches[amine][0], training_batches[amine][1]
-            x_v, y_v = validation_batches[amine][0], validation_batches[amine][1]
-            all_data, all_labels = x_v, y_v
-
-            # Load the training and validation set into the model
-            KNN.load_dataset(x_t, x_v, y_t, y_v, all_data, all_labels)
-
-            KNN.train()
+            ADT = ActiveDecisionTree(amine=amine, config=option, verbose=False)
+            ADT.load_dataset(training_batches, validation_batches)
+            ADT.train()
 
             # Calculate AUC
-            auc = roc_auc_score(all_labels, KNN.y_preds)
+            auc = roc_auc_score(ADT.all_labels, ADT.y_preds)
 
-            accuracies.append(KNN.metrics['accuracies'][-1])
-            precisions.append(KNN.metrics['precisions'][-1])
-            recalls.append(KNN.metrics['recalls'][-1])
-            bcrs.append(KNN.metrics['bcrs'][-1])
+            accuracies.append(ADT.metrics['accuracies'][-1])
+            precisions.append(ADT.metrics['precisions'][-1])
+            recalls.append(ADT.metrics['recalls'][-1])
+            bcrs.append(ADT.metrics['bcrs'][-1])
             aucs.append(auc)
 
         avg_accuracy = sum(accuracies) / len(accuracies)
@@ -469,7 +388,8 @@ def fine_tune(info=False):
             best_option = option
             if info:
                 print(f'The fine-tuned average accuracy is {avg_accuracy} vs. the base accuracy {base_avg_accuracy}')
-                print(f'The fine-tuned average precision is {avg_precision} vs. the base precision {base_avg_precision}')
+                print(
+                    f'The fine-tuned average precision is {avg_precision} vs. the base precision {base_avg_precision}')
                 print(f'The fine-tuned average recall rate is {avg_recall} vs. the base recall rate {base_avg_recall}')
                 print(f'The fine-tuned average bcr is {avg_bcr} vs. the base bcr {base_avg_bcr}')
                 print(f'The fine-tuned average auc is {avg_auc} vs. the base auc {base_avg_auc}')
@@ -488,7 +408,6 @@ def fine_tune(info=False):
 
 def save_used_data(training_batches, validation_batches, testing_batches, counts, pretrain):
     """Save the data used to train, validate and test the model to designated folder
-
     Args:
         training_batches:       A dictionary representing the training batches used to train.
                                     See dataset.py for specific structure.
@@ -502,20 +421,17 @@ def save_used_data(training_batches, validation_batches, testing_batches, counts
                                     Option 1 is train with observations of other tasks and validate on the
                                     task-specific observations.
                                     Option 2 is to train and validate on the task-specific observations.
-                                    
-    Returns:
-        N/A
     """
 
     # Indicate which option we used the data for
     option = 1 if pretrain else 2
 
     # Set up the destination folder to save the data
-    data_folder = './results/KNN_few_shot/option_{0:d}/data'.format(option)
+    data_folder = './results/DecisionTree_few_shot/option_{0:d}/data'.format(option)
     if not os.path.exists(data_folder):
         os.makedirs(data_folder)
-        print('No folder for KNN model data storage found')
-        print('Make folder to store data used for KNN models at')
+        print('No folder for decision tree model data storage found')
+        print('Make folder to store data used for decision tree models at')
     else:
         print('Found existing folder. Data used for models will be stored at')
     print(data_folder)
@@ -529,48 +445,106 @@ def save_used_data(training_batches, validation_batches, testing_batches, counts
     }
 
     # Save the file using pickle
-    file_name = "KNN_data.pkl"
+    file_name = "DecisionTree_data.pkl"
     with open(os.path.join(data_folder, file_name), "wb") as f:
         pickle.dump(data, f)
 
 
-def run_model(KNN_params):
-    """Full-scale training, validation and testing using all amines.
+def parse_args():
+    """Set up the initial variables for running decision tree.
+
+    Retrieves argument values from the terminal command line to create an argparse.Namespace object for
+        initialization.
 
     Args:
-        KNN_params:         A dictionary of the parameters for the KNN model.
-                                See initialize() for more information.
+        N/A
 
     Returns:
-        N/A
+        args: Namespace object with the following attributes:
+            datasource:         A string identifying the datasource to be used, with default datasource set to drp_chem.
+            train_size          An integer representing the number of samples use for training. Default set to 1.
+            train:              A train_flag attribute. Including it in the command line will set the train_flag to
+                                    True by default.
+            test:               A train_flag attribute. Including it in the command line will set the train_flag to
+                                    False.
+            cross_validate:     A boolean. Including it in the command line will run the model with cross-validation.
+            pretrain:           A boolean representing if it will be trained under option 1 or option 2.
+                                    Option 1 is train with observations of other tasks and validate on the
+                                    task-specific observations.
+                                    Option 2 is to train and validate on the task-specific observations.
+            full_dataset:       A boolean representing if we want to load the full dataset or the test sample dataset.
+            verbose:            A boolean. Including it in the command line will output additional information to the
+                                    terminal for functions with verbose feature.
     """
 
-    # Unload parameters
-    config = KNN_params['config']
-    cross_validation = KNN_params['cross_validate']
-    verbose = KNN_params['verbose']
-    pretrain = KNN_params['pretrain']
-    stats_path = KNN_params['stats_path']
+    parser = argparse.ArgumentParser(description='Setup variables for active learning SVM.')
+    parser.add_argument('--datasource', type=str, default='drp_chem', help='datasource to be used')
 
-    model_name = KNN_params['model_name']
-    print(f'Running model {model_name}')
-    
+    parser.add_argument('--train_size', dest='train_size', default=1, help='number of samples used for training')
+
+    parser.add_argument('--train', dest='train_flag', action='store_true')
+    parser.add_argument('--test', dest='train_flag', action='store_false')
+    parser.set_defaults(train_flag=True)
+
+    parser.add_argument('--cross_validate', action='store_true', help='use cross-validation for training')
+    parser.add_argument('--pretrain', action='store_true', help='load the dataset under option 1. Not include this will'
+                                                                ' load the dataset under option 2. See documentation in'
+                                                                ' codes for details.')
+    parser.add_argument('--full', dest='full_dataset', action='store_true', help='load the full dataset or the test '
+                                                                                 'sample dataset')
+    parser.add_argument('--verbose', action='store_true')
+
+    args = parser.parse_args()
+
+    return args
+
+
+def run_model(DecisionTree_params):
+    """Full-scale training, validation and testing using all amines.
+    Args:
+        DecisionTree_params:         A dictionary of the parameters for the decision tree model.
+                                        See initialize() for more information.
+    """
+    '''
+    # For visualization, may need deletion
+    features = ['_rxn_M_acid', '_rxn_M_inorganic', '_rxn_M_organic', '_solv_GBL', '_solv_DMSO', '_solv_DMF',
+                '_stoich_mmol_org', '_stoich_mmol_inorg', '_stoich_mmol_acid', '_stoich_mmol_solv', '_stoich_org/solv',
+                '_stoich_inorg/solv', '_stoich_acid/solv', '_stoich_org+inorg/solv', '_stoich_org+inorg+acid/solv',
+                '_stoich_org/liq', '_stoich_inorg/liq', '_stoich_org+inorg/liq', '_stoich_org/inorg',
+                '_stoich_acid/inorg', '_rxn_Temperature_C', '_rxn_Reactiontime_s', '_feat_AvgPol',
+                '_feat_Refractivity', '_feat_MaximalProjectionArea', '_feat_MaximalProjectionRadius',
+                '_feat_maximalprojectionsize', '_feat_MinimalProjectionArea', '_feat_MinimalProjectionRadius',
+                '_feat_minimalprojectionsize', '_feat_MolPol', '_feat_VanderWaalsSurfaceArea', '_feat_ASA',
+                '_feat_ASA_H', '_feat_ASA_P', '_feat_ASA-', '_feat_ASA+', '_feat_ProtPolarSurfaceArea',
+                '_feat_Hacceptorcount', '_feat_Hdonorcount', '_feat_RotatableBondCount', '_raw_standard_molweight',
+                '_feat_AtomCount_N', '_feat_BondCount', '_feat_ChainAtomCount', '_feat_RingAtomCount',
+                '_feat_primaryAmine', '_feat_secondaryAmine', '_rxn_plateEdgeQ', '_feat_maxproj_per_N',
+                '_raw_RelativeHumidity']
+    '''
+
+    # Unload parameters
+    config = DecisionTree_params['config']
+    cross_validation = DecisionTree_params['cross_validate']
+    verbose = DecisionTree_params['verbose']
+    pretrain = DecisionTree_params['pretrain']
+    stats_path = DecisionTree_params['stats_path']
+    model_name = DecisionTree_params['model_name']
+    print(model_name)
+
     # Set up if we want to load the meta dataset for option 2 or not
     meta = not pretrain
-
     # Set up the number of samples used for training under option 2
-    train_size = KNN_params['train_size']
-
+    train_size = DecisionTree_params['train_size']
     # Specify the desired operation
-    fine_tuning = KNN_params['fine_tuning']
-    to_params = True
-
+    fine_tuning = DecisionTree_params['fine_tuning']
     if fine_tuning:
-        best_config = fine_tune(info=True)
-
+        ft_training_batches, ft_validation_batches, ft_testing_batches, ft_counts = import_full_dataset(
+            train_size, meta_batch_size=25, num_batches=250, verbose=verbose, cross_validation=cross_validation,
+            meta=False)
+        best_config = fine_tune(ft_training_batches, ft_validation_batches, info=True)
     else:
         # Load the full dataset for training and validation
-        if KNN_params['full_dataset']:
+        if DecisionTree_params['full_dataset']:
             training_batches, validation_batches, testing_batches, counts = import_full_dataset(train_size,
                                                                                                 meta_batch_size=25,
                                                                                                 num_batches=250,
@@ -584,43 +558,33 @@ def run_model(KNN_params):
                                                                                                 verbose=verbose,
                                                                                                 cross_validation=cross_validation,
                                                                                                 meta=meta)
-
         # Save the data used for training and testing for reproducibility
         save_used_data(training_batches, validation_batches, testing_batches, counts, pretrain)
-
         # print(training_batches.keys())
         for amine in training_batches:
             print(f'Training and active learning on amine {amine}')
             # Create the KNN model instance for the specific amine
-            KNN = ActiveKNN(amine=amine, config=config, verbose=verbose, stats_path=stats_path, model_name=model_name)
-
-            if cross_validation:
-                # Option 1:
-                if pretrain:
-                    print('Conducting training under option 1.')
-                    x_t, y_t = training_batches[amine][0], training_batches[amine][1]
-                    x_v, y_v = validation_batches[amine][0], validation_batches[amine][1]
-                    all_data, all_labels = x_v, y_v
-                # Option 2
-                else:
-                    print('Conducting training under option 2.')
-                    x_t, y_t = validation_batches[amine][0], validation_batches[amine][1]
-                    x_v, y_v = validation_batches[amine][2], validation_batches[amine][3]
-                    all_data, all_labels = np.concatenate(
-                        (x_t, x_v)), np.concatenate((y_t, y_v))
-
+            ADT = ActiveDecisionTree(amine=amine, config=config, verbose=verbose, stats_path=stats_path,
+                                     model_name=model_name)
             # Load the training and validation set into the model
-            KNN.load_dataset(x_t, x_v, y_t, y_v, all_data, all_labels)
-
+            ADT.load_dataset(training_batches, validation_batches, meta)
             # Train the data on the training set
-            KNN.train()
-
+            ADT.train()
             # Conduct active learning with all the observations available in the pool
-            KNN.active_learning(to_params=to_params)
-
+            ADT.active_learning(to_params=True)
+            '''
+            # Plot the decision tree
+            file_name = './results/{}_dt_op1.dot'.format(amine) if pretrain else './results/{}_dt_op2.dot'.format(amine)
+            export_graphviz(ADT.model,
+                            feature_names=features,
+                            class_names=['FAILURE', 'SUCCESS'],
+                            out_file=file_name,
+                            filled=True,
+                            rounded=True,
+                            special_characters=True)
+            '''
             # Save the model for future reproducibility
-            KNN.save_model(train_size, 2, pretrain)
-
+            ADT.save_model(train_size, 2, pretrain)
             # TODO: testing part not implemented
 
 
@@ -628,9 +592,9 @@ def main():
     """Main driver function"""
 
     # This converts the args into a dictionary
-    KNN_params = vars(parse_args())
+    DecisionTree_params = vars(parse_args())
 
-    run_model(KNN_params)
+    run_model(DecisionTree_params)
 
 
 if __name__ == "__main__":
