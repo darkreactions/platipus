@@ -107,14 +107,14 @@ def find_avg_metrics(stats_dict, min_length=None):
     avg_stat = {}
     
     all_models = list(stats_dict.keys())
-    random_model = all_models[0]
+    """random_model = all_models[0]
 
     if not min_length:
         min_length = len(stats_dict[random_model]['accuracies'][0])
         for model in all_models:
             length = len(min(stats_dict[model]['accuracies'], key=len))
             if min_length > length:
-                min_length = length
+                min_length = length"""
 
     # Calculate average metrics by model
     for model in all_models:
@@ -125,31 +125,48 @@ def find_avg_metrics(stats_dict, min_length=None):
             'recalls': [],
             'bcrs': []
         }
+        max_length = len(max(stats_dict[model]['accuracies'], key=len))
 
-        for i in range(min_length):
+        for i in range(max_length):
 
             total = 0
+            num_points = 0
             for amine_metric in stats_dict[model]['accuracies']:
-                total += amine_metric[i]
-            avg_acc = total / len(stats_dict[model]['accuracies'])
+                if i < len(amine_metric):
+                    total += amine_metric[i]
+                    num_points += 1
+            # avg_acc = total / len(stats_dict[model]['accuracies'])
+            avg_acc = total / num_points
             avg_stat[model]['accuracies'].append(avg_acc)
 
             total = 0
+            num_points = 0
             for amine_metric in stats_dict[model]['precisions']:
-                total += amine_metric[i]
-            avg_prec = total / len(stats_dict[model]['precisions'])
+                if i < len(amine_metric):
+                    total += amine_metric[i]
+                    num_points += 1
+            # avg_prec = total / len(stats_dict[model]['precisions'])
+            avg_prec = total / num_points
             avg_stat[model]['precisions'].append(avg_prec)
 
             total = 0
+            num_points = 0
             for amine_metric in stats_dict[model]['recalls']:
-                total += amine_metric[i]
-            avg_rec = total / len(stats_dict[model]['recalls'])
+                if i < len(amine_metric):
+                    total += amine_metric[i]
+                    num_points += 1
+            # avg_rec = total / len(stats_dict[model]['recalls'])
+            avg_rec = total / num_points
             avg_stat[model]['recalls'].append(avg_rec)
 
             total = 0
+            num_points = 0
             for amine_metric in stats_dict[model]['bcrs']:
-                total += amine_metric[i]
-            avg_bcr = total / len(stats_dict[model]['bcrs'])
+                if i < len(amine_metric):
+                    total += amine_metric[i]
+                    num_points += 1
+            # avg_bcr = total / len(stats_dict[model]['bcrs'])
+            avg_bcr = total / num_points
             avg_stat[model]['bcrs'].append(avg_bcr)
 
     return avg_stat

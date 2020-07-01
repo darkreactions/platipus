@@ -7,12 +7,13 @@ common_params = {
     'train_flag': True,
     'gpu_id': 1,
     'test_data': True,
-    'meta': False,
+    'meta': False,  # TODO: redundant with pretrain?
     'full_dataset': True,
     'fine_tuning': False,
     'pretrain': True,
     'stats_path': Path('./results/cv_statistics.pkl'),
-    'cv_stats_overwrite': True
+    'cv_stats_overwrite': True,
+    'save_model': False
 }
 
 knn_params = {
