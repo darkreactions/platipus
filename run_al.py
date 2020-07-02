@@ -59,6 +59,7 @@ if __name__ == '__main__':
     models_to_plot.append(KNN2_params['model_name'])
     KNN.run_model(KNN2_params)
 
+    """
     # SVM w/ active learning
     # Trained under option 1
     SVM1_params = {**common_params, **svm_params}
@@ -66,15 +67,14 @@ if __name__ == '__main__':
     models_to_plot.append(SVM1_params['model_name'])
     SVM.run_model(SVM1_params)
 
-    # TODO: CAN'T RUN DUE TO INSUFFICIENT SUCCESSES
-    '''
     # Trained under option 2
+    # TODO: CAN'T RUN DUE TO INSUFFICIENT SUCCESSES
     SVM2_params = {**common_params, **svm_params}
     SVM2_params['pretrain'] = False
     SVM2_params['model_name'] = define_non_meta_model_name(SVM2_params['model_name'], SVM2_params['pretrain'])
     models_to_plot.append(SVM2_params['model_name'])
     SVM.run_model(SVM2_params)
-    '''
+    """
 
     # Random Forest w/ active learning
     # Trained under option 1
@@ -97,15 +97,13 @@ if __name__ == '__main__':
     models_to_plot.append(LR1_params['model_name'])
     LogisticRegression.run_model(LR1_params)
 
-    # Trained under option 2
+    """# Trained under option 2
     # TODO: CAN'T RUN DUE TO INSUFFICIENT SUCCESSES
-    '''
     LR2_params = {**common_params, **logisticregression_params}
     LR2_params['pretrain'] = False
     LR2_params['model_name'] = define_non_meta_model_name(LR2_params['model_name'], LR2_params['pretrain'])
     models_to_plot.append(LR2_params['model_name'])
-    LogisticRegression.run_model(LR2_params)
-    '''
+    LogisticRegression.run_model(LR2_params)"""
 
     # Decision Tree w/ active learning
     # Trained under option 1

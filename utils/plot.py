@@ -82,8 +82,8 @@ def plot_metrics_graph(num_examples, stats_dict, dst, amine=None, amine_index=No
             bcr.plot(num_examples, stats_dict[model]
             ['bcrs'], 'o-', label=model, alpha=0.6)
 
-    # Make the graph more readable
-    """# PLATIPUS BASELINE TODO: TEMPORARY FOR AVG GRAPH
+    """# Make the graph more readable
+    # PLATIPUS BASELINE TODO: TEMPORARY FOR AVG GRAPH
     acc.axhline(y=.88, linestyle='-.', linewidth=4, color='r')
     acc.axvline(x=32, linestyle='-.', linewidth=4, color='r')
     acc.annotate('PLATIPUS', (90, .86), fontsize='x-large')
@@ -100,7 +100,7 @@ def plot_metrics_graph(num_examples, stats_dict, dst, amine=None, amine_index=No
     bcr.axvline(x=32, linestyle='-.', linewidth=4, color='r')
     bcr.annotate('PLATIPUS', (90, .85), fontsize='x-large')"""
 
-    # Get rid of top and right spines for subplots
+    """# Get rid of top and right spines for subplots
     # TODO: BULKY
     acc.spines['top'].set_visible(False)
     acc.spines['right'].set_visible(False)
@@ -109,7 +109,7 @@ def plot_metrics_graph(num_examples, stats_dict, dst, amine=None, amine_index=No
     rec.spines['top'].set_visible(False)
     rec.spines['right'].set_visible(False)
     bcr.spines['top'].set_visible(False)
-    bcr.spines['right'].set_visible(False)
+    bcr.spines['right'].set_visible(False)"""
 
     # Increase the font size of the x/y labels
     acc.tick_params(axis='both', labelsize=20)
@@ -119,14 +119,14 @@ def plot_metrics_graph(num_examples, stats_dict, dst, amine=None, amine_index=No
 
     # Display legends for all subplots
     handles, labels = acc.get_legend_handles_labels()
-    fig.legend(handles, labels, loc=(.15, .04), ncol=int(len(labels)/2), fontsize=18)
+    num_cols = int(len(labels)/2) if len(labels) > 7 else len(labels)
+    fig.legend(handles, labels, loc="lower center", ncol=num_cols, fontsize=18, bbox_to_anchor=[0.5, 0.04])
 
     # Put x-axis label at the bottom
     fig.text(0.5, 0.02, "Number of samples given", ha="center", va="center", fontsize=28)
 
     # Set the metrics graph's name and designated folder
-    graph_name = 'cv_metrics_{0:s}.png'.format(
-        amine) if amine else 'average_metrics.png'
+    graph_name = 'cv_metrics_{0:s}.png'.format(amine) if amine else 'average_metrics.png'
 
     graph_dst = Path(dst) / Path(graph_name)
     # graph_dst = '{0:s}/{1:s}'.format(dst, graph_name)
