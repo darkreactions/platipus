@@ -8,9 +8,11 @@ common_params = {
     'gpu_id': 1,
     'test_data': True,
     'meta': False,  # TODO: redundant with pretrain?
-    'full_dataset': True,
+    'full_dataset': False,
     'fine_tuning': False,
     'pretrain': True,
+    'train_size': 20,
+    'pre_learn_size': 10,
     'stats_path': Path('./results/cv_statistics.pkl'),
     'cv_stats_overwrite': True,
     'save_model': False
@@ -57,7 +59,6 @@ The format for SVM config should be a dictionary in the following form
 """
 
 randomforest_params = {
-    'train_size': 20,
     'config': None,
     'model_name': 'Random_Forest'
 }
