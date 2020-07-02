@@ -333,7 +333,7 @@ def load_test_samples(hold_out_amines, df, to_exclude, k_shot, amine_header, sco
     return amine_test_samples
 
 
-def process_dataset(train_size=10, pre_learn_size=10, verbose=True, cross_validation=True, full=True, pretrain=True):
+def process_dataset(train_size=10, verbose=True, cross_validation=True, full=True, pretrain=True):
     """TODO: DOCUMENTATION and COMMENTS"""
 
     # Initialize data dict dictionary TODO: CLUNKY
@@ -418,8 +418,6 @@ def process_dataset(train_size=10, pre_learn_size=10, verbose=True, cross_valida
         full_amines = list(full_training_op1.keys())
         test_amines = list(test_training_op1.keys())
 
-        total_selected = train_size + pre_learn_size
-
         for amine in full_amines:
             # Full dataset under option 1
             x_t, y_t = full_training_op1[amine][0], full_training_op1[amine][1]
@@ -427,7 +425,7 @@ def process_dataset(train_size=10, pre_learn_size=10, verbose=True, cross_valida
             all_data, all_labels = full_validation_op1[amine][0], full_validation_op1[amine][1]
             
             # Select k + x many for training before active learning loop
-            qry = np.random.choice(x_v.shape[0], size=total_selected, replace=False)
+            qry = np.random.choice(x_v.shape[0], size=train_size, replace=False)
             
             # Update training and validation set with the selection
             x_t = np.append(x_t, x_v[qry]).reshape(-1, x_t.shape[1])
@@ -448,15 +446,6 @@ def process_dataset(train_size=10, pre_learn_size=10, verbose=True, cross_valida
             x_v, y_v = full_validation_op2[amine][2], full_validation_op2[amine][3]
             all_data, all_labels = np.concatenate((x_t, x_v)), np.concatenate((y_t, y_v))
 
-            # Select k + x many for training before active learning loop
-            qry = np.random.choice(x_v.shape[0], size=pre_learn_size, replace=False)
-
-            # Update training and validation set with the selection
-            x_t = np.append(x_t, x_v[qry]).reshape(-1, x_t.shape[1])
-            y_t = np.append(y_t, y_v[qry])
-            x_v = np.delete(x_v, qry, axis=0)
-            y_v = np.delete(y_v, qry)
-
             # Load into dictionary
             data_dict['full']['option_2']['x_t'][amine] = x_t
             data_dict['full']['option_2']['y_t'][amine] = y_t
@@ -472,7 +461,7 @@ def process_dataset(train_size=10, pre_learn_size=10, verbose=True, cross_valida
             all_data, all_labels = test_validation_op1[amine][0], test_validation_op1[amine][1]
 
             # Select k + x many for training before active learning loop
-            qry = np.random.choice(x_v.shape[0], size=total_selected, replace=False)
+            qry = np.random.choice(x_v.shape[0], size=train_size, replace=False)
 
             # Update training and validation set with the selection
             x_t = np.append(x_t, x_v[qry]).reshape(-1, x_t.shape[1])
@@ -492,15 +481,6 @@ def process_dataset(train_size=10, pre_learn_size=10, verbose=True, cross_valida
             x_t, y_t = test_validation_op2[amine][0], test_validation_op2[amine][1]
             x_v, y_v = test_validation_op2[amine][2], test_validation_op2[amine][3]
             all_data, all_labels = np.concatenate((x_t, x_v)), np.concatenate((y_t, y_v))
-
-            # Select k + x many for training before active learning loop
-            qry = np.random.choice(x_v.shape[0], size=pre_learn_size, replace=False)
-
-            # Update training and validation set with the selection
-            x_t = np.append(x_t, x_v[qry]).reshape(-1, x_t.shape[1])
-            y_t = np.append(y_t, y_v[qry])
-            x_v = np.delete(x_v, qry, axis=0)
-            y_v = np.delete(y_v, qry)
 
             # Load into dictionary
             data_dict['test']['option_2']['x_t'][amine] = x_t
