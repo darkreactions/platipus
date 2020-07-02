@@ -1,9 +1,8 @@
 import os
 import pickle
-from collections import defaultdict
-
 import numpy as np
 import pandas as pd
+from collections import defaultdict
 from sklearn.preprocessing import StandardScaler
 
 # Set up various strings corresponding to headers
@@ -374,14 +373,14 @@ def process_dataset(train_size=10, verbose=True, cross_validation=True, full=Tru
                 'all_labels': defaultdict(dict)
             },
         }
-                 }
+    }
 
     data_dict_path = './data/non_meta_data.pkl'
 
     if not os.path.exists(data_dict_path):
         print('No data used for non-meta models found')
         print('Generating data dictionary across models...')
-        
+
         full_training_op1, full_validation_op1, full_testing_op1, full_counts_op1 = import_full_dataset(
             train_size,
             meta_batch_size=25,
@@ -414,7 +413,7 @@ def process_dataset(train_size=10, verbose=True, cross_validation=True, full=Tru
             cross_validation=cross_validation,
             meta=True
         )
-        
+
         full_amines = list(full_training_op1.keys())
         test_amines = list(test_training_op1.keys())
 
@@ -423,7 +422,7 @@ def process_dataset(train_size=10, verbose=True, cross_validation=True, full=Tru
             x_t, y_t = full_training_op1[amine][0], full_training_op1[amine][1]
             x_v, y_v = full_validation_op1[amine][0], full_validation_op1[amine][1]
             all_data, all_labels = full_validation_op1[amine][0], full_validation_op1[amine][1]
-            
+
             # Select k + x many for training before active learning loop
             qry = np.random.choice(x_v.shape[0], size=train_size, replace=False)
             
@@ -432,7 +431,7 @@ def process_dataset(train_size=10, verbose=True, cross_validation=True, full=Tru
             y_t = np.append(y_t, y_v[qry])
             x_v = np.delete(x_v, qry, axis=0)
             y_v = np.delete(y_v, qry)
-            
+
             # Load into dictionary
             data_dict['full']['option_1']['x_t'][amine] = x_t
             data_dict['full']['option_1']['y_t'][amine] = y_t
@@ -440,7 +439,7 @@ def process_dataset(train_size=10, verbose=True, cross_validation=True, full=Tru
             data_dict['full']['option_1']['y_v'][amine] = y_v
             data_dict['full']['option_1']['all_data'][amine] = all_data
             data_dict['full']['option_1']['all_labels'][amine] = all_labels
-            
+
             # Full dataset under option 2
             x_t, y_t = full_validation_op2[amine][0], full_validation_op2[amine][1]
             x_v, y_v = full_validation_op2[amine][2], full_validation_op2[amine][3]
@@ -535,7 +534,6 @@ def process_dataset(train_size=10, verbose=True, cross_validation=True, full=Tru
     amine_list = list(x_t.keys())
 
     return amine_list, x_t, y_t, x_v, y_v, all_data, all_labels
-
 
 if __name__ == "__main__":
     meta_batch_size = 10

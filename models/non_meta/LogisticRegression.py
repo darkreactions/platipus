@@ -282,12 +282,12 @@ def fine_tune(training_batches, cross_validation_batches, info=False):
     # Set all possible combinations
 
     params = {
-        'penalty': ['l1','l2','elasticnet','none'],
-        'dual': [True, False],
-        'tol': [1e-3, 1e-4, 1e-5],
-        'C': [.1 * i for i in range(3)],
-        'solver': ['newton-cg','lbfgs','liblinear','sag','saga'],
-        'max_iter': [4000, 5000, 6000, 7000]
+        'penalty': ['l2','none'],
+        'dual': [False],
+        'tol': [1e-4, 1e-5],
+        'C': [.1 * i for i in range(1,3)],
+        'solver': ['lbfgs','liblinear','sag','saga'],
+        'max_iter': [4000, 5000, 6000, 7000, 9000]
     }
 
     combinations = []
@@ -340,55 +340,58 @@ def fine_tune(training_batches, cross_validation_batches, info=False):
     # Try out each possible combinations of hyper-parameters
     print(f'There are {len(combinations)} many combinations to try.')
     for option in combinations:
-        accuracies = []
-        precisions = []
-        recalls = []
-        bcrs = []
-        aucs = []
+        if option['solver'] == 'liblinear' and option['penalty'] =='none':
+            pass
+        else:
+            accuracies = []
+            precisions = []
+            recalls = []
+            bcrs = []
+            aucs = []
+
+            if info:
+                print(f'Trying option {option_no}')
+
+            for amine in training_batches:
+                # print("Training and cross validation on {} amine.".format(amine))
+                ALR = ActiveLogisticRegression(amine=amine, config=option, verbose=False)
+                ALR.load_dataset(training_batches, cross_validation_batches)
+                ALR.train()
+
+                # Calculate AUC
+                auc = roc_auc_score(ALR.all_labels, ALR.y_preds)
+
+                accuracies.append(ALR.metrics['accuracies'][-1])
+                precisions.append(ALR.metrics['precisions'][-1])
+                recalls.append(ALR.metrics['recalls'][-1])
+                bcrs.append(ALR.metrics['bcrs'][-1])
+                aucs.append(auc)
+
+            avg_accuracy = sum(accuracies) / len(accuracies)
+            avg_precision = sum(precisions) / len(precisions)
+            avg_recall = sum(recalls) / len(recalls)
+            avg_bcr = sum(bcrs) / len(bcrs)
+            avg_auc = sum(aucs) / len(aucs)
+
+            if avg_auc > best_metric:
+                best_metric = avg_auc
+                best_option = option
+                if info:
+                    print(f'The fine-tuned average accuracy is {avg_accuracy} vs. the base accuracy {base_avg_accuracy}')
+                    print(
+                        f'The fine-tuned average precision is {avg_precision} vs. the base precision {base_avg_precision}')
+                    print(f'The fine-tuned average recall rate is {avg_recall} vs. the base recall rate {base_avg_recall}')
+                    print(f'The fine-tuned average bcr is {avg_bcr} vs. the base bcr {base_avg_bcr}')
+                    print(f'The fine-tuned average auc is {avg_auc} vs. the base auc {base_avg_auc}')
+                    print(f'The current best setting is {best_option}')
+                    print()
+
+            option_no += 1
 
         if info:
-            print(f'Trying option {option_no}')
-
-        for amine in training_batches:
-            # print("Training and cross validation on {} amine.".format(amine))
-            ALR = ActiveLogisticRegression(amine=amine, config=option, verbose=False)
-            ALR.load_dataset(training_batches, cross_validation_batches)
-            ALR.train()
-
-            # Calculate AUC
-            auc = roc_auc_score(ALR.all_labels, ALR.y_preds)
-
-            accuracies.append(ALR.metrics['accuracies'][-1])
-            precisions.append(ALR.metrics['precisions'][-1])
-            recalls.append(ALR.metrics['recalls'][-1])
-            bcrs.append(ALR.metrics['bcrs'][-1])
-            aucs.append(auc)
-
-        avg_accuracy = sum(accuracies) / len(accuracies)
-        avg_precision = sum(precisions) / len(precisions)
-        avg_recall = sum(recalls) / len(recalls)
-        avg_bcr = sum(bcrs) / len(bcrs)
-        avg_auc = sum(aucs) / len(aucs)
-
-        if avg_auc > best_metric:
-            best_metric = avg_auc
-            best_option = option
-            if info:
-                print(f'The fine-tuned average accuracy is {avg_accuracy} vs. the base accuracy {base_avg_accuracy}')
-                print(
-                    f'The fine-tuned average precision is {avg_precision} vs. the base precision {base_avg_precision}')
-                print(f'The fine-tuned average recall rate is {avg_recall} vs. the base recall rate {base_avg_recall}')
-                print(f'The fine-tuned average bcr is {avg_bcr} vs. the base bcr {base_avg_bcr}')
-                print(f'The fine-tuned average auc is {avg_auc} vs. the base auc {base_avg_auc}')
-                print(f'The current best setting is {best_option}')
-                print()
-
-        option_no += 1
-
-    if info:
-        print()
-        print(f'The best setting for all amines is {best_option}')
-        print(f'With an average auc of {best_metric}')
+            print()
+            print(f'The best setting for all amines is {best_option}')
+            print(f'With an average auc of {best_metric}')
 
     return best_option
 
