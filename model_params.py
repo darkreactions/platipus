@@ -12,7 +12,7 @@ common_params = {
     'fine_tuning': False,
     'pretrain': True,
     'train_size': 10,   # k after pretrain
-    'pre_learn_size': 10,   # x before active learning
+    'active_learning_iter': 10,   # x before active learning
     'stats_path': Path('./results/cv_statistics.pkl'),
     'cv_stats_overwrite': True,
     'save_model': False
