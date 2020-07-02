@@ -536,7 +536,7 @@ def run_model(SVM_params):
 
     # Set up the number of samples used for training under option 2
     train_size = SVM_params['train_size']
-    pre_learn_size = SVM_params['pre_learn_size']
+    active_learning_iter = SVM_params['active_learning_iter']
 
     # Specify the desired operation
     fine_tuning = SVM_params['fine_tuning']
@@ -549,7 +549,6 @@ def run_model(SVM_params):
         # Load the desired sized dataset under desired option
         amine_list, x_t, y_t, x_v, y_v, all_data, all_labels = process_dataset(
             train_size=train_size,
-            pre_learn_size=pre_learn_size,
             verbose=verbose,
             cross_validation=cross_validation,
             full=full,
@@ -571,7 +570,7 @@ def run_model(SVM_params):
                 ASVM.train()
 
                 # Conduct active learning with all the observations available in the pool
-                ASVM.active_learning(to_params=to_params)
+                ASVM.active_learning(num_iter=active_learning_iter, to_params=to_params)
 
                 # Save the model for future reproducibility
                 if save_model:
