@@ -6,17 +6,19 @@ common_params = {
     'verbose': False,
     'train_flag': True,
     'gpu_id': 1,
-    'test_data': True,
-    'meta': False,
+    'test_data': True,  # TODO: redundant with full_dataset?
+    'meta': False,  # TODO: redundant with pretrain?
     'full_dataset': True,
     'fine_tuning': False,
     'pretrain': True,
+    'train_size': 10,   # k after pretrain
+    'active_learning_iter': 10,   # x before active learning
     'stats_path': Path('./results/cv_statistics.pkl'),
-    'cv_stats_overwrite': True
+    'cv_stats_overwrite': True,
+    'save_model': False
 }
 
 knn_params = {
-    'train_size': 20,
     'neighbors': 2,
     'config': None,
     'model_name': 'KNN'
@@ -35,7 +37,6 @@ The format for KNN's config should be a dictionary in the following form
 """
 
 svm_params = {
-    'train_size': 20,
     'config': None,
     'model_name': 'SVM'
 }
@@ -56,19 +57,22 @@ The format for SVM config should be a dictionary in the following form
 """
 
 randomforest_params = {
-    'train_size': 20,
     'config': None,
     'model_name': 'Random_Forest'
 }
 
+logisticregression_params = {
+    'config': None,
+    'model_name': 'Logistic_Regression'
+}
+
 decisiontree_params = {
-    'train_size': 20,
     'config': None,
     'model_name': 'Decision_Tree'
 }
 
 meta_params = {
-    'k_shot': 20,
+    'k_shot': 10,
     'n_way': 2,
     'inner_lr': 1e-3,
     'meta_lr': 1e-3,

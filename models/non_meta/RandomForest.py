@@ -21,7 +21,7 @@ from sklearn.ensemble import RandomForestClassifier
 
 from modAL.models import ActiveLearner
 
-from utils.dataset import import_full_dataset, import_test_dataset
+from utils.dataset import import_full_dataset, import_test_dataset, process_dataset
 
 
 class ActiveRandomForest:
@@ -68,44 +68,25 @@ class ActiveRandomForest:
         self.model_name = model_name
 
     # TODO: find out what to do with this part
-    def load_dataset(self, training_batches, validation_batches, meta=False):
-        """Load the dataset for training and testing into model under option 1 or option 2
-
-        Option 1 is train with observations of other tasks and validate on the task-specific observations.
-        Option 2 is to train and validate on the task-specific observations.
+    def load_dataset(self, x_t, y_t, x_v, y_v, all_data, all_labels):
+        """Load the input training and validation data and labels into the model.
 
         Args:
-            training_batches:           A dictionary representing the training batches used to train.
-                                            See dataset.py for specific structure.
-            validation_batches:         A dictionary representing the training batches used to train.
-                                            See dataset.py for specific structure.
-            meta:                       A boolean representing if it will be trained under option 1 or option 2.
-                                            Option 1 is train with observations of other tasks and validate on the
-                                            task-specific observations.
-                                            Option 2 is to train and validate on the task-specific observations.
-                                            Default to option 1.
+            x_t:                A 2-D numpy array representing the training data.
+            y_t:                A 2-D numpy array representing the training labels.
+            x_v:                A 2-D numpy array representing the validation data.
+            y_v:                A 2-D numpy array representing the validation labels.
+            all_data:           A 2-D numpy array representing all the data in the active learning pool.
+            all_labels:         A 2-D numpy array representing all the labels in the active learning pool.
+
+        Returns:
+            N/A
         """
 
-        if meta is True:
-            # option 2
-            print("Conducting Training under Option 2.")
-            self.x_t = validation_batches[self.amine][0]
-            self.y_t = validation_batches[self.amine][1]
-            self.x_v = validation_batches[self.amine][2]
-            self.y_v = validation_batches[self.amine][3]
+        self.x_t, self.x_v, self.y_t, self.y_v = x_t, y_t, x_v, y_v
 
-            self.all_data = np.concatenate((self.x_t, self.x_v))
-            self.all_labels = np.concatenate((self.y_t, self.y_v))
-
-        else:
-            print("Conducting Training under Option 1.")
-            self.x_t = training_batches[self.amine][0]
-            self.y_t = training_batches[self.amine][1]
-            self.x_v = validation_batches[self.amine][0]
-            self.y_v = validation_batches[self.amine][1]
-
-            self.all_data = self.x_v
-            self.all_labels = self.y_v
+        self.all_data = all_data
+        self.all_labels = all_labels
 
         if self.verbose:
             print(f'The training data has dimension of {self.x_t.shape}.')
@@ -287,13 +268,9 @@ class ActiveRandomForest:
             pickle.dump(self, f)
 
 
-def fine_tune(training_batches, validation_batches, info=False):
+def fine_tune(info=False):
     """Fine tune the model based on average bcr performance to find the best model hyper-parameters.
     Args:
-        training_batches:       A dictionary representing the training batches used to train.
-                                    See dataset.py for specific structure.
-        validation_batches:     A dictionary representing the training batches used to train.
-                                    See dataset.py for specific structure.
         info:                   A boolean. Setting it to True will make the function print out additional information
                                     during the fine-tuning stage.
                                     Default to False.
@@ -323,6 +300,18 @@ def fine_tune(training_batches, validation_batches, info=False):
     for bundle in itertools.product(*values):
         combinations.append(dict(zip(keys, bundle)))
 
+    if info:
+        print(f'There are {len(combinations)} many combinations to try.')
+
+    amine_list, train_data, train_labels, val_data, val_labels, all_data, all_labels = process_dataset(
+        train_size=10,
+        pre_learn_size=10,
+        verbose=False,
+        cross_validation=True,
+        full=True,
+        pretrain=True
+    )
+
     # Set baseline performance
     base_accuracies = []
     base_precisions = []
@@ -330,13 +319,20 @@ def fine_tune(training_batches, validation_batches, info=False):
     base_bcrs = []
     base_aucs = []
 
-    for amine in training_batches:
+    for amine in amine_list:
         ARF = ActiveRandomForest(amine=amine, verbose=False)
-        ARF.load_dataset(training_batches, validation_batches)
+
+        x_t, y_t = train_data[amine], train_labels[amine]
+        x_v, y_v = val_data[amine], val_labels[amine]
+        all_data, all_labels = all_data[amine], all_labels[amine]
+
+        # Load the training and validation set into the model
+        ARF.load_dataset(x_t, x_v, y_t, y_v, all_data, all_labels)
+
         ARF.train()
 
         # Calculate AUC
-        auc = roc_auc_score(ARF.all_labels, ARF.y_preds)
+        auc = roc_auc_score(all_labels, ARF.y_preds)
 
         base_accuracies.append(ARF.metrics['accuracies'][-1])
         base_precisions.append(ARF.metrics['precisions'][-1])
@@ -365,7 +361,6 @@ def fine_tune(training_batches, validation_batches, info=False):
     option_no = 1  # Debug
 
     # Try out each possible combinations of hyper-parameters
-    print(f'There are {len(combinations)} many combinations to try.')
     for option in combinations:
         accuracies = []
         precisions = []
@@ -376,14 +371,19 @@ def fine_tune(training_batches, validation_batches, info=False):
         if info:
             print(f'Trying option {option_no}')
 
-        for amine in training_batches:
+        for amine in amine_list:
             # print("Training and cross validation on {} amine.".format(amine))
             ARF = ActiveRandomForest(amine=amine, config=option, verbose=False)
-            ARF.load_dataset(training_batches, validation_batches)
+            x_t, y_t = train_data[amine], train_labels[amine]
+            x_v, y_v = val_data[amine], val_labels[amine]
+            all_data, all_labels = all_data[amine], all_labels[amine]
+
+            # Load the training and validation set into the model
+            ARF.load_dataset(x_t, x_v, y_t, y_v, all_data, all_labels)
             ARF.train()
 
             # Calculate AUC
-            auc = roc_auc_score(ARF.all_labels, ARF.y_preds)
+            auc = roc_auc_score(all_labels, ARF.y_preds)
 
             accuracies.append(ARF.metrics['accuracies'][-1])
             precisions.append(ARF.metrics['precisions'][-1])
@@ -496,6 +496,8 @@ def parse_args():
     parser.add_argument('--test', dest='train_flag', action='store_false')
     parser.set_defaults(train_flag=True)
 
+    parser.add_argument('--pre_learn_size', dest='pre_learn_size', default=10, help='number of samples used for '
+                                                                                    'training before active learning')
     parser.add_argument('--cross_validate', action='store_true', help='use cross-validation for training')
     parser.add_argument('--pretrain', action='store_true', help='load the dataset under option 1. Not include this will'
                                                                 ' load the dataset under option 2. See documentation in'
@@ -521,53 +523,57 @@ def run_model(RandomForest_params):
     cross_validation = RandomForest_params['cross_validate']
     verbose = RandomForest_params['verbose']
     pretrain = RandomForest_params['pretrain']
+    pre_learn_size = RandomForest_params['pre_learn_size']
+    full = RandomForest_params['full_dataset']
     stats_path = RandomForest_params['stats_path']
     model_name = RandomForest_params['model_name']
     print(model_name)
 
-    # Set up if we want to load the meta dataset for option 2 or not
-    meta = not pretrain
     # Set up the number of samples used for training under option 2
     train_size = RandomForest_params['train_size']
     # Specify the desired operation
     fine_tuning = RandomForest_params['fine_tuning']
+    save_model = RandomForest_params['save_model']
+
     if fine_tuning:
-        ft_training_batches, ft_validation_batches, ft_testing_batches, ft_counts = import_full_dataset(
-            train_size, meta_batch_size=25, num_batches=250, verbose=verbose, cross_validation=cross_validation,
-            meta=False)
-        best_config = fine_tune(ft_training_batches, ft_validation_batches, info=True)
+        best_config = fine_tune(info=True)
     else:
-        # Load the full dataset for training and validation
-        if RandomForest_params['full_dataset']:
-            training_batches, validation_batches, testing_batches, counts = import_full_dataset(train_size,
-                                                                                                meta_batch_size=25,
-                                                                                                num_batches=250,
-                                                                                                verbose=verbose,
-                                                                                                cross_validation=cross_validation,
-                                                                                                meta=meta)
-        else:
-            training_batches, validation_batches, testing_batches, counts = import_test_dataset(train_size,
-                                                                                                meta_batch_size=25,
-                                                                                                num_batches=250,
-                                                                                                verbose=verbose,
-                                                                                                cross_validation=cross_validation,
-                                                                                                meta=meta)
-        # Save the data used for training and testing for reproducibility
-        save_used_data(training_batches, validation_batches, testing_batches, counts, pretrain)
+        amine_list, x_t, y_t, x_v, y_v, all_data, all_labels = process_dataset(
+            train_size=train_size,
+            pre_learn_size=pre_learn_size,
+            verbose=verbose,
+            cross_validation=cross_validation,
+            full=full,
+            pretrain=pretrain
+        )
+
+
         # print(training_batches.keys())
-        for amine in training_batches:
+        for amine in amine_list:
             print(f'Training and active learning on amine {amine}')
-            # Create the random forest model instance for the specific amine
-            ARF = ActiveRandomForest(amine=amine, config=config, verbose=verbose, stats_path=stats_path,
-                                     model_name=model_name)
+            # Create the RandomForest model instance for the specific amine
+            ARF = ActiveRandomForest(amine=amine, config=config, verbose=verbose, stats_path=stats_path, model_name=model_name)
+
+            x_t, y_t = x_t[amine], y_t[amine]
+            # print(type(y_t))
+            # for y in y_t:
+            #     print(type(y))
+            x_v, y_v = x_v[amine], y_v[amine]
+            # print(type(y_v))
+            # for x in y_v:
+            #     print(type(x))
+            all_data, all_labels = all_data[amine], all_labels[amine]
+
             # Load the training and validation set into the model
-            ARF.load_dataset(training_batches, validation_batches, meta)
+            ARF.load_dataset(x_t,y_t,x_v,y_v,all_data,all_labels)
             # Train the data on the training set
             ARF.train()
             # Conduct active learning with all the observations available in the pool
             ARF.active_learning(to_params=True)
             # Save the model for future reproducibility
-            ARF.save_model(train_size, 2, pretrain)
+            if save_model:
+                ARF.save_model(train_size, 2, pretrain)
+
             # TODO: testing part not implemented
 
 

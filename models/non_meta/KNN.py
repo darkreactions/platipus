@@ -21,7 +21,7 @@ from sklearn.neighbors import KNeighborsClassifier
 
 from modAL.models import ActiveLearner
 
-from utils.dataset import import_full_dataset, import_test_dataset
+from utils.dataset import process_dataset
 
 
 class ActiveKNN:
@@ -36,8 +36,8 @@ class ActiveKNN:
         verbose:        A boolean representing whether it will prints out additional information to the terminal or not.
         stats_path:     A Path object representing the directory of the stats dictionary.
         model_name:     A string representing the name of the model for future plotting.
-        pool_data:      A numpy array representing all the data from the dataset.
-        pool_labels:    A numpy array representing all the labels from the dataset.
+        all_data:       A numpy array representing all the data from the dataset.
+        all_labels:     A numpy array representing all the labels from the dataset.
         x_t:            A numpy array representing the training data used for model training.
         y_t:            A numpy array representing the training labels used for model training.
         x_v:            A numpy array representing the testing data used for active learning.
@@ -80,15 +80,12 @@ class ActiveKNN:
             y_v:                A 2-D numpy array representing the validation labels.
             all_data:           A 2-D numpy array representing all the data in the active learning pool.
             all_labels:         A 2-D numpy array representing all the labels in the active learning pool.
-
-        Returns:
-            N/A
         """
 
         self.x_t, self.x_v, self.y_t, self.y_v = x_t, y_t, x_v, y_v
 
-        self.pool_data = all_data
-        self.pool_labels = all_labels
+        self.all_data = all_data
+        self.all_labels = all_labels
 
         if self.verbose:
             print(f'The training data has dimension of {self.x_t.shape}.')
@@ -115,9 +112,8 @@ class ActiveKNN:
             to_params:  A boolean that decide if to store the metrics to the dictionary,
                         detail see "store_metrics_to_params" function.
                         Default = True
-
-        return: N/A
         """
+
         num_iter = num_iter if num_iter else self.x_v.shape[0]
 
         for _ in range(num_iter):
@@ -132,8 +128,7 @@ class ActiveKNN:
             self.evaluate()
 
             # Remove the queried instance from the unlabeled pool.
-            self.x_t = np.append(
-                self.x_t, uncertain_data).reshape(-1, self.pool_data.shape[1])
+            self.x_t = np.append(self.x_t, uncertain_data).reshape(-1, self.all_data.shape[1])
             self.y_t = np.append(self.y_t, uncertain_label)
             self.x_v = np.delete(self.x_v, query_index, axis=0)
             self.y_v = np.delete(self.y_v, query_index)
@@ -147,17 +142,15 @@ class ActiveKNN:
         Args:
             store:  A boolean that decides if to store the metrics of the performance of the model.
                     Default = True
-
-        return: N/A
         """
 
         # Calculate and report our model's accuracy.
-        accuracy = self.learner.score(self.pool_data, self.pool_labels)
+        accuracy = self.learner.score(self.all_data, self.all_labels)
 
-        self.y_preds = self.learner.predict(self.pool_data)
+        self.y_preds = self.learner.predict(self.all_data)
 
-        # TODO: move this into utils maybe?
-        cm = confusion_matrix(self.pool_labels, self.y_preds)
+        # TODO: move the following parts into utils maybe?
+        cm = confusion_matrix(self.all_labels, self.y_preds)
 
         # To prevent nan value for precision, we set it to 1 and send out a warning message
         if cm[1][1] + cm[0][1] != 0:
@@ -190,8 +183,6 @@ class ActiveKNN:
                                 predicted to be successful out of all the actual successful reactions.
             bcr:            A float representing the balanced classification rate of the model. It's the average value
                                 of recall rate and true negative rate.
-
-        return: N/A
         """
 
         self.metrics['confusion_matrices'].append(cm)
@@ -225,7 +216,6 @@ class ActiveKNN:
         if model not in stats_dict:
             stats_dict[model] = defaultdict(list)
 
-        # TODO: may have to change this once the structure of stats_dict changes
         stats_dict[model]['amine'].append(self.amine)
         stats_dict[model]['accuracies'].append(self.metrics['accuracies'])
         stats_dict[model]['confusion_matrices'].append(
@@ -248,9 +238,6 @@ class ActiveKNN:
                                         Option 1 is train with observations of other tasks and validate on the
                                         task-specific observations.
                                         Option 2 is to train and validate on the task-specific observations.
-
-        Returns:
-            N/A
         """
 
         # Indicate which option we used the data for
@@ -299,7 +286,10 @@ def parse_args():
         args: Namespace object with the following attributes:
             datasource:         A string identifying the datasource to be used, with default datasource set to drp_chem.
             neighbors:          An integer representing the number of neighbors used for KNN. Default set to 1.
-            train_size          An integer representing the number of samples use for training. Default set to 1.
+            train_size          An integer representing the number of samples uses for training after pre-training.
+                                    Default set to 10.
+            pre_learn_size      An integer representing the number of samples used for training before active learning.
+                                    Default set to 10.
             train:              A train_flag attribute. Including it in the command line will set the train_flag to
                                     True by default.
             test:               A train_flag attribute. Including it in the command line will set the train_flag to
@@ -318,7 +308,10 @@ def parse_args():
     parser.add_argument('--datasource', type=str, default='drp_chem', help='datasource to be used')
 
     parser.add_argument('--neighbors', dest='neighbors', default=1, help='number of neighbors for KNN')
-    parser.add_argument('--train_size', dest='train_size', default=1, help='number of samples used for training')
+    parser.add_argument('--train_size', dest='train_size', default=10, help='number of samples used for training after '
+                                                                            'pre-training')
+    parser.add_argument('--pre_learn_size', dest='pre_learn_size', default=10, help='number of samples used for '
+                                                                                    'training before active learning')
 
     parser.add_argument('--train', dest='train_flag', action='store_true')
     parser.add_argument('--test', dest='train_flag', action='store_false')
@@ -352,7 +345,6 @@ def fine_tune(info=False):
     """
 
     # Set all possible combinations
-
     params = {
         'n_neighbors': [i for i in range(1, 11)],
         'weights': ['uniform', 'distance'],
@@ -370,12 +362,15 @@ def fine_tune(info=False):
     if info:
         print(f'There are {len(combinations)} many combinations to try.')
 
-    training_batches, validation_batches, testing_batches, counts = import_full_dataset(k_shot=20,
-                                                                                        meta_batch_size=10,
-                                                                                        num_batches=250,
-                                                                                        verbose=True,
-                                                                                        cross_validation=True,
-                                                                                        meta=False)
+    # Load the full dataset under option 1
+    amine_list, train_data, train_labels, val_data, val_labels, all_data, all_labels = process_dataset(
+        train_size=10,
+        pre_learn_size=10,
+        verbose=False,
+        cross_validation=True,
+        full=True,
+        pretrain=True
+    )
 
     # Set baseline performance
     base_accuracies = []
@@ -384,20 +379,20 @@ def fine_tune(info=False):
     base_bcrs = []
     base_aucs = []
 
-    for amine in training_batches:
+    for amine in amine_list:
+        # Create model for a specific amine
         KNN = ActiveKNN(amine=amine, verbose=False)
 
-        x_t, y_t = training_batches[amine][0], training_batches[amine][1]
-        x_v, y_v = validation_batches[amine][0], validation_batches[amine][1]
-        all_data, all_labels = x_v, y_v
-
-        # Load the training and validation set into the model
-        KNN.load_dataset(x_t, x_v, y_t, y_v, all_data, all_labels)
+        # Exact and load the training and validation set into the model
+        x_t, y_t = train_data[amine], train_labels[amine]
+        x_v, y_v = val_data[amine], val_labels[amine]
+        all_task_data, all_task_labels = all_data[amine], all_labels[amine]
+        KNN.load_dataset(x_t, x_v, y_t, y_v, all_task_data, all_task_labels)
 
         KNN.train()
 
         # Calculate AUC
-        auc = roc_auc_score(all_labels, KNN.y_preds)
+        auc = roc_auc_score(all_task_labels, KNN.y_preds)
 
         base_accuracies.append(KNN.metrics['accuracies'][-1])
         base_precisions.append(KNN.metrics['precisions'][-1])
@@ -436,21 +431,20 @@ def fine_tune(info=False):
         if info:
             print(f'Trying config {option_no}')
 
-        for amine in training_batches:
-            # print("Training and cross validation on {} amine.".format(amine))
+        for amine in amine_list:
+            # Create model for a specific amine
             KNN = ActiveKNN(amine=amine, config=option, verbose=False)
 
-            x_t, y_t = training_batches[amine][0], training_batches[amine][1]
-            x_v, y_v = validation_batches[amine][0], validation_batches[amine][1]
-            all_data, all_labels = x_v, y_v
-
-            # Load the training and validation set into the model
-            KNN.load_dataset(x_t, x_v, y_t, y_v, all_data, all_labels)
+            # Exact and load the training and validation set into the model
+            x_t, y_t = train_data[amine], train_labels[amine]
+            x_v, y_v = val_data[amine], val_labels[amine]
+            all_task_data, all_task_labels = all_data[amine], all_labels[amine]
+            KNN.load_dataset(x_t, x_v, y_t, y_v, all_task_data, all_task_labels)
 
             KNN.train()
 
             # Calculate AUC
-            auc = roc_auc_score(all_labels, KNN.y_preds)
+            auc = roc_auc_score(all_task_labels, KNN.y_preds)
 
             accuracies.append(KNN.metrics['accuracies'][-1])
             precisions.append(KNN.metrics['precisions'][-1])
@@ -469,7 +463,8 @@ def fine_tune(info=False):
             best_option = option
             if info:
                 print(f'The fine-tuned average accuracy is {avg_accuracy} vs. the base accuracy {base_avg_accuracy}')
-                print(f'The fine-tuned average precision is {avg_precision} vs. the base precision {base_avg_precision}')
+                print(
+                    f'The fine-tuned average precision is {avg_precision} vs. the base precision {base_avg_precision}')
                 print(f'The fine-tuned average recall rate is {avg_recall} vs. the base recall rate {base_avg_recall}')
                 print(f'The fine-tuned average bcr is {avg_bcr} vs. the base bcr {base_avg_bcr}')
                 print(f'The fine-tuned average auc is {avg_auc} vs. the base auc {base_avg_auc}')
@@ -484,54 +479,6 @@ def fine_tune(info=False):
         print(f'With an average auc of {best_metric}')
 
     return best_option
-
-
-def save_used_data(training_batches, validation_batches, testing_batches, counts, pretrain):
-    """Save the data used to train, validate and test the model to designated folder
-
-    Args:
-        training_batches:       A dictionary representing the training batches used to train.
-                                    See dataset.py for specific structure.
-        validation_batches:     A dictionary representing the training batches used to train.
-                                    See dataset.py for specific structure.
-        testing_batches:        A dictionary representing the training batches used to train.
-                                    See dataset.py for specific structure.
-        counts:                 A dictionary with 'total' and each available amines as keys and lists of length 2 as
-                                    values in the format of: [# of failed reactions, # of successful reactions]
-        pretrain:               A boolean representing if it will be trained under option 1 or option 2.
-                                    Option 1 is train with observations of other tasks and validate on the
-                                    task-specific observations.
-                                    Option 2 is to train and validate on the task-specific observations.
-                                    
-    Returns:
-        N/A
-    """
-
-    # Indicate which option we used the data for
-    option = 1 if pretrain else 2
-
-    # Set up the destination folder to save the data
-    data_folder = './results/KNN_few_shot/option_{0:d}/data'.format(option)
-    if not os.path.exists(data_folder):
-        os.makedirs(data_folder)
-        print('No folder for KNN model data storage found')
-        print('Make folder to store data used for KNN models at')
-    else:
-        print('Found existing folder. Data used for models will be stored at')
-    print(data_folder)
-
-    # Put all data into a dictionary for easier use later
-    data = {
-        'training_batches': training_batches,
-        'validation_batches': validation_batches,
-        'testing_batches': testing_batches,
-        'counts': counts
-    }
-
-    # Save the file using pickle
-    file_name = "KNN_data.pkl"
-    with open(os.path.join(data_folder, file_name), "wb") as f:
-        pickle.dump(data, f)
 
 
 def run_model(KNN_params):
@@ -550,76 +497,51 @@ def run_model(KNN_params):
     cross_validation = KNN_params['cross_validate']
     verbose = KNN_params['verbose']
     pretrain = KNN_params['pretrain']
+    full = KNN_params['full_dataset']
     stats_path = KNN_params['stats_path']
 
     model_name = KNN_params['model_name']
     print(f'Running model {model_name}')
-    
-    # Set up if we want to load the meta dataset for option 2 or not
-    meta = not pretrain
 
     # Set up the number of samples used for training under option 2
     train_size = KNN_params['train_size']
+    active_learning_iter = KNN_params['active_learning_iter']
 
     # Specify the desired operation
     fine_tuning = KNN_params['fine_tuning']
+    save_model = KNN_params['save_model']
     to_params = True
 
     if fine_tuning:
         best_config = fine_tune(info=True)
-
     else:
-        # Load the full dataset for training and validation
-        if KNN_params['full_dataset']:
-            training_batches, validation_batches, testing_batches, counts = import_full_dataset(train_size,
-                                                                                                meta_batch_size=25,
-                                                                                                num_batches=250,
-                                                                                                verbose=verbose,
-                                                                                                cross_validation=cross_validation,
-                                                                                                meta=meta)
-        else:
-            training_batches, validation_batches, testing_batches, counts = import_test_dataset(train_size,
-                                                                                                meta_batch_size=25,
-                                                                                                num_batches=250,
-                                                                                                verbose=verbose,
-                                                                                                cross_validation=cross_validation,
-                                                                                                meta=meta)
+        # Load the desired sized dataset under desired option
+        amine_list, x_t, y_t, x_v, y_v, all_data, all_labels = process_dataset(
+            train_size=train_size,
+            verbose=verbose,
+            cross_validation=cross_validation,
+            full=full,
+            pretrain=pretrain
+        )
 
-        # Save the data used for training and testing for reproducibility
-        save_used_data(training_batches, validation_batches, testing_batches, counts, pretrain)
-
-        # print(training_batches.keys())
-        for amine in training_batches:
+        for amine in amine_list:
             print(f'Training and active learning on amine {amine}')
+
             # Create the KNN model instance for the specific amine
             KNN = ActiveKNN(amine=amine, config=config, verbose=verbose, stats_path=stats_path, model_name=model_name)
 
-            if cross_validation:
-                # Option 1:
-                if pretrain:
-                    print('Conducting training under option 1.')
-                    x_t, y_t = training_batches[amine][0], training_batches[amine][1]
-                    x_v, y_v = validation_batches[amine][0], validation_batches[amine][1]
-                    all_data, all_labels = x_v, y_v
-                # Option 2
-                else:
-                    print('Conducting training under option 2.')
-                    x_t, y_t = validation_batches[amine][0], validation_batches[amine][1]
-                    x_v, y_v = validation_batches[amine][2], validation_batches[amine][3]
-                    all_data, all_labels = np.concatenate(
-                        (x_t, x_v)), np.concatenate((y_t, y_v))
-
             # Load the training and validation set into the model
-            KNN.load_dataset(x_t, x_v, y_t, y_v, all_data, all_labels)
+            KNN.load_dataset(x_t[amine], x_v[amine], y_t[amine], y_v[amine], all_data[amine], all_labels[amine])
 
             # Train the data on the training set
             KNN.train()
 
             # Conduct active learning with all the observations available in the pool
-            KNN.active_learning(to_params=to_params)
+            KNN.active_learning(num_iter=active_learning_iter, to_params=to_params)
 
             # Save the model for future reproducibility
-            KNN.save_model(train_size, 2, pretrain)
+            if save_model:
+                KNN.save_model(train_size, 2, pretrain)
 
             # TODO: testing part not implemented
 

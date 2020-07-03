@@ -22,7 +22,7 @@ from sklearn.svm import SVC
 
 from modAL.models import ActiveLearner
 
-from utils.dataset import import_full_dataset, import_test_dataset
+from utils.dataset import process_dataset
 
 
 class ActiveSVM:
@@ -98,49 +98,22 @@ class ActiveSVM:
         self.stats_path = stats_path
         self.model_name = model_name
 
-    # TODO: find out what to do with this part
-    def load_dataset(self, training_batches, validation_batches, meta=False):
-        """Load the dataset for training and testing into model under option 1 or option 2
-
-        Option 1 is train with observations of other tasks and validate on the task-specific observations.
-        Option 2 is to train and validate on the task-specific observations.
+    def load_dataset(self, x_t, y_t, x_v, y_v, all_data, all_labels):
+        """Load the input training and validation data and labels into the model.
 
         Args:
-            training_batches:           A dictionary representing the training batches used to train.
-                                            See dataset.py for specific structure.
-            validation_batches:         A dictionary representing the training batches used to train.
-                                            See dataset.py for specific structure.
-            meta:                       A boolean representing if it will be trained under option 1 or option 2.
-                                            Option 1 is train with observations of other tasks and validate on the
-                                            task-specific observations.
-                                            Option 2 is to train and validate on the task-specific observations.
-                                            Default to option 1.
+            x_t:                A 2-D numpy array representing the training data.
+            y_t:                A 2-D numpy array representing the training labels.
+            x_v:                A 2-D numpy array representing the validation data.
+            y_v:                A 2-D numpy array representing the validation labels.
+            all_data:           A 2-D numpy array representing all the data in the active learning pool.
+            all_labels:         A 2-D numpy array representing all the labels in the active learning pool.
         """
 
-        if meta is True:
-            # config 2
-            self.x_t = validation_batches[self.amine][0]
-            self.y_t = validation_batches[self.amine][1]
-            self.x_v = validation_batches[self.amine][2]
-            self.y_v = validation_batches[self.amine][3]
+        self.x_t, self.x_v, self.y_t, self.y_v = x_t, y_t, x_v, y_v
 
-            self.all_data = np.concatenate((self.x_t, self.x_v))
-            self.all_labels = np.concatenate((self.y_t, self.y_v))
-
-            if self.verbose:
-                print("Conducting Training under Option 2.")
-
-        else:
-            self.x_t = training_batches[self.amine][0]
-            self.y_t = training_batches[self.amine][1]
-            self.x_v = validation_batches[self.amine][0]
-            self.y_v = validation_batches[self.amine][1]
-
-            self.all_data = self.x_v
-            self.all_labels = self.y_v
-
-            if self.verbose:
-                print("Conducting Training under Option 1.")
+        self.all_data = all_data
+        self.all_labels = all_labels
 
         if self.verbose:
             print(f'The training data has dimension of {self.x_t.shape}.')
@@ -169,6 +142,7 @@ class ActiveSVM:
                         detail see "store_metrics_to_params" function.
                         Default = True
         """
+
         num_iter = num_iter if num_iter else self.x_v.shape[0]
 
         for _ in range(num_iter):
@@ -272,7 +246,6 @@ class ActiveSVM:
         if model not in stats_dict:
             stats_dict[model] = defaultdict(list)
 
-        # TODO: may have to change this once the structure of stats_dict changes
         stats_dict[model]['amine'].append(self.amine)
         stats_dict[model]['accuracies'].append(self.metrics['accuracies'])
         stats_dict[model]['confusion_matrices'].append(
@@ -342,7 +315,10 @@ def parse_args():
     Returns:
         args: Namespace object with the following attributes:
             datasource:         A string identifying the datasource to be used, with default datasource set to drp_chem.
-            train_size          An integer representing the number of samples use for training. Default set to 1.
+            train_size          An integer representing the number of samples uses for training after pre-training.
+                                    Default set to 10.
+            pre_learn_size      An integer representing the number of samples used for training before active learning.
+                                    Default set to 10.
             train:              A train_flag attribute. Including it in the command line will set the train_flag to
                                     True by default.
             test:               A train_flag attribute. Including it in the command line will set the train_flag to
@@ -360,7 +336,10 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Setup variables for active learning SVM.')
     parser.add_argument('--datasource', type=str, default='drp_chem', help='datasource to be used')
 
-    parser.add_argument('--train_size', dest='train_size', default=1, help='number of samples used for training')
+    parser.add_argument('--train_size', dest='train_size', default=10, help='number of samples used for training after '
+                                                                            'pre-training')
+    parser.add_argument('--pre_learn_size', dest='pre_learn_size', default=10, help='number of samples used for '
+                                                                                    'training before active learning')
 
     parser.add_argument('--train', dest='train_flag', action='store_true')
     parser.add_argument('--test', dest='train_flag', action='store_false')
@@ -379,14 +358,10 @@ def parse_args():
     return args
 
 
-def fine_tune(training_batches, validation_batches, info=False):
+def fine_tune(info=False):
     """Fine tune the model based on average bcr performance to find the best model hyper-parameters.
 
     Args:
-        training_batches:       A dictionary representing the training batches used to train.
-                                    See dataset.py for specific structure.
-        validation_batches:     A dictionary representing the training batches used to train.
-                                    See dataset.py for specific structure.
         info:                A boolean. Setting it to True will make the function print out additional information
                                     during the fine-tuning stage.
                                     Default to False.
@@ -419,6 +394,16 @@ def fine_tune(training_batches, validation_batches, info=False):
     if info:
         print(f'There are {len(combinations)} many combinations to try.')
 
+    # Load the full dataset under option 1
+    amine_list, train_data, train_labels, val_data, val_labels, all_data, all_labels = process_dataset(
+        train_size=10,
+        pre_learn_size=10,
+        verbose=False,
+        cross_validation=True,
+        full=True,
+        pretrain=True
+    )
+
     # Set baseline performance
     base_accuracies = []
     base_precisions = []
@@ -426,9 +411,17 @@ def fine_tune(training_batches, validation_batches, info=False):
     base_bcrs = []
     base_aucs = []
 
-    for amine in training_batches:
+    for amine in amine_list:
+        # Create model for a specific amine
         ASVM = ActiveSVM(amine=amine, verbose=False)
-        ASVM.load_dataset(training_batches, validation_batches)
+
+        x_t, y_t = train_data[amine], train_labels[amine]
+        x_v, y_v = val_data[amine], val_labels[amine]
+        all_task_data, all_task_labels = all_data[amine], all_labels[amine]
+
+        # Load the training and validation set into the model
+        ASVM.load_dataset(x_t, x_v, y_t, y_v, all_task_data, all_task_labels)
+
         ASVM.train()
 
         # Calculate AUC
@@ -471,10 +464,17 @@ def fine_tune(training_batches, validation_batches, info=False):
         if info:
             print(f'Trying option {option_no}')
 
-        for amine in training_batches:
-            # print("Training and cross validation on {} amine.".format(amine))
+        for amine in amine_list:
+            # Create model for a specific amine
             ASVM = ActiveSVM(amine=amine, config=option, verbose=False)
-            ASVM.load_dataset(training_batches, validation_batches)
+
+            # Exact and load the training and validation set into the model
+            x_t, y_t = train_data[amine], train_labels[amine]
+            x_v, y_v = val_data[amine], val_labels[amine]
+            all_task_data, all_task_labels = all_data[amine], all_labels[amine]
+
+            ASVM.load_dataset(x_t, x_v, y_t, y_v, all_task_data, all_task_labels)
+
             ASVM.train()
 
             # Calculate AUC
@@ -515,51 +515,6 @@ def fine_tune(training_batches, validation_batches, info=False):
     return best_option
 
 
-def save_used_data(training_batches, validation_batches, testing_batches, counts, pretrain):
-    """Save the data used to train, validate and test the model to designated folder
-
-    Args:
-        training_batches:       A dictionary representing the training batches used to train.
-                                    See dataset.py for specific structure.
-        validation_batches:     A dictionary representing the training batches used to train.
-                                    See dataset.py for specific structure.
-        testing_batches:        A dictionary representing the training batches used to train.
-                                    See dataset.py for specific structure.
-        counts:                 A dictionary with 'total' and each available amines as keys and lists of length 2 as
-                                    values in the format of: [# of failed reactions, # of successful reactions]
-        pretrain:               A boolean representing if it will be trained under option 1 or option 2.
-                                    Option 1 is train with observations of other tasks and validate on the
-                                    task-specific observations.
-                                    Option 2 is to train and validate on the task-specific observations.
-    """
-
-    # Indicate which option we used the data for
-    option = 1 if pretrain else 2
-
-    # Set up the destination folder to save the data
-    data_folder = './results/SVM_few_shot/option_{0:d}/data'.format(option)
-    if not os.path.exists(data_folder):
-        os.makedirs(data_folder)
-        print('No folder for SVM model data storage found')
-        print('Make folder to store data used for SVM models at')
-    else:
-        print('Found existing folder. Data used for models will be stored at')
-    print(data_folder)
-
-    # Put all data into a dictionary for easier use later
-    data = {
-        'training_batches': training_batches,
-        'validation_batches': validation_batches,
-        'testing_batches': testing_batches,
-        'counts': counts
-    }
-
-    # Save the file using pickle
-    file_name = "SVM_data.pkl"
-    with open(os.path.join(data_folder, file_name), "wb") as f:
-        pickle.dump(data, f)
-
-
 def run_model(SVM_params):
     """Full-scale training, validation and testing using all amines.
 
@@ -573,47 +528,35 @@ def run_model(SVM_params):
     cross_validation = SVM_params['cross_validate']
     verbose = SVM_params['verbose']
     pretrain = SVM_params['pretrain']
+    full = SVM_params['full_dataset']
     stats_path = SVM_params['stats_path']
 
     model_name = SVM_params['model_name']
     print(f'Running model {model_name}')
 
-    # Set up if we want to load the meta dataset for option 2 or not
-    meta = not pretrain
-
     # Set up the number of samples used for training under option 2
     train_size = SVM_params['train_size']
+    active_learning_iter = SVM_params['active_learning_iter']
 
     # Specify the desired operation
     fine_tuning = SVM_params['fine_tuning']
     to_params = True
+    save_model = SVM_params['save_model']
 
     if fine_tuning:
-        ft_training_batches, ft_validation_batches, ft_testing_batches, ft_counts = import_full_dataset(
-            train_size, meta_batch_size=25, num_batches=250, verbose=verbose, cross_validation=cross_validation, meta=False)
-        best_config = fine_tune(ft_training_batches, ft_validation_batches, info=True)
+        best_config = fine_tune(info=True)
     else:
-        # Load the full dataset for training and validation
-        if SVM_params['full_dataset']:
-            training_batches, validation_batches, testing_batches, counts = import_full_dataset(train_size,
-                                                                                                meta_batch_size=25,
-                                                                                                num_batches=250,
-                                                                                                verbose=verbose,
-                                                                                                cross_validation=cross_validation,
-                                                                                                meta=meta)
-        else:
-            training_batches, validation_batches, testing_batches, counts = import_test_dataset(train_size,
-                                                                                                meta_batch_size=25,
-                                                                                                num_batches=250,
-                                                                                                verbose=verbose,
-                                                                                                cross_validation=cross_validation,
-                                                                                                meta=meta)
+        # Load the desired sized dataset under desired option
+        amine_list, x_t, y_t, x_v, y_v, all_data, all_labels = process_dataset(
+            train_size=train_size,
+            verbose=verbose,
+            cross_validation=cross_validation,
+            full=full,
+            pretrain=pretrain
+        )
 
-        # Save the data used for training and testing for reproducibility
-        save_used_data(training_batches, validation_batches, testing_batches, counts, pretrain)
-
-        # print(training_batches.keys())
-        for amine in training_batches:
+        # print(amine_list)
+        for amine in amine_list:
             if cross_validation:
                 print("Training and cross validation on {} amine.".format(amine))
 
@@ -621,16 +564,17 @@ def run_model(SVM_params):
                 ASVM = ActiveSVM(amine=amine, config=config, verbose=verbose, stats_path=stats_path, model_name=model_name)
 
                 # Load the training and validation set into the model
-                ASVM.load_dataset(training_batches, validation_batches, meta=meta)
+                ASVM.load_dataset(x_t[amine], x_v[amine], y_t[amine], y_v[amine], all_data[amine], all_labels[amine])
 
                 # Train the data on the training set
                 ASVM.train()
 
                 # Conduct active learning with all the observations available in the pool
-                ASVM.active_learning(to_params=to_params)
+                ASVM.active_learning(num_iter=active_learning_iter, to_params=to_params)
 
                 # Save the model for future reproducibility
-                ASVM.save_model(k_shot=train_size, n_way=2, pretrain=pretrain)
+                if save_model:
+                    ASVM.save_model(k_shot=train_size, n_way=2, pretrain=pretrain)
 
             # TODO: testing part not implemented: might need to change the logic loading things in
 
