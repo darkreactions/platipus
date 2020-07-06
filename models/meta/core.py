@@ -8,7 +8,7 @@ import sys
 
 from utils import (load_chem_dataset, create_cv_stats_dict,
                    update_cv_stats_dict)
-from utils.plot import plot_metrics_graph
+#from utils.plot import plot_metrics_graph
 
 from models.meta.FC_net import FCNet
 from models.meta.platipus import (initialzie_theta_platipus, save_model,
@@ -173,7 +173,7 @@ def main(params):
 
             # Graph all model's performances
             num_examples = [i for i in range(min_length)]
-            plot_metrics_graph(num_examples, avg_stat, params['graph_folder'])
+            #plot_metrics_graph(num_examples, avg_stat, params['graph_folder'])
 
         # TEST CODE, SHOULD NOT BE RUN
         elif params['datasource'] == 'drp_chem' and not params['cross_validate']:
@@ -364,8 +364,8 @@ def test_model_actively(params, amine=None):
                 cv_stats_dict[model]['bcrs'])
 
         # Plot the metric graphs and save it in the designated folder
-        plot_metrics_graph(num_examples, cv_stats_dict,
-                           params['active_learning_graph_folder'], amine=amine)
+        #plot_metrics_graph(num_examples, cv_stats_dict,
+        #                   params['active_learning_graph_folder'], amine=amine)
 
     # Here we are testing, this code should NOT be run yet
     elif not params['cross_validate']:
@@ -406,8 +406,8 @@ def test_model_actively(params, amine=None):
                                                  recall, bcr, prob_pred=prob_pred, verbose=params['verbose'])
 
         # Plot the metric graphs and save it in the designated folder
-        plot_metrics_graph(num_examples, cv_stats_dict,
-                           params['active_learning_graph_folder'], amine=amine)
+        #plot_metrics_graph(num_examples, cv_stats_dict,
+        #                   params['active_learning_graph_folder'], amine=amine)
 
     return params
 

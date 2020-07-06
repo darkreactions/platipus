@@ -30,7 +30,7 @@ import sys
 
 from .core import main
 from .FC_net import FCNet
-from utils import *
+from utils.utils import *
 from .platipus import *
 #from models.meta.maml import *
 
