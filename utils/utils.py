@@ -7,10 +7,11 @@ from pathlib import Path
 import pickle
 import torch
 
-#/from matplotlib import pyplot as plt
+# /from matplotlib import pyplot as plt
 
 from utils.dataset import (import_chemdata, cross_validation_data, hold_out_data,
                            import_test_dataset, import_full_dataset)
+
 
 def write_pickle(path, data):
     """Write pickle file
@@ -105,7 +106,7 @@ def find_avg_metrics(stats_dict, min_length=None):
 
     # Set up default dictionary to store average metrics for each model
     avg_stat = {}
-    
+
     all_models = list(stats_dict.keys())
     """random_model = all_models[0]
 
@@ -186,7 +187,7 @@ def save_model(model, params, amine=None):
     return: The path for dst_folder
     """
     # Make sure we are creating directory for all models
-    dst_folder_root = '.'
+    dst_folder_root = './results'
     dst_folder = ""
     if amine is not None and amine in params["training_batches"]:
         dst_folder = '{0:s}/{1:s}_few_shot/{2:s}_{3:s}_{4:d}way_{5:d}shot_{6:s}'.format(
@@ -347,6 +348,7 @@ def update_cv_stats_dict(cv_stats_dict, model, correct, cm, accuracy, precision,
         print('balanced classification rate for model is', bcr)
 
     return cv_stats_dict
+
 
 def define_non_meta_model_name(model_name, pretrain):
     """ Function to define the suffix of non-meta model

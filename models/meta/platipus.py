@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-
+import logging
 import sys
 import os
 
@@ -96,16 +96,15 @@ def load_previous_model_platipus(params):
 
     return: The saved checkpoint
     """
-    print('Restore previous Theta...')
-    print('Resume epoch {0:d}'.format(params['resume_epoch']))
+    logging.info('Restore previous Theta...')
+    logging.debug('Resume epoch {0:d}'.format(params['resume_epoch']))
     checkpoint_filename = ('{0:s}_{1:d}way_{2:d}shot_{3:d}.pt') \
         .format(params['datasource'],
                 params['num_classes_per_task'],
                 params['num_training_samples_per_class'],
                 params['resume_epoch'])
     checkpoint_file = os.path.join(params["dst_folder"], checkpoint_filename)
-    print('Start to load weights from')
-    print('{0:s}'.format(checkpoint_file))
+    logging.info(f'Start to load weights from {checkpoint_file}')
     if torch.cuda.is_available():
         saved_checkpoint = torch.load(
             checkpoint_file,
@@ -156,7 +155,7 @@ def meta_train_platipus(params, amine=None):
     num_meta_updates_print = 1
 
     for epoch in range(resume_epoch, resume_epoch + num_epochs):
-        print(f"Starting epoch {epoch}")
+        logging.debug(f"Starting epoch {epoch}")
 
         # Load chemistry data
         if datasource == 'drp_chem':
@@ -237,7 +236,7 @@ def meta_train_platipus(params, amine=None):
                         meta_loss_avg_print / num_meta_updates_count)
                     kl_loss_avg_save.append(
                         kl_loss_avg_print / num_meta_updates_count)
-                    print('{0:d}, {1:2.4f}, {2:2.4f}'.format(
+                    logging.debug('{0:d}, {1:2.4f}, {2:2.4f}'.format(
                         task_count,
                         meta_loss_avg_save[-1],
                         kl_loss_avg_save[-1]
@@ -267,18 +266,17 @@ def meta_train_platipus(params, amine=None):
                 'train_accuracy': train_accuracies,
                 'op_Theta': op_Theta.state_dict()
             }
-            print('SAVING WEIGHTS...')
+            logging.info('SAVING WEIGHTS...')
 
             checkpoint_filename = ('{0:s}_{1:d}way_{2:d}shot_{3:d}.pt') \
                 .format(datasource,
                         num_classes_per_task,
                         num_training_samples_per_class,
                         epoch + 1)
-            print(checkpoint_filename)
+            logging.info(checkpoint_filename)
             dst_folder = params['dst_folder']
             torch.save(checkpoint, os.path.join(
                 dst_folder, checkpoint_filename))
-        print()
 
     return params
 
@@ -595,7 +593,7 @@ def zero_point_platipus(preds, sm_loss, all_labels):
         precision = cm[1][1] / (cm[1][1] + cm[0][1])
     else:
         precision = 1.0
-        print('WARNING: zero division during precision calculation')
+        logging.warn('zero division during precision calculation')
 
     recall = cm[1][1] / (cm[1][1] + cm[1][0])
     true_negative = cm[0][0] / (cm[0][0] + cm[0][1])
@@ -664,19 +662,19 @@ def active_learning_platipus(preds, sm_loss, all_labels, params, x_t, y_t, x_v, 
     prob_pred_update, labels_pred_update = torch.max(
         input=y_pred_update, dim=1)
 
-    print(y_v)
-    print(labels_pred_update)
-    print(len(prob_pred_update))
+    logging.debug(y_v)
+    logging.debug(labels_pred_update)
+    logging.debug(len(prob_pred_update))
 
     value, index = prob_pred_update.min(0)
-    print(f'Minimum confidence {value}')
+    logging.debug(f'Minimum confidence {value}')
     # Add to the training data
     x_t = torch.cat((x_t, x_v[index].view(1, 51)))
     y_t = torch.cat((y_t, y_v[index].view(1)))
     # Remove from pool, there is probably a less clunky way to do this
     x_v = torch.cat([x_v[0:index], x_v[index + 1:]])
     y_v = torch.cat([y_v[0:index], y_v[index + 1:]])
-    print('length of x_v is now', len(x_v))
+    logging.debug(f'length of x_v is now {len(x_v)}')
 
     cm = confusion_matrix(all_labels.detach().cpu().numpy(),
                           labels_pred.detach().cpu().numpy())
@@ -686,7 +684,7 @@ def active_learning_platipus(preds, sm_loss, all_labels, params, x_t, y_t, x_v, 
         precision = cm[1][1] / (cm[1][1] + cm[0][1])
     else:
         precision = 1.0
-        print('WARNING: zero division during precision calculation')
+        logging.warn('WARNING: zero division during precision calculation')
 
     recall = cm[1][1] / (cm[1][1] + cm[1][0])
     true_negative = cm[0][0] / (cm[0][0] + cm[0][1])
@@ -723,8 +721,8 @@ def forward_pass_validate_platipus(params, amine):
 
     prob_pred, labels_pred = torch.max(input=y_pred, dim=1)
     # print('print training labels', y_t)
-    print('print labels predicted', labels_pred)
-    print('print true labels', y_v)
+    logging.debug(f'labels predicted {labels_pred}')
+    logging.debug(f'true labels {y_v}')
     # print('print probability of prediction', prob_pred)
     correct = (labels_pred == y_v)
     corrects.extend(correct.detach().cpu().numpy())
@@ -735,5 +733,5 @@ def forward_pass_validate_platipus(params, amine):
 
     probability_pred.extend(prob_pred.detach().cpu().numpy())
 
-    print('accuracy for model is', accuracies)
-    print('probabilities for predictions are', probability_pred)
+    logging.debug(f'accuracy for model is {accuracies}')
+    logging.debug(f'probabilities for predictions are {probability_pred}')

@@ -5,6 +5,8 @@ import pickle
 
 import os
 import sys
+import logging
+from pathlib import Path
 
 from utils import (load_chem_dataset, create_cv_stats_dict,
                    update_cv_stats_dict)
@@ -35,13 +37,15 @@ def main(params):
     """
 
     # Do the massive initialization and get back a dictionary instead of using global variables
+    logging.basicConfig(
+        filename=params['dst_folder']/Path('logfile.log'), level=logging.DEBUG)
 
     if params['train_flag']:
         if params['datasource'] == 'drp_chem':
             if params['cross_validate']:
                 # TODO: This is going to be insanely nasty, basically reinitialize for each amine
                 for amine in params['training_batches']:
-                    print("Starting training for amine", amine)
+                    logging.info(f'Starting training for {amine}')
                     # Change the path to save models
                     params['dst_folder'] = save_model(
                         "PLATIPUS", params, amine)
@@ -55,7 +59,8 @@ def main(params):
                         weights = [amine_counts[1] / amine_counts[0],
                                    amine_counts[1] / amine_counts[1]]
 
-                    print('Using the following weights for loss function:', weights)
+                    #print('Using the following weights for loss function:', weights)
+                    logging.debug(f'Weights for loss function: {weights}')
                     class_weights = torch.tensor(
                         weights, device=params['device'])
                     params['loss_fn'] = torch.nn.CrossEntropyLoss(
@@ -76,7 +81,8 @@ def main(params):
             # It will get added to in the active learning code
             # Test performance of each individual cross validation model
             for amine in params['validation_batches']:
-                print("Starting validation for amine", amine)
+                #print("Starting validation for amine", amine)
+                logging.info(f'Starting validation for {amine}')
                 # Change the path to save models
                 params['dst_folder'] = save_model("PLATIPUS", params, amine)
 
@@ -94,7 +100,8 @@ def main(params):
                 else:
                     weights = [amine_counts[1] / amine_counts[0],
                                amine_counts[1] / amine_counts[1]]
-                print('Using the following weights for loss function:', weights)
+                #print('Using the following weights for loss function:', weights)
+                logging.debug(f'Weights for loss function: {weights}')
                 class_weights = torch.tensor(weights, device=params['device'])
                 params['loss_fn'] = torch.nn.CrossEntropyLoss(class_weights)
 
@@ -119,8 +126,10 @@ def main(params):
 
                 prob_pred, labels_pred = torch.max(input=y_pred, dim=1)
                 # print('print training labels', y_t)
-                print('print labels predicted', labels_pred)
-                print('print true labels', y_v)
+                #print('print labels predicted', labels_pred)
+                logging.debug(f'Labels predicted: {labels_pred}')
+                #print('print true labels', y_v)
+                logging.debug(f'True labels: {y_v}')
                 # print('print probability of prediction', prob_pred)
                 correct = (labels_pred == y_v)
                 corrects.extend(correct.detach().cpu().numpy())
@@ -131,15 +140,16 @@ def main(params):
 
                 probability_pred.extend(prob_pred.detach().cpu().numpy())
 
-                print('accuracy for model is', accuracies)
-                print('probabilities for predictions are', probability_pred)
+                #print('accuracy for model is', accuracies)
+                logging.debug(f'Prediction prob: {probability_pred}')
+                #print('probabilities for predictions are', probability_pred)
                 params = test_model_actively(params, amine)
 
                 # Save this dictionary in case we need it later
-                with open(os.path.join("./data", "cv_statistics.pkl"), "wb") as f:
+                with open(os.path.join(params['dst_folder'], "cv_statistics.pkl"), "wb") as f:
                     pickle.dump(params['cv_statistics'], f)
 
-            with open(os.path.join("./data", "cv_statistics.pkl"), "rb") as f:
+            with open(os.path.join(params['dst_folder'], "cv_statistics.pkl"), "rb") as f:
                 params['cv_statistics'] = pickle.load(f)
             # Now plot the big graph
             stats_dict = params['cv_statistics']
@@ -154,7 +164,7 @@ def main(params):
             """
             for key in stats_dict.keys():
                 for stat_list in stats_dict[key]["precisions"]:
-                    print(stat_list[0])
+                    # print(stat_list[0])
                     if np.isnan(stat_list[0]):
                         stat_list[0] = 0
 
@@ -165,7 +175,9 @@ def main(params):
             # Find the minimum number of points for performance evaluation
             min_length = len(
                 min(stats_dict["PLATIPUS"]['accuracies'], key=len))
-            print(
+            # print(
+            #    f'Minimum number of points we have to work with is {min_length}')
+            logging.info(
                 f'Minimum number of points we have to work with is {min_length}')
 
             # Evaluate all models' performances
@@ -177,10 +189,13 @@ def main(params):
 
         # TEST CODE, SHOULD NOT BE RUN
         elif params['datasource'] == 'drp_chem' and not params['cross_validate']:
-            print('If this code is running, you are doing something wrong. DO NOT TEST.')
+            #print('If this code is running, you are doing something wrong. DO NOT TEST.')
+            logging.info(
+                'If this code is running, you are doing something wrong. DO NOT TEST.')
             test_batches = params['testing_batches']
             for amine in test_batches:
-                print("Checking for amine", amine)
+                #print("Checking for amine", amine)
+                logging.info(f'Checking for {amine}')
                 val_batch = test_batches[amine]
                 x_t, y_t, x_v, y_v = torch.from_numpy(val_batch[0]).float().to(params['device']), torch.from_numpy(
                     val_batch[1]).long().to(params['device']), \
@@ -200,9 +215,11 @@ def main(params):
 
                 prob_pred, labels_pred = torch.max(input=y_pred, dim=1)
                 # print('print training labels', y_t)
-                print('print labels predicted', labels_pred)
-                print('print true labels', y_v)
-                print('print probability of prediction', prob_pred)
+                #print('print labels predicted', labels_pred)
+                logging.debug(f'Labels predicted: {labels_pred}')
+                #print('print true labels', y_v)
+                logging.debug(f'True labels: {y_v}')
+                #print('print probability of prediction', prob_pred)
                 correct = (labels_pred == y_v)
                 corrects.extend(correct.detach().cpu().numpy())
 
@@ -212,7 +229,8 @@ def main(params):
 
                 probability_pred.extend(prob_pred.detach().cpu().numpy())
 
-                print('accuracy for model is', accuracies)
+                #print('accuracy for model is', accuracies)
+                logging.debug(f'Accuracy: {accuracies}')
                 # print('probabilities for predictions are', probability_pred)
                 params = test_model_actively(params, amine)
 
@@ -236,7 +254,8 @@ def test_model_actively(params, amine=None):
     if params['cross_validate']:
         # List out the models we want to conduct active learning
         #models = ['PLATIPUS', 'MAML']
-        models = ['PLATIPUS']
+        #models = ['PLATIPUS']
+        models = [params['model_name']]
 
         # Create the stats dictionary to store performance metrics
         cv_stats_dict = create_cv_stats_dict(models)
@@ -250,6 +269,7 @@ def test_model_actively(params, amine=None):
         val_batch = validation_batches[amine]
 
         for model in models:
+            # print(model)
             # Initialize the training and the active learning pool for model
             x_t, y_t, x_v, y_v = torch.from_numpy(val_batch[0]).float().to(params['device']), torch.from_numpy(
                 val_batch[1]).long().to(params['device']), \
@@ -271,20 +291,24 @@ def test_model_actively(params, amine=None):
             # Randomly pick a point to start active learning with
             rand_index = np.random.choice(iters + 1)
 
-            if model == 'PLATIPUS':
+            if 'platipus' in model.lower():
 
                 # Zero point prediction for PLATIPUS model
-                print(
+                logging.info(
                     'Getting the PLATIPUS model baseline before training on zero points')
                 preds = get_naive_prediction_platipus(all_data, params)
 
                 # Evaluate zero point performance for PLATIPUS
-                prob_pred, correct, cm, accuracy, precision, recall, bcr = zero_point_platipus(preds, sm_loss_platipus,
-                                                                                               all_labels)
+                prob_pred, correct, cm, accuracy,\
+                    precision, recall, bcr = \
+                    zero_point_platipus(preds, sm_loss_platipus, all_labels)
 
                 # Display and update individual performance metric
-                cv_stats_dict = update_cv_stats_dict(cv_stats_dict, model, correct, cm, accuracy, precision,
-                                                     recall, bcr, prob_pred=prob_pred, verbose=params['verbose'])
+                cv_stats_dict = update_cv_stats_dict(cv_stats_dict, model,
+                                                     correct, cm, accuracy,
+                                                     precision, recall,
+                                                     bcr, prob_pred=prob_pred,
+                                                     verbose=params['verbose'])
 
                 # Reset the training set and validation set
                 x_t, x_v = all_data[rand_index].view(-1, 51), torch.cat(
@@ -293,7 +317,9 @@ def test_model_actively(params, amine=None):
                     [all_labels[0:rand_index], all_labels[rand_index + 1:]])
 
                 for _ in range(iters):
-                    print(f'Doing active learning with {len(x_t)} examples')
+                    #print(f'Doing active learning with {len(x_t)} examples')
+                    logging.debug(
+                        f'Doing active learning with {len(x_t)} examples')
                     num_examples.append(len(x_t))
                     preds = get_task_prediction_platipus(
                         x_t, y_t, all_data, params)
@@ -306,14 +332,15 @@ def test_model_actively(params, amine=None):
                     cv_stats_dict = update_cv_stats_dict(cv_stats_dict, model, correct, cm, accuracy, precision,
                                                          recall, bcr, prob_pred=prob_pred, verbose=params['verbose'])
 
-            elif model == 'MAML':
+            elif 'maml' in model.lower():
                 # Load pre-trained MAML model
                 maml_checkpoint = load_previous_model_maml(
                     dst_folder_root, params, amine=None)
                 Theta_maml = maml_checkpoint['theta']
 
                 # Zero point prediction for MAML model
-                print('Getting the MAML model baseline before training on zero points')
+                logging.info(
+                    'Getting the MAML model baseline before training on zero points')
                 preds = get_naive_task_prediction_maml(
                     all_data, Theta_maml, params)
 
@@ -332,19 +359,29 @@ def test_model_actively(params, amine=None):
                     [all_labels[0:rand_index], all_labels[rand_index + 1:]])
 
                 for i in range(iters):
-                    print(f'Doing MAML learning with {len(x_t)} examples')
+                    # print(
+                    logging.debug(
+                        f'Doing MAML learning with {len(x_t)} examples')
                     num_examples.append(len(x_t))
-                    preds = get_task_prediction_maml(x_t=x_t, y_t=y_t, x_v=all_data, meta_params=Theta_maml,
+                    preds = get_task_prediction_maml(x_t=x_t, y_t=y_t,
+                                                     x_v=all_data,
+                                                     meta_params=Theta_maml,
                                                      params=params)
 
                     # Update available datapoints in the pool and evaluate current model performance
-                    x_t, y_t, x_v, y_v, correct, cm, accuracy, precision, recall, bcr = active_learning_maml(
-                        preds, sm_loss_maml, all_labels, x_t, y_t, x_v, y_v
-                    )
+                    x_t, y_t, x_v, y_v, correct, \
+                        cm, accuracy, precision, \
+                        recall, bcr = \
+                        active_learning_maml(preds, sm_loss_maml,
+                                             all_labels, x_t, y_t,
+                                             x_v, y_v
+                                             )
 
                     # Display and update individual performance metric
-                    cv_stats_dict = update_cv_stats_dict(cv_stats_dict, model, correct, cm, accuracy, precision,
-                                                         recall, bcr, verbose=params['verbose'])
+                    cv_stats_dict = update_cv_stats_dict(cv_stats_dict, model,
+                                                         correct, cm, accuracy,
+                                                         precision, recall,
+                                                         bcr, verbose=params['verbose'])
 
             else:
                 sys.exit('Unidentified model')
@@ -364,7 +401,7 @@ def test_model_actively(params, amine=None):
                 cv_stats_dict[model]['bcrs'])
 
         # Plot the metric graphs and save it in the designated folder
-        #plot_metrics_graph(num_examples, cv_stats_dict,
+        # plot_metrics_graph(num_examples, cv_stats_dict,
         #                   params['active_learning_graph_folder'], amine=amine)
 
     # Here we are testing, this code should NOT be run yet
@@ -393,7 +430,8 @@ def test_model_actively(params, amine=None):
         iters = len(x_v)
 
         for i in range(iters):
-            print(f'Doing active learning with {len(x_t)} examples')
+            # print()
+            logging.debug(f'Doing active learning with {len(x_t)} examples')
             num_examples.append(len(x_t))
             preds = get_task_prediction_platipus(x_t, y_t, all_data, params)
 
@@ -406,7 +444,7 @@ def test_model_actively(params, amine=None):
                                                  recall, bcr, prob_pred=prob_pred, verbose=params['verbose'])
 
         # Plot the metric graphs and save it in the designated folder
-        #plot_metrics_graph(num_examples, cv_stats_dict,
+        # plot_metrics_graph(num_examples, cv_stats_dict,
         #                   params['active_learning_graph_folder'], amine=amine)
 
     return params

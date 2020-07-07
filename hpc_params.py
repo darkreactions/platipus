@@ -35,13 +35,13 @@ meta_params = {
 }
 
 meta_train = {
-    'num_epochs': 3000,
+    'num_epochs': 4,
     'resume_epoch': 0,
     'train_flag': True
 }
 
 meta_test = {
     'num_epochs': 0,
-    'resume_epoch': 3000,
+    'resume_epoch': 4,
     'train_flag': False
 }

@@ -27,6 +27,7 @@ import argparse
 import torch
 import os
 import sys
+from pathlib import Path
 
 from .core import main
 from .FC_net import FCNet
@@ -216,7 +217,7 @@ def initialize(models_list, args):
         """
 
     #args = parse_args()
-    params = {}
+    params = {**args}
 
     # Set up training using either GPU or CPU
     gpu_id = args.get('gpu_id', 0)
@@ -293,71 +294,86 @@ def initialize(models_list, args):
     params['cv_statistics'] = stats_dict
 
     # Save it in case we are running other models before PLATIPUS
-    with open(os.path.join("./data", "cv_statistics.pkl"), "wb") as f:
-        pickle.dump(params['cv_statistics'], f)
+    # with open(os.path.join("./data", "cv_statistics.pkl"), "wb") as f:
+    #    pickle.dump(params['cv_statistics'], f)
+
+    # Set up the path to save models
+    params['dst_folder'] = Path(save_model("PLATIPUS", params))
 
     if params['datasource'] == 'drp_chem':
 
         # Set number of training samples and number of total samples per class
         # These two values are hard-coded, corresponding to the values hard-coded in load_chem_dataset below
         params['num_total_samples_per_class'] = 40
-        params['num_training_samples_per_class'] = 20
+        #params['num_training_samples_per_class'] = 20
 
         if params['train_flag']:
 
             if params['cross_validate']:
 
-                training_batches, validation_batches, testing_batches, counts = load_chem_dataset(k_shot=20,
-                                                                                                  cross_validation=params[
-                                                                                                      'cross_validate'],
-                                                                                                  meta_batch_size=args[
-                                                                                                      'meta_batch_size'],
-                                                                                                  num_batches=250,
-                                                                                                  verbose=args['verbose'],
-                                                                                                  test=params.get('test_data', False))
+                training_batches, \
+                    validation_batches, \
+                    testing_batches, counts \
+                    = load_chem_dataset(k_shot=args['k_shot'],
+                                        cross_validation=params['cross_validate'],
+                                        meta_batch_size=args['meta_batch_size'],
+                                        num_batches=250,
+                                        verbose=args['verbose'],
+                                        test=params.get('test_data', False))
                 params['training_batches'] = training_batches
                 params['validation_batches'] = validation_batches
                 params['testing_batches'] = testing_batches
                 params['counts'] = counts
 
                 # Save for reproducibility
-                write_pickle("./data/train_dump.pkl", training_batches)
-                write_pickle("./data/val_dump.pkl", validation_batches)
-                write_pickle("./data/test_dump.pkl", testing_batches)
-                write_pickle("./data/counts_dump.pkl", counts)
+                write_pickle(params['dst_folder'] /
+                             Path("train_dump.pkl"), training_batches)
+                write_pickle(params['dst_folder'] /
+                             Path("val_dump.pkl"), validation_batches)
+                write_pickle(params['dst_folder'] /
+                             Path("test_dump.pkl"), testing_batches)
+                write_pickle(params['dst_folder'] /
+                             Path("counts_dump.pkl"), counts)
 
             else:
-                training_batches, testing_batches, counts = load_chem_dataset(k_shot=20,
-                                                                              cross_validation=params['cross_validate'],
-                                                                              meta_batch_size=args['meta_batch_size'],
-                                                                              num_batches=250,
-                                                                              verbose=args['verbose'],
-                                                                              test=params.get('test_data', False))
+                training_batches, \
+                    testing_batches, \
+                    counts = load_chem_dataset(k_shot=args['k_shot'],
+                                               cross_validation=params['cross_validate'],
+                                               meta_batch_size=args['meta_batch_size'],
+                                               num_batches=250,
+                                               verbose=args['verbose'],
+                                               test=params.get('test_data', False))
                 params['training_batches'] = training_batches
                 params['testing_batches'] = testing_batches
                 params['counts'] = counts
 
                 # Save for reproducibility
-                write_pickle("./data/train_dump_nocv.pkl",
-                             {'training_data': training_batches})
-                write_pickle("./data/test_dump_nocv.pkl", testing_batches)
-                write_pickle("./data/counts_dump_nocv.pkl", counts)
+                write_pickle(params['dst_folder'] /
+                             Path("train_dump_nocv.pkl"), training_batches)
+                write_pickle(params['dst_folder'] /
+                             Path("test_dump_nocv.pkl"), testing_batches)
+                write_pickle(params['dst_folder'] /
+                             Path("counts_dump_nocv.pkl"), counts)
 
         # Make sure we don't overwrite our batches if we are validating and testing
         else:
             if params['cross_validate']:
                 params['training_batches'] = read_pickle(
-                    "./data/train_dump.pkl")
+                    params['dst_folder'] / Path("train_dump.pkl"))
                 params['validation_batches'] = read_pickle(
-                    "./data/val_dump.pkl")
-                params['testing_batches'] = read_pickle("./data/test_dump.pkl")
-                params['counts'] = read_pickle("./data/counts_dump.pkl")
+                    params['dst_folder'] / Path("val_dump.pkl"))
+                params['testing_batches'] = read_pickle(
+                    params['dst_folder'] / Path("test_dump.pkl"))
+                params['counts'] = read_pickle(
+                    params['dst_folder'] / Path("counts_dump.pkl"))
             else:
                 params['training_batches'] = read_pickle(
-                    "./data/train_dump_nocv.pkl")['training_data']
+                    params['dst_folder'] / Path("train_dump_nocv.pkl"))
                 params['testing_batches'] = read_pickle(
-                    "./data/test_dump_nocv.pkl")
-                params['counts'] = read_pickle("./data/counts_dump_nocv.pkl")
+                    params['dst_folder'] / Path("test_dump_nocv.pkl"))
+                params['counts'] = read_pickle(
+                    params['dst_folder'] / Path("counts_dump_nocv.pkl"))
 
         net = FCNet(
             dim_input=51,
@@ -389,13 +405,12 @@ def initialize(models_list, args):
     print(f'KL reweight = {args["kl_reweight"]}')
     params['KL_reweight'] = args['kl_reweight']
 
-    # Set up the path to save models
-    params['dst_folder'] = save_model("PLATIPUS", params)
-
     # Set up the path to save graphs
-    graph_folder = '{0:s}/graphs'.format(params['dst_folder'])
-    if not os.path.exists(graph_folder):
-        os.makedirs(graph_folder)
+    #graph_folder = '{0:s}/graphs'.format(params['dst_folder'])
+    graph_folder = params['dst_folder'] / Path("graph")
+    if not graph_folder.exists():
+        # os.makedirs(graph_folder)
+        graph_folder.mkdir(exist_ok=True)
         print('No folder for graph storage found')
         print(f'Make folder to store graphs at')
     else:
@@ -404,10 +419,12 @@ def initialize(models_list, args):
     params['graph_folder'] = graph_folder
 
     # Set up sub-folder under graphs to save active learning cross validation graphs
-    active_learning_graph_folder = '{0:s}/active_learning_cv_graphs'.format(
-        params['graph_folder'])
-    if not os.path.exists(active_learning_graph_folder):
-        os.makedirs(active_learning_graph_folder)
+    active_learning_graph_folder = params['dst_folder'] / \
+        Path("active_learning_cv_graphs")
+
+    if not active_learning_graph_folder.exists():
+        # os.makedirs(active_learning_graph_folder)
+        graph_folder.mkdir(exist_ok=True)
         print('No folder for active learning cross-validation graph storage found')
         print(f'Make folder to store cross-validation graphs at')
     else:
@@ -470,7 +487,6 @@ def initialize(models_list, args):
 
         params['op_Theta'] = op_Theta
 
-    print()
     return params
 
 
