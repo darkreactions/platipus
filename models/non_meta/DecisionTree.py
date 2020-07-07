@@ -66,7 +66,7 @@ class ActiveDecisionTree:
             all_labels:         A 2-D numpy array representing all the labels in the active learning pool.
         """
 
-        self.x_t, self.x_v, self.y_t, self.y_v = x_t, y_t, x_v, y_v
+        self.x_t, self.y_t, self.x_v, self.y_v = x_t, y_t, x_v, y_v
 
         self.all_data = all_data
         self.all_labels = all_labels
@@ -212,43 +212,23 @@ class ActiveDecisionTree:
         with open(self.stats_path, "wb") as f:
             pickle.dump(stats_dict, f)
 
-    def save_model(self, train_size, n_way, pretrain):
-        """Save the data used to train, validate and test the model to designated folder.
+    def save_model(self, model_name):
+        """Save the data used to train, validate and test the model to designated folder
 
         Args:
-            k_shot:                 An integer representing the number of training samples per class.
-            n_way:                  An integer representing the number of classes per task.
-            pretrain:               A boolean representing if it will be trained under option 1 or option 2.
-                                        Option 1 is train with observations of other tasks and validate on the
-                                        task-specific observations.
-                                        Option 2 is to train and validate on the task-specific observations.
+            model_name:         A string representing the name of the model.
         """
 
-        option = 1 if pretrain else 2
-
-        dst_root = './results/DecisionTree_few_shot/option_{0:d}'.format(option)
-
+        # Set up the main destination folder for the model
+        dst_root = './data/DT/{0:s}'.format(model_name)
         if not os.path.exists(dst_root):
             os.makedirs(dst_root)
-            print('No folder for decision tree model storage found')
+            print(f'No folder for decision tree model {model_name} storage found')
             print(f'Make folder to store model at')
 
-        model_folder = '{0:s}/DecisionTree_{1:d}_shot_{2:d}_way_option_{3:d}_{4:s}'.format(dst_root,
-                                                                                           train_size,
-                                                                                           n_way,
-                                                                                           option,
-                                                                                           self.amine)
-        if not os.path.exists(model_folder):
-            os.makedirs(model_folder)
-            print('No folder for decision tree model storage found')
-            print(f'Make folder to store model of amine {self.amine} at')
-        else:
-            print(f'Found existing folder. Model of amine {self.amine} will be stored at')
-        print(model_folder)
-
-        # Dump the model
-        file_name = "DecisionTree_{0:s}_option_{1:d}.pkl".format(self.amine, option)
-        with open(os.path.join(model_folder, file_name), "wb") as f:
+        # Dump the model into the designated folder
+        file_name = "{0:s}_{1:s}.pkl".format(model_name, self.amine)
+        with open(os.path.join(dst_root, file_name), "wb") as f:
             pickle.dump(self, f)
 
 
@@ -337,11 +317,13 @@ def fine_tune(info=False):
     # Load the full dataset under option 1
     amine_list, train_data, train_labels, val_data, val_labels, all_data, all_labels = process_dataset(
         train_size=10,
-        pre_learn_size=10,
+        active_learning_iter=10,
         verbose=False,
         cross_validation=True,
         full=True,
-        pretrain=True
+        active_learning=False,
+        w_hx=True,
+        w_k=False
     )
 
     # Set baseline performance
@@ -475,20 +457,22 @@ def run_model(DecisionTree_params):
                 '_feat_primaryAmine', '_feat_secondaryAmine', '_rxn_plateEdgeQ', '_feat_maxproj_per_N',
                 '_raw_RelativeHumidity']
 
-    # Unload parameters
+    # Unload common parameters
     config = DecisionTree_params['config']
-    cross_validation = DecisionTree_params['cross_validate']
     verbose = DecisionTree_params['verbose']
-    pretrain = DecisionTree_params['pretrain']
-    full = DecisionTree_params['full_dataset']
     stats_path = DecisionTree_params['stats_path']
 
     model_name = DecisionTree_params['model_name']
     print(model_name)
 
-    # Set up the number of samples used for training under option 2
+    # Unload the training data specific parameters
     train_size = DecisionTree_params['train_size']
     active_learning_iter = DecisionTree_params['active_learning_iter']
+    cross_validation = DecisionTree_params['cross_validate']
+    full = DecisionTree_params['full_dataset']
+    active_learning = DecisionTree_params['active_learning']
+    w_hx = DecisionTree_params['with_historical_data']
+    w_k = DecisionTree_params['with_k']
 
     # Specify the desired operation
     fine_tuning = DecisionTree_params['fine_tuning']
@@ -501,10 +485,13 @@ def run_model(DecisionTree_params):
         # Load the desired sized dataset under desired option
         amine_list, x_t, y_t, x_v, y_v, all_data, all_labels = process_dataset(
             train_size=train_size,
+            active_learning_iter=active_learning_iter,
             verbose=verbose,
             cross_validation=cross_validation,
             full=full,
-            pretrain=pretrain
+            active_learning=active_learning,
+            w_hx=w_hx,
+            w_k=w_k
         )
 
         # print(amine_list)
@@ -516,20 +503,23 @@ def run_model(DecisionTree_params):
                                      model_name=model_name)
 
             # Load the training and validation set into the model
-            ADT.load_dataset(x_t[amine], x_v[amine], y_t[amine], y_v[amine], all_data[amine], all_labels[amine])
+            ADT.load_dataset(x_t[amine], y_t[amine], x_v[amine], y_v[amine], all_data[amine], all_labels[amine])
 
             # Train the data on the training set
             ADT.train()
 
             # Conduct active learning with all the observations available in the pool
-            ADT.active_learning(num_iter=active_learning_iter, to_params=True)
+            if active_learning:
+                ADT.active_learning(num_iter=active_learning_iter, to_params=True)
+            else:
+                ADT.store_metrics_to_params()
 
             if visualize:
                 # Plot the decision tree
                 # To compile the graph, use the following command in terminal
                 # dot -Tpng "{amine_name}_dt_{op1 or op2}.dot" -o "{desired file name}.png"
                 # If using Jupyter Notebook, add ! in front to run command lines
-                file_name = './results/{}_dt_op1.dot'.format(amine) if pretrain else './results/{}_dt_op2.dot'.format(amine)
+                file_name = './results/{0:s}_dt_{1:s}.dot'.format(model_name, amine)
                 export_graphviz(ADT.model,
                                 feature_names=features,
                                 class_names=['FAILURE', 'SUCCESS'],
@@ -540,7 +530,7 @@ def run_model(DecisionTree_params):
 
             # Save the model for future reproducibility
             if save_model:
-                ADT.save_model(train_size, 2, pretrain)
+                ADT.save_model(model_name)
 
             # TODO: testing part not implemented
 
