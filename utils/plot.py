@@ -1,6 +1,9 @@
+import os
+
 from matplotlib import pyplot as plt
-# import os
 from pathlib import Path
+
+from utils import read_pickle, find_avg_metrics
 
 
 def plot_metrics_graph(num_examples, stats_dict, dst, amine=None, amine_index=None, models=[], show=False):
@@ -145,8 +148,59 @@ def plot_metrics_graph(num_examples, stats_dict, dst, amine=None, amine_index=No
     if show:
         plt.show()
 
+    plt.close()
+
 
 # TODO: finish this function
 def plot_bcr_vs_success_rate():
     """TODO: DOCUMENTATION"""
     return
+
+
+def plot_all_graphs(common_params):
+    """TODO: DOCUMENTATIONS"""
+    cv_stats = read_pickle(common_params['stats_path'])
+    models_to_plot = list(cv_stats.keys())
+    amines = cv_stats[models_to_plot[0]]['amine']
+    # print(cv_stats.keys())
+    # print(amines)
+
+    # Plotting portion
+    # Plot the models based on categories
+    cat_3 = [model for model in models_to_plot if 'category_3' in model]
+    cat_4 = [model for model in models_to_plot if 'category_4' in model]
+    cat_5 = [model for model in models_to_plot if 'category_5' in model]
+
+    all_cats = {
+        'category_3': cat_3,
+        'category_4': cat_4,
+        'category_5': cat_5,
+    }
+
+    for cat in all_cats:
+        # Identify category specific folder
+        graph_folder = './results/{}'.format(cat)
+
+        # Check (and create) designated folder
+        if not os.path.exists(graph_folder):
+            os.makedirs(graph_folder)
+            print(f'No folder for graphs of {cat} models found')
+            print('Make folder to store results at')
+        else:
+            print('Found existing folder. Graphs will be stored at')
+        print(graph_folder)
+
+        # Load all models to plot under the category
+        models = all_cats[cat]
+
+        # Plotting individual graphs for each task-specific model
+        for i, amine in enumerate(amines):
+            graph_dst = '{0:s}/cv_metrics_{1:s}.png'.format(graph_folder, amine)
+            plot_metrics_graph(96, cv_stats, graph_dst, amine=amine, amine_index=i, models=models)
+
+        # Plotting avg graphs for all models
+        avg_stats = find_avg_metrics(cv_stats)
+        rand_model = list(avg_stats.keys())[0]
+        num_examples = len(avg_stats[rand_model]['accuracies'])
+        graph_dst = '{0:s}/average_metrics_{1:s}.png'.format(graph_folder, cat)
+        plot_metrics_graph(num_examples, avg_stats, graph_dst, models=models)
