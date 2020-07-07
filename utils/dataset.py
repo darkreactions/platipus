@@ -19,6 +19,7 @@ SUCCESS = 4
 
 def import_full_dataset(k_shot, meta_batch_size, num_batches, verbose=False,
                         cross_validation=True, meta=True):
+    wrong_amine = 'UMDDLGMCNFAZDX-UHFFFAOYSA-O'
     viable_amines = ['ZEVRFFCPALTVDN-UHFFFAOYSA-N',
                      'KFQARYBEAKAXIC-UHFFFAOYSA-N',
                      'NLJDBTZLVTWXRG-UHFFFAOYSA-N',
@@ -32,7 +33,7 @@ def import_full_dataset(k_shot, meta_batch_size, num_batches, verbose=False,
                      'KOAGKPNEVYEZDU-UHFFFAOYSA-N',
                      'FJFIJIDZQADKEE-UHFFFAOYSA-N',
                      'XFYICZOIWSBQSK-UHFFFAOYSA-N',
-                     'UMDDLGMCNFAZDX-UHFFFAOYSA-O',
+                     'KFXBDBPOGBBVMC-UHFFFAOYSA-N',
                      'HBPSMMXRESDUSG-UHFFFAOYSA-N',
                      'NXRUEVJQMBGVAT-UHFFFAOYSA-N',
                      'CALQKRVFTWDYDG-UHFFFAOYSA-N',
@@ -481,7 +482,8 @@ def process_dataset(train_size=10, active_learning_iter=10, verbose=True, cross_
             # Full dataset under option 2 W/O ACTIVE LEARNING
             x_t, y_t = full_validation_op2[amine][0], full_validation_op2[amine][1]
             x_v, y_v = full_validation_op2[amine][2], full_validation_op2[amine][3]
-            all_data, all_labels = np.concatenate((x_t, x_v)), np.concatenate((y_t, y_v))
+            all_data, all_labels = np.concatenate(
+                (x_t, x_v)), np.concatenate((y_t, y_v))
 
             x_t = np.concatenate((k_x, x_qry))
             y_t = np.concatenate((k_y, y_qry))
@@ -513,6 +515,7 @@ def process_dataset(train_size=10, active_learning_iter=10, verbose=True, cross_
             # Select k many more for training before active learning loop
             # qry = np.random.choice(x_v.shape[0], size=train_size, replace=False)
             qry = find_index(k_x, x_v)
+
             # Update training and validation set with the selection
             x_t = np.append(x_t, x_v[qry]).reshape(-1, x_t.shape[1])
             y_t = np.append(y_t, y_v[qry])
@@ -531,7 +534,8 @@ def process_dataset(train_size=10, active_learning_iter=10, verbose=True, cross_
             # Full dataset under option 2 W/ ACTIVE LEARNING
             x_t, y_t = full_validation_op2[amine][0], full_validation_op2[amine][1]
             x_v, y_v = full_validation_op2[amine][2], full_validation_op2[amine][3]
-            all_data, all_labels = np.concatenate((x_t, x_v)), np.concatenate((y_t, y_v))
+            all_data, all_labels = np.concatenate(
+                (x_t, x_v)), np.concatenate((y_t, y_v))
 
             # Select k many more for training before active learning loop
             qry = find_index(k_x, all_data)
@@ -614,7 +618,8 @@ def process_dataset(train_size=10, active_learning_iter=10, verbose=True, cross_
             # test dataset under option 2 W/O ACTIVE LEARNING
             x_t, y_t = test_validation_op2[amine][0], test_validation_op2[amine][1]
             x_v, y_v = test_validation_op2[amine][2], test_validation_op2[amine][3]
-            all_data, all_labels = np.concatenate((x_t, x_v)), np.concatenate((y_t, y_v))
+            all_data, all_labels = np.concatenate(
+                (x_t, x_v)), np.concatenate((y_t, y_v))
 
             x_t = np.concatenate((k_x, x_qry))
             y_t = np.concatenate((k_y, y_qry))
@@ -646,6 +651,7 @@ def process_dataset(train_size=10, active_learning_iter=10, verbose=True, cross_
             # Select k many more for training before active learning loop
             # qry = np.random.choice(x_v.shape[0], size=train_size, replace=False)
             qry = find_index(k_x, x_v)
+
             # Update training and validation set with the selection
             x_t = np.append(x_t, x_v[qry]).reshape(-1, x_t.shape[1])
             y_t = np.append(y_t, y_v[qry])
@@ -664,7 +670,8 @@ def process_dataset(train_size=10, active_learning_iter=10, verbose=True, cross_
             # test dataset under option 2 W/ ACTIVE LEARNING
             x_t, y_t = test_validation_op2[amine][0], test_validation_op2[amine][1]
             x_v, y_v = test_validation_op2[amine][2], test_validation_op2[amine][3]
-            all_data, all_labels = np.concatenate((x_t, x_v)), np.concatenate((y_t, y_v))
+            all_data, all_labels = np.concatenate(
+                (x_t, x_v)), np.concatenate((y_t, y_v))
 
             # Select k many more for training before active learning loop
             qry = find_index(k_x, all_data)
