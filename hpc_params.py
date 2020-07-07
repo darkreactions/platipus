@@ -29,19 +29,19 @@ meta_params = {
     'num_inner_updates': 10,
     'kl_reweight': 0.0001,
     'p_dropout_base': 0.4,
-    'num_epochs_save': 2,
+    'num_epochs_save': 1000,
     'num_batches': 250,
     'model_name': 'Platipus'
 }
 
 meta_train = {
-    'num_epochs': 4,
+    'num_epochs': 3000,
     'resume_epoch': 0,
     'train_flag': True
 }
 
 meta_test = {
     'num_epochs': 0,
-    'resume_epoch': 4,
+    'resume_epoch': 3000,
     'train_flag': False
 }
