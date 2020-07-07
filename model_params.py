@@ -7,11 +7,13 @@ common_params = {
     'train_flag': True,
     'gpu_id': 1,
     'test_data': True,  # TODO: redundant with full_dataset?
-    'meta': False,  # TODO: redundant with pretrain?
+    'meta': False,
     'full_dataset': True,
     'fine_tuning': False,
-    'pretrain': True,
+    'with_historical_data': True,   # Train models with historical data of other amines
+    'with_k': False,     # Train the model with k additional amine-specific experiments
     'train_size': 10,   # k after pretrain
+    'active_learning': False,
     'active_learning_iter': 10,   # x before active learning
     'stats_path': Path('./results/cv_statistics.pkl'),
     'cv_stats_overwrite': True,
