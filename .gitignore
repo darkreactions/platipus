@@ -2,3 +2,10 @@ __pycache__/
 *.pkl
 *.pt
 *.png
+.ipynb_checkpoints/
+running_logs*/
+PLATIPUS_*/
+MAML_*/
+.vscode/
+*.ipynb
+results/
