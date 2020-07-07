@@ -58,6 +58,9 @@ if __name__ == '__main__':
     KNN_C3 = run_model(base_model=KNN, common_params=common_params, model_params=knn_params, active_learning=False, w_hx=True, w_k=False)
     models_to_plot.append(KNN_C3['model_name'])
 
+    RF_C3 = run_model(base_model=RandomForest, common_params=common_params, model_params=randomforest_params, active_learning=False, w_hx=True, w_k=False)
+    models_to_plot.append(RF_C3['model_name'])
+
     # Trained under option 2
     '''KNN2_params = {**common_params, **knn_params}
     KNN2_params['pretrain'] = False
