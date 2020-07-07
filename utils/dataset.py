@@ -11,7 +11,7 @@ amine_header = '_rxn_organic-inchikey'
 score_header = '_out_crystalscore'
 name_header = 'name'
 to_exclude = [score_header, amine_header, name_header, distribution_header]
-path = './data/0050.perovskitedata_DRP.csv'
+path = './data/0057.perovskitedata_DRPFeatures_2020-07-02.csv'
 
 # Successful reaction is defined as having a crystal score of...
 SUCCESS = 4
@@ -56,7 +56,7 @@ def import_full_dataset(k_shot, meta_batch_size, num_batches, verbose=False,
 
 
 def import_test_dataset(k_shot, meta_batch_size, num_batches, verbose=False,
-                        cross_validation=True,  meta=True):
+                        cross_validation=True, meta=True):
     """
     meta_batch_size = 10
     k_shot = 20
@@ -332,25 +332,45 @@ def load_test_samples(hold_out_amines, df, to_exclude, k_shot, amine_header, sco
     return amine_test_samples
 
 
-def process_dataset(train_size=10, active_learning_iter=10, verbose=True, cross_validation=True, full=True, 
-                    active_learning=True, pretrain=True):
+def find_index(selected_experiements, all_experiments):
+    qry_index = []
+    for experiment in selected_experiements:
+        i = 0
+        found = False
+        while i in range(len(all_experiments)) and (found == False):
+            if list(experiment) == list(all_experiments[i]):
+                found = True
+                qry_index.append(i)
+            else:
+                i += 1
+    return qry_index
+
+
+def process_dataset(train_size=10, active_learning_iter=10, verbose=True, cross_validation=True, full=True,
+                    active_learning=True, w_hx=True, w_k=True):
     """TODO: DOCUMENTATION and COMMENTS"""
 
     # Initialize data dict dictionary
     data_dict = defaultdict(dict)
-    al_options = ['with_AL', 'without_AL']
     dataset_sizes = ['full', 'test']
-    options = ['option_1', 'option_2']
+    al_options = ['w/_AL', 'w/o_AL']
+    historical_options = ['w/_hx', 'w/o_hx']
+    k_options = ['w/_k', 'w/o_k']
+    x_options = ['w/_x', 'w/o_x']
     data_types = ['x_t', 'y_t', 'x_v', 'y_v', 'all_data', 'all_labels']
-    
+
     for size in dataset_sizes:
         data_dict[size] = defaultdict(dict)
         for al in al_options:
             data_dict[size][al] = defaultdict(dict)
-            for option in options:
-                data_dict[size][al][option] = defaultdict(dict)
-                for dt in data_types:
-                    data_dict[size][al][option][dt] = defaultdict(dict)
+            for hx_op in historical_options:
+                data_dict[size][al][hx_op] = defaultdict(dict)
+                for k_op in k_options:
+                    data_dict[size][al][hx_op][k_op] = defaultdict(dict)
+                    for x_op in x_options:
+                        data_dict[size][al][hx_op][k_op][x_op] = defaultdict(dict)
+                        for dt in data_types:
+                            data_dict[size][al][hx_op][k_op][x_op][dt] = defaultdict(dict)
 
     # Indicate path of the pkl file
     # If running the file inside this folder
@@ -405,45 +425,94 @@ def process_dataset(train_size=10, active_learning_iter=10, verbose=True, cross_
             all_data, all_labels = full_validation_op1[amine][0], full_validation_op1[amine][1]
 
             # Load into dictionary
-            data_dict['full']['without_AL']['option_1']['x_t'][amine] = x_t
-            data_dict['full']['without_AL']['option_1']['y_t'][amine] = y_t
-            data_dict['full']['without_AL']['option_1']['x_v'][amine] = x_v
-            data_dict['full']['without_AL']['option_1']['y_v'][amine] = y_v
-            data_dict['full']['without_AL']['option_1']['all_data'][amine] = all_data
-            data_dict['full']['without_AL']['option_1']['all_labels'][amine] = all_labels
+            data_dict['full']['w/o_AL']['w/_hx']['w/o_k']['w/o_x']['x_t'][amine] = x_t
+            data_dict['full']['w/o_AL']['w/_hx']['w/o_k']['w/o_x']['y_t'][amine] = y_t
+            data_dict['full']['w/o_AL']['w/_hx']['w/o_k']['w/o_x']['x_v'][amine] = x_v
+            data_dict['full']['w/o_AL']['w/_hx']['w/o_k']['w/o_x']['y_v'][amine] = y_v
+            data_dict['full']['w/o_AL']['w/_hx']['w/o_k']['w/o_x']['all_data'][amine] = all_data
+            data_dict['full']['w/o_AL']['w/_hx']['w/o_k']['w/o_x']['all_labels'][amine] = all_labels
 
-            # Category 4:
+            # Category 4(i):
+            # For non-AL models only
+            # Full dataset under option 1 W/O ACTIVE LEARNING
+            x_t, y_t = full_training_op1[amine][0], full_training_op1[amine][1]
+            x_v, y_v = full_validation_op1[amine][0], full_validation_op1[amine][1]
+            all_data, all_labels = full_validation_op1[amine][0], full_validation_op1[amine][1]
+
+            # Select x many more for training
+            # qry_k = np.random.choice(x_v.shape[0], size=train_size, replace=False)
+            # qry_x = np.random.choice(x_v.shape[0], size=active_learning_iter, replace=False)
+            qry_k = np.random.choice(x_v.shape[0], size=train_size, replace=False)
+
+            # TODO: Rename this variable
+            # This is the selected k
+            k_x = x_v[qry_k]
+            k_y = y_v[qry_k]
+
+            # Update training and validation set with the selection
+            x_t = np.append(x_t, k_x).reshape(-1, x_t.shape[1])
+            y_t = np.append(y_t, k_y)
+            x_v = np.delete(x_v, qry_k, axis=0)
+            y_v = np.delete(y_v, qry_k)
+
+            qry_x = np.random.choice(x_v.shape[0], size=active_learning_iter, replace=False)
+
+            # TODO: Rename this variable
+            # This is the selected x
+            x_qry = x_v[qry_x]
+            y_qry = y_v[qry_x]
+
+            # Update training and validation set with the selection
+            x_t = np.append(x_t, x_qry).reshape(-1, x_t.shape[1])
+            y_t = np.append(y_t, y_qry)
+            x_v = np.delete(x_v, qry_x, axis=0)
+            y_v = np.delete(y_v, qry_x)
+
+            # Load into dictionary
+            data_dict['full']['w/o_AL']['w/_hx']['w/_k']['w/_x']['x_t'][amine] = x_t
+            data_dict['full']['w/o_AL']['w/_hx']['w/_k']['w/_x']['y_t'][amine] = y_t
+            data_dict['full']['w/o_AL']['w/_hx']['w/_k']['w/_x']['x_v'][amine] = x_v
+            data_dict['full']['w/o_AL']['w/_hx']['w/_k']['w/_x']['y_v'][amine] = y_v
+            data_dict['full']['w/o_AL']['w/_hx']['w/_k']['w/_x']['all_data'][amine] = all_data
+            data_dict['full']['w/o_AL']['w/_hx']['w/_k']['w/_x']['all_labels'][amine] = all_labels
+
+            # Category 4(ii):
+            # For non-MAML models only
             # Full dataset under option 2 W/O ACTIVE LEARNING
             x_t, y_t = full_validation_op2[amine][0], full_validation_op2[amine][1]
             x_v, y_v = full_validation_op2[amine][2], full_validation_op2[amine][3]
             all_data, all_labels = np.concatenate((x_t, x_v)), np.concatenate((y_t, y_v))
 
-            # Select x many more for training
-            qry = np.random.choice(x_v.shape[0], size=active_learning_iter, replace=False)
+            x_t = np.concatenate((k_x, x_qry))
+            y_t = np.concatenate((k_y, y_qry))
+            qry = find_index(x_t, all_data)
+            x_v = np.delete(all_data, qry, axis=0)
+            y_v = np.delete(all_labels, qry)
 
             # Update training and validation set with the selection
-            x_t = np.append(x_t, x_v[qry]).reshape(-1, x_t.shape[1])
-            y_t = np.append(y_t, y_v[qry])
-            x_v = np.delete(x_v, qry, axis=0)
-            y_v = np.delete(y_v, qry)
+            # x_t = np.append(x_t, x_v[qry]).reshape(-1, x_t.shape[1])
+            # y_t = np.append(y_t, y_v[qry])
+            # x_v = np.delete(x_v, qry, axis=0)
+            # y_v = np.delete(y_v, qry)
 
             # Load into dictionary
-            data_dict['full']['without_AL']['option_2']['x_t'][amine] = x_t
-            data_dict['full']['without_AL']['option_2']['y_t'][amine] = y_t
-            data_dict['full']['without_AL']['option_2']['x_v'][amine] = x_v
-            data_dict['full']['without_AL']['option_2']['y_v'][amine] = y_v
-            data_dict['full']['without_AL']['option_2']['all_data'][amine] = all_data
-            data_dict['full']['without_AL']['option_2']['all_labels'][amine] = all_labels
-            
-            # Category 5:
+            data_dict['full']['w/o_AL']['w/o_hx']['w/_k']['w/_x']['x_t'][amine] = x_t
+            data_dict['full']['w/o_AL']['w/o_hx']['w/_k']['w/_x']['y_t'][amine] = y_t
+            data_dict['full']['w/o_AL']['w/o_hx']['w/_k']['w/_x']['x_v'][amine] = x_v
+            data_dict['full']['w/o_AL']['w/o_hx']['w/_k']['w/_x']['y_v'][amine] = y_v
+            data_dict['full']['w/o_AL']['w/o_hx']['w/_k']['w/_x']['all_data'][amine] = all_data
+            data_dict['full']['w/o_AL']['w/o_hx']['w/_k']['w/_x']['all_labels'][amine] = all_labels
+
+            # Category 5(a):
+            # For non-PLATIPUS models only
             # Full dataset under option 1 W/ ACTIVE LEARNING
             x_t, y_t = full_training_op1[amine][0], full_training_op1[amine][1]
             x_v, y_v = full_validation_op1[amine][0], full_validation_op1[amine][1]
             all_data, all_labels = full_validation_op1[amine][0], full_validation_op1[amine][1]
 
             # Select k many more for training before active learning loop
-            qry = np.random.choice(x_v.shape[0], size=train_size, replace=False)
-            
+            # qry = np.random.choice(x_v.shape[0], size=train_size, replace=False)
+            qry = find_index(k_x, x_v)
             # Update training and validation set with the selection
             x_t = np.append(x_t, x_v[qry]).reshape(-1, x_t.shape[1])
             y_t = np.append(y_t, y_v[qry])
@@ -451,26 +520,35 @@ def process_dataset(train_size=10, active_learning_iter=10, verbose=True, cross_
             y_v = np.delete(y_v, qry)
 
             # Load into dictionary
-            data_dict['full']['with_AL']['option_1']['x_t'][amine] = x_t
-            data_dict['full']['with_AL']['option_1']['y_t'][amine] = y_t
-            data_dict['full']['with_AL']['option_1']['x_v'][amine] = x_v
-            data_dict['full']['with_AL']['option_1']['y_v'][amine] = y_v
-            data_dict['full']['with_AL']['option_1']['all_data'][amine] = all_data
-            data_dict['full']['with_AL']['option_1']['all_labels'][amine] = all_labels
+            data_dict['full']['w/_AL']['w/_hx']['w/_k']['w/o_x']['x_t'][amine] = x_t
+            data_dict['full']['w/_AL']['w/_hx']['w/_k']['w/o_x']['y_t'][amine] = y_t
+            data_dict['full']['w/_AL']['w/_hx']['w/_k']['w/o_x']['x_v'][amine] = x_v
+            data_dict['full']['w/_AL']['w/_hx']['w/_k']['w/o_x']['y_v'][amine] = y_v
+            data_dict['full']['w/_AL']['w/_hx']['w/_k']['w/o_x']['all_data'][amine] = all_data
+            data_dict['full']['w/_AL']['w/_hx']['w/_k']['w/o_x']['all_labels'][amine] = all_labels
 
-            # Category 6:
+            # Category 5(b):
             # Full dataset under option 2 W/ ACTIVE LEARNING
             x_t, y_t = full_validation_op2[amine][0], full_validation_op2[amine][1]
             x_v, y_v = full_validation_op2[amine][2], full_validation_op2[amine][3]
             all_data, all_labels = np.concatenate((x_t, x_v)), np.concatenate((y_t, y_v))
 
+            # Select k many more for training before active learning loop
+            qry = find_index(k_x, all_data)
+
+            # Update training and validation set w/ the selection
+            x_t = k_x
+            y_t = k_y
+            x_v = np.delete(all_data, qry, axis=0)
+            y_v = np.delete(all_labels, qry)
+
             # Load into dictionary
-            data_dict['full']['with_AL']['option_2']['x_t'][amine] = x_t
-            data_dict['full']['with_AL']['option_2']['y_t'][amine] = y_t
-            data_dict['full']['with_AL']['option_2']['x_v'][amine] = x_v
-            data_dict['full']['with_AL']['option_2']['y_v'][amine] = y_v
-            data_dict['full']['with_AL']['option_2']['all_data'][amine] = all_data
-            data_dict['full']['with_AL']['option_2']['all_labels'][amine] = all_labels
+            data_dict['full']['w/_AL']['w/o_hx']['w/_k']['w/o_x']['x_t'][amine] = x_t
+            data_dict['full']['w/_AL']['w/o_hx']['w/_k']['w/o_x']['y_t'][amine] = y_t
+            data_dict['full']['w/_AL']['w/o_hx']['w/_k']['w/o_x']['x_v'][amine] = x_v
+            data_dict['full']['w/_AL']['w/o_hx']['w/_k']['w/o_x']['y_v'][amine] = y_v
+            data_dict['full']['w/_AL']['w/o_hx']['w/_k']['w/o_x']['all_data'][amine] = all_data
+            data_dict['full']['w/_AL']['w/o_hx']['w/_k']['w/o_x']['all_labels'][amine] = all_labels
 
         for amine in test_amines:
             # Category 3:
@@ -480,45 +558,94 @@ def process_dataset(train_size=10, active_learning_iter=10, verbose=True, cross_
             all_data, all_labels = test_validation_op1[amine][0], test_validation_op1[amine][1]
 
             # Load into dictionary
-            data_dict['test']['without_AL']['option_1']['x_t'][amine] = x_t
-            data_dict['test']['without_AL']['option_1']['y_t'][amine] = y_t
-            data_dict['test']['without_AL']['option_1']['x_v'][amine] = x_v
-            data_dict['test']['without_AL']['option_1']['y_v'][amine] = y_v
-            data_dict['test']['without_AL']['option_1']['all_data'][amine] = all_data
-            data_dict['test']['without_AL']['option_1']['all_labels'][amine] = all_labels
+            data_dict['test']['w/o_AL']['w/_hx']['w/o_k']['w/o_x']['x_t'][amine] = x_t
+            data_dict['test']['w/o_AL']['w/_hx']['w/o_k']['w/o_x']['y_t'][amine] = y_t
+            data_dict['test']['w/o_AL']['w/_hx']['w/o_k']['w/o_x']['x_v'][amine] = x_v
+            data_dict['test']['w/o_AL']['w/_hx']['w/o_k']['w/o_x']['y_v'][amine] = y_v
+            data_dict['test']['w/o_AL']['w/_hx']['w/o_k']['w/o_x']['all_data'][amine] = all_data
+            data_dict['test']['w/o_AL']['w/_hx']['w/o_k']['w/o_x']['all_labels'][amine] = all_labels
 
-            # Category 4:
-            # Test dataset under option 2 W/O ACTIVE LEARNING
+            # Category 4(i):
+            # For non-AL models only
+            # test dataset under option 1 W/O ACTIVE LEARNING
+            x_t, y_t = test_training_op1[amine][0], test_training_op1[amine][1]
+            x_v, y_v = test_validation_op1[amine][0], test_validation_op1[amine][1]
+            all_data, all_labels = test_validation_op1[amine][0], test_validation_op1[amine][1]
+
+            # Select x many more for training
+            # qry_k = np.random.choice(x_v.shape[0], size=train_size, replace=False)
+            # qry_x = np.random.choice(x_v.shape[0], size=active_learning_iter, replace=False)
+            qry_k = np.random.choice(x_v.shape[0], size=train_size, replace=False)
+
+            # TODO: Rename this variable
+            # This is the selected k
+            k_x = x_v[qry_k]
+            k_y = y_v[qry_k]
+
+            # Update training and validation set w/ the selection
+            x_t = np.append(x_t, k_x).reshape(-1, x_t.shape[1])
+            y_t = np.append(y_t, k_y)
+            x_v = np.delete(x_v, qry_k, axis=0)
+            y_v = np.delete(y_v, qry_k)
+
+            qry_x = np.random.choice(x_v.shape[0], size=active_learning_iter, replace=False)
+
+            # TODO: Rename this variable
+            # This is the selected x
+            x_qry = x_v[qry_x]
+            y_qry = y_v[qry_x]
+
+            # Update training and validation set w/ the selection
+            x_t = np.append(x_t, x_qry).reshape(-1, x_t.shape[1])
+            y_t = np.append(y_t, y_qry)
+            x_v = np.delete(x_v, qry_x, axis=0)
+            y_v = np.delete(y_v, qry_x)
+
+            # Load into dictionary
+            data_dict['test']['w/o_AL']['w/_hx']['w/_k']['w/_x']['x_t'][amine] = x_t
+            data_dict['test']['w/o_AL']['w/_hx']['w/_k']['w/_x']['y_t'][amine] = y_t
+            data_dict['test']['w/o_AL']['w/_hx']['w/_k']['w/_x']['x_v'][amine] = x_v
+            data_dict['test']['w/o_AL']['w/_hx']['w/_k']['w/_x']['y_v'][amine] = y_v
+            data_dict['test']['w/o_AL']['w/_hx']['w/_k']['w/_x']['all_data'][amine] = all_data
+            data_dict['test']['w/o_AL']['w/_hx']['w/_k']['w/_x']['all_labels'][amine] = all_labels
+
+            # Category 4(ii):
+            # For non-MAML models only
+            # test dataset under option 2 W/O ACTIVE LEARNING
             x_t, y_t = test_validation_op2[amine][0], test_validation_op2[amine][1]
             x_v, y_v = test_validation_op2[amine][2], test_validation_op2[amine][3]
             all_data, all_labels = np.concatenate((x_t, x_v)), np.concatenate((y_t, y_v))
 
-            # Select x many more for training
-            qry = np.random.choice(x_v.shape[0], size=active_learning_iter, replace=False)
+            x_t = np.concatenate((k_x, x_qry))
+            y_t = np.concatenate((k_y, y_qry))
+            qry = find_index(x_t, all_data)
+            x_v = np.delete(all_data, qry, axis=0)
+            y_v = np.delete(all_labels, qry)
 
             # Update training and validation set with the selection
-            x_t = np.append(x_t, x_v[qry]).reshape(-1, x_t.shape[1])
-            y_t = np.append(y_t, y_v[qry])
-            x_v = np.delete(x_v, qry, axis=0)
-            y_v = np.delete(y_v, qry)
+            # x_t = np.append(x_t, x_v[qry]).reshape(-1, x_t.shape[1])
+            # y_t = np.append(y_t, y_v[qry])
+            # x_v = np.delete(x_v, qry, axis=0)
+            # y_v = np.delete(y_v, qry)
 
             # Load into dictionary
-            data_dict['test']['without_AL']['option_2']['x_t'][amine] = x_t
-            data_dict['test']['without_AL']['option_2']['y_t'][amine] = y_t
-            data_dict['test']['without_AL']['option_2']['x_v'][amine] = x_v
-            data_dict['test']['without_AL']['option_2']['y_v'][amine] = y_v
-            data_dict['test']['without_AL']['option_2']['all_data'][amine] = all_data
-            data_dict['test']['without_AL']['option_2']['all_labels'][amine] = all_labels
+            data_dict['test']['w/o_AL']['w/o_hx']['w/_k']['w/_x']['x_t'][amine] = x_t
+            data_dict['test']['w/o_AL']['w/o_hx']['w/_k']['w/_x']['y_t'][amine] = y_t
+            data_dict['test']['w/o_AL']['w/o_hx']['w/_k']['w/_x']['x_v'][amine] = x_v
+            data_dict['test']['w/o_AL']['w/o_hx']['w/_k']['w/_x']['y_v'][amine] = y_v
+            data_dict['test']['w/o_AL']['w/o_hx']['w/_k']['w/_x']['all_data'][amine] = all_data
+            data_dict['test']['w/o_AL']['w/o_hx']['w/_k']['w/_x']['all_labels'][amine] = all_labels
 
-            # Category 5:
-            # Test dataset under option 1 W/ ACTIVE LEARNING
+            # Category 5(a):
+            # For non-PLATIPUS models only
+            # test dataset under option 1 W/ ACTIVE LEARNING
             x_t, y_t = test_training_op1[amine][0], test_training_op1[amine][1]
             x_v, y_v = test_validation_op1[amine][0], test_validation_op1[amine][1]
             all_data, all_labels = test_validation_op1[amine][0], test_validation_op1[amine][1]
 
             # Select k many more for training before active learning loop
-            qry = np.random.choice(x_v.shape[0], size=train_size, replace=False)
-
+            # qry = np.random.choice(x_v.shape[0], size=train_size, replace=False)
+            qry = find_index(k_x, x_v)
             # Update training and validation set with the selection
             x_t = np.append(x_t, x_v[qry]).reshape(-1, x_t.shape[1])
             y_t = np.append(y_t, y_v[qry])
@@ -526,26 +653,35 @@ def process_dataset(train_size=10, active_learning_iter=10, verbose=True, cross_
             y_v = np.delete(y_v, qry)
 
             # Load into dictionary
-            data_dict['test']['with_AL']['option_1']['x_t'][amine] = x_t
-            data_dict['test']['with_AL']['option_1']['y_t'][amine] = y_t
-            data_dict['test']['with_AL']['option_1']['x_v'][amine] = x_v
-            data_dict['test']['with_AL']['option_1']['y_v'][amine] = y_v
-            data_dict['test']['with_AL']['option_1']['all_data'][amine] = all_data
-            data_dict['test']['with_AL']['option_1']['all_labels'][amine] = all_labels
+            data_dict['test']['w/_AL']['w/_hx']['w/_k']['w/o_x']['x_t'][amine] = x_t
+            data_dict['test']['w/_AL']['w/_hx']['w/_k']['w/o_x']['y_t'][amine] = y_t
+            data_dict['test']['w/_AL']['w/_hx']['w/_k']['w/o_x']['x_v'][amine] = x_v
+            data_dict['test']['w/_AL']['w/_hx']['w/_k']['w/o_x']['y_v'][amine] = y_v
+            data_dict['test']['w/_AL']['w/_hx']['w/_k']['w/o_x']['all_data'][amine] = all_data
+            data_dict['test']['w/_AL']['w/_hx']['w/_k']['w/o_x']['all_labels'][amine] = all_labels
 
-            # Category 6:
-            # Test dataset under option 2 W/ ACTIVE LEARNING
+            # Category 5(b):
+            # test dataset under option 2 W/ ACTIVE LEARNING
             x_t, y_t = test_validation_op2[amine][0], test_validation_op2[amine][1]
             x_v, y_v = test_validation_op2[amine][2], test_validation_op2[amine][3]
             all_data, all_labels = np.concatenate((x_t, x_v)), np.concatenate((y_t, y_v))
 
+            # Select k many more for training before active learning loop
+            qry = find_index(k_x, all_data)
+
+            # Update training and validation set w/ the selection
+            x_t = k_x
+            y_t = k_y
+            x_v = np.delete(all_data, qry, axis=0)
+            y_v = np.delete(all_labels, qry)
+
             # Load into dictionary
-            data_dict['test']['with_AL']['option_2']['x_t'][amine] = x_t
-            data_dict['test']['with_AL']['option_2']['y_t'][amine] = y_t
-            data_dict['test']['with_AL']['option_2']['x_v'][amine] = x_v
-            data_dict['test']['with_AL']['option_2']['y_v'][amine] = y_v
-            data_dict['test']['with_AL']['option_2']['all_data'][amine] = all_data
-            data_dict['test']['with_AL']['option_2']['all_labels'][amine] = all_labels
+            data_dict['test']['w/_AL']['w/o_hx']['w/_k']['w/o_x']['x_t'][amine] = x_t
+            data_dict['test']['w/_AL']['w/o_hx']['w/_k']['w/o_x']['y_t'][amine] = y_t
+            data_dict['test']['w/_AL']['w/o_hx']['w/_k']['w/o_x']['x_v'][amine] = x_v
+            data_dict['test']['w/_AL']['w/o_hx']['w/_k']['w/o_x']['y_v'][amine] = y_v
+            data_dict['test']['w/_AL']['w/o_hx']['w/_k']['w/o_x']['all_data'][amine] = all_data
+            data_dict['test']['w/_AL']['w/o_hx']['w/_k']['w/o_x']['all_labels'][amine] = all_labels
 
         with open(data_dict_path, "wb") as f:
             pickle.dump(data_dict, f)
@@ -555,79 +691,158 @@ def process_dataset(train_size=10, active_learning_iter=10, verbose=True, cross_
             data_dict = pickle.load(f)
 
     if full:
-        if active_learning:
-            if pretrain:
-                print('Conducting training under option 1.')
-                x_t, y_t, x_v, y_v, all_data, all_labels = data_dict['full']['with_AL']['option_1']['x_t'], \
-                                                           data_dict['full']['with_AL']['option_1']['y_t'], \
-                                                           data_dict['full']['with_AL']['option_1']['x_v'], \
-                                                           data_dict['full']['with_AL']['option_1']['y_v'], \
-                                                           data_dict['full']['with_AL']['option_1']['all_data'], \
-                                                           data_dict['full']['with_AL']['option_1']['all_labels']
+        if not active_learning:
+            if w_hx:
+                if not w_k:
+                    print('Training category 3 models.')
+                    x_t, y_t, x_v, y_v, all_data, all_labels = data_dict['full']['w/o_AL']['w/_hx']['w/o_k']['w/o_x'][
+                                                                   'x_t'], \
+                                                               data_dict['full']['w/o_AL']['w/_hx']['w/o_k']['w/o_x'][
+                                                                   'y_t'], \
+                                                               data_dict['full']['w/o_AL']['w/_hx']['w/o_k']['w/o_x'][
+                                                                   'x_v'], \
+                                                               data_dict['full']['w/o_AL']['w/_hx']['w/o_k']['w/o_x'][
+                                                                   'y_v'], \
+                                                               data_dict['full']['w/o_AL']['w/_hx']['w/o_k']['w/o_x'][
+                                                                   'all_data'], \
+                                                               data_dict['full']['w/o_AL']['w/_hx']['w/o_k']['w/o_x'][
+                                                                   'all_labels']
+                else:
+                    print('Training category 4(i) models.')
+                    x_t, y_t, x_v, y_v, all_data, all_labels = data_dict['full']['w/o_AL']['w/_hx']['w/_k']['w/_x'][
+                                                                   'x_t'], \
+                                                               data_dict['full']['w/o_AL']['w/_hx']['w/_k']['w/_x'][
+                                                                   'y_t'], \
+                                                               data_dict['full']['w/o_AL']['w/_hx']['w/_k']['w/_x'][
+                                                                   'x_v'], \
+                                                               data_dict['full']['w/o_AL']['w/_hx']['w/_k']['w/_x'][
+                                                                   'y_v'], \
+                                                               data_dict['full']['w/o_AL']['w/_hx']['w/_k']['w/_x'][
+                                                                   'all_data'], \
+                                                               data_dict['full']['w/o_AL']['w/_hx']['w/_k']['w/_x'][
+                                                                   'all_labels']
             else:
-                print('Conducting training under option 2.')
-                x_t, y_t, x_v, y_v, all_data, all_labels = data_dict['full']['with_AL']['option_2']['x_t'], \
-                                                           data_dict['full']['with_AL']['option_2']['y_t'], \
-                                                           data_dict['full']['with_AL']['option_2']['x_v'], \
-                                                           data_dict['full']['with_AL']['option_2']['y_v'], \
-                                                           data_dict['full']['with_AL']['option_2']['all_data'], \
-                                                           data_dict['full']['with_AL']['option_2']['all_labels']
+                print('Training category 4(ii) models.')
+                x_t, y_t, x_v, y_v, all_data, all_labels = data_dict['full']['w/o_AL']['w/o_hx']['w/_k']['w/_x'][
+                                                               'x_t'], \
+                                                           data_dict['full']['w/o_AL']['w/o_hx']['w/_k']['w/_x'][
+                                                               'y_t'], \
+                                                           data_dict['full']['w/o_AL']['w/o_hx']['w/_k']['w/_x'][
+                                                               'x_v'], \
+                                                           data_dict['full']['w/o_AL']['w/o_hx']['w/_k']['w/_x'][
+                                                               'y_v'], \
+                                                           data_dict['full']['w/o_AL']['w/o_hx']['w/_k']['w/_x'][
+                                                               'all_data'], \
+                                                           data_dict['full']['w/o_AL']['w/o_hx']['w/_k']['w/_x'][
+                                                               'all_labels']
         else:
-            if pretrain:
-                print('Conducting training under option 1.')
-                x_t, y_t, x_v, y_v, all_data, all_labels = data_dict['full']['without_AL']['option_1']['x_t'], \
-                                                           data_dict['full']['without_AL']['option_1']['y_t'], \
-                                                           data_dict['full']['without_AL']['option_1']['x_v'], \
-                                                           data_dict['full']['without_AL']['option_1']['y_v'], \
-                                                           data_dict['full']['without_AL']['option_1']['all_data'], \
-                                                           data_dict['full']['without_AL']['option_1']['all_labels']
+            if w_hx:
+                print('Training category 5(i) models.')
+                x_t, y_t, x_v, y_v, all_data, all_labels = data_dict['full']['w/_AL']['w/_hx']['w/_k']['w/o_x'][
+                                                               'x_t'], \
+                                                           data_dict['full']['w/_AL']['w/_hx']['w/_k']['w/o_x'][
+                                                               'y_t'], \
+                                                           data_dict['full']['w/_AL']['w/_hx']['w/_k']['w/o_x'][
+                                                               'x_v'], \
+                                                           data_dict['full']['w/_AL']['w/_hx']['w/_k']['w/o_x'][
+                                                               'y_v'], \
+                                                           data_dict['full']['w/_AL']['w/_hx']['w/_k']['w/o_x'][
+                                                               'all_data'], \
+                                                           data_dict['full']['w/_AL']['w/_hx']['w/_k']['w/o_x'][
+                                                               'all_labels']
             else:
-                print('Conducting training under option 2.')
-                x_t, y_t, x_v, y_v, all_data, all_labels = data_dict['full']['without_AL']['option_2']['x_t'], \
-                                                           data_dict['full']['without_AL']['option_2']['y_t'], \
-                                                           data_dict['full']['without_AL']['option_2']['x_v'], \
-                                                           data_dict['full']['without_AL']['option_2']['y_v'], \
-                                                           data_dict['full']['without_AL']['option_2']['all_data'], \
-                                                           data_dict['full']['without_AL']['option_2']['all_labels']
+                print('Training category 5(ii) models.')
+                x_t, y_t, x_v, y_v, all_data, all_labels = data_dict['full']['w/_AL']['w/o_hx']['w/_k']['w/o_x'][
+                                                               'x_t'], \
+                                                           data_dict['full']['w/_AL']['w/o_hx']['w/_k']['w/o_x'][
+                                                               'y_t'], \
+                                                           data_dict['full']['w/_AL']['w/o_hx']['w/_k']['w/o_x'][
+                                                               'x_v'], \
+                                                           data_dict['full']['w/_AL']['w/o_hx']['w/_k']['w/o_x'][
+                                                               'y_v'], \
+                                                           data_dict['full']['w/_AL']['w/o_hx']['w/_k']['w/o_x'][
+                                                               'all_data'], \
+                                                           data_dict['full']['w/_AL']['w/o_hx']['w/_k']['w/o_x'][
+                                                               'all_labels']
     else:
-        if active_learning:
-            if pretrain:
-                print('Conducting training under option 1.')
-                x_t, y_t, x_v, y_v, all_data, all_labels = data_dict['test']['with_AL']['option_1']['x_t'], \
-                                                           data_dict['test']['with_AL']['option_1']['y_t'], \
-                                                           data_dict['test']['with_AL']['option_1']['x_v'], \
-                                                           data_dict['test']['with_AL']['option_1']['y_v'], \
-                                                           data_dict['test']['with_AL']['option_1']['all_data'], \
-                                                           data_dict['test']['with_AL']['option_1']['all_labels']
+        if not active_learning:
+            if w_hx:
+                if not w_k:
+                    print('Training category 3 models.')
+                    x_t, y_t, x_v, y_v, all_data, all_labels = data_dict['test']['w/o_AL']['w/_hx']['w/o_k']['w/o_x'][
+                                                                   'x_t'], \
+                                                               data_dict['test']['w/o_AL']['w/_hx']['w/o_k']['w/o_x'][
+                                                                   'y_t'], \
+                                                               data_dict['test']['w/o_AL']['w/_hx']['w/o_k']['w/o_x'][
+                                                                   'x_v'], \
+                                                               data_dict['test']['w/o_AL']['w/_hx']['w/o_k']['w/o_x'][
+                                                                   'y_v'], \
+                                                               data_dict['test']['w/o_AL']['w/_hx']['w/o_k']['w/o_x'][
+                                                                   'all_data'], \
+                                                               data_dict['test']['w/o_AL']['w/_hx']['w/o_k']['w/o_x'][
+                                                                   'all_labels']
+                else:
+                    print('Training category 4(i) models.')
+                    x_t, y_t, x_v, y_v, all_data, all_labels = data_dict['test']['w/o_AL']['w/_hx']['w/_k']['w/_x'][
+                                                                   'x_t'], \
+                                                               data_dict['test']['w/o_AL']['w/_hx']['w/_k']['w/_x'][
+                                                                   'y_t'], \
+                                                               data_dict['test']['w/o_AL']['w/_hx']['w/_k']['w/_x'][
+                                                                   'x_v'], \
+                                                               data_dict['test']['w/o_AL']['w/_hx']['w/_k']['w/_x'][
+                                                                   'y_v'], \
+                                                               data_dict['test']['w/o_AL']['w/_hx']['w/_k']['w/_x'][
+                                                                   'all_data'], \
+                                                               data_dict['test']['w/o_AL']['w/_hx']['w/_k']['w/_x'][
+                                                                   'all_labels']
             else:
-                print('Conducting training under option 2.')
-                x_t, y_t, x_v, y_v, all_data, all_labels = data_dict['test']['with_AL']['option_2']['x_t'], \
-                                                           data_dict['test']['with_AL']['option_2']['y_t'], \
-                                                           data_dict['test']['with_AL']['option_2']['x_v'], \
-                                                           data_dict['test']['with_AL']['option_2']['y_v'], \
-                                                           data_dict['test']['with_AL']['option_2']['all_data'], \
-                                                           data_dict['test']['with_AL']['option_2']['all_labels']
+                print('Training category 4(ii) models.')
+                x_t, y_t, x_v, y_v, all_data, all_labels = data_dict['test']['w/o_AL']['w/o_hx']['w/_k']['w/_x'][
+                                                               'x_t'], \
+                                                           data_dict['test']['w/o_AL']['w/o_hx']['w/_k']['w/_x'][
+                                                               'y_t'], \
+                                                           data_dict['test']['w/o_AL']['w/o_hx']['w/_k']['w/_x'][
+                                                               'x_v'], \
+                                                           data_dict['test']['w/o_AL']['w/o_hx']['w/_k']['w/_x'][
+                                                               'y_v'], \
+                                                           data_dict['test']['w/o_AL']['w/o_hx']['w/_k']['w/_x'][
+                                                               'all_data'], \
+                                                           data_dict['test']['w/o_AL']['w/o_hx']['w/_k']['w/_x'][
+                                                               'all_labels']
         else:
-            if pretrain:
-                print('Conducting training under option 1.')
-                x_t, y_t, x_v, y_v, all_data, all_labels = data_dict['test']['without_AL']['option_1']['x_t'], \
-                                                           data_dict['test']['without_AL']['option_1']['y_t'], \
-                                                           data_dict['test']['without_AL']['option_1']['x_v'], \
-                                                           data_dict['test']['without_AL']['option_1']['y_v'], \
-                                                           data_dict['test']['without_AL']['option_1']['all_data'], \
-                                                           data_dict['test']['without_AL']['option_1']['all_labels']
+            if w_hx:
+                print('Training category 5(i) models.')
+                x_t, y_t, x_v, y_v, all_data, all_labels = data_dict['test']['w/_AL']['w/_hx']['w/_k']['w/o_x'][
+                                                               'x_t'], \
+                                                           data_dict['test']['w/_AL']['w/_hx']['w/_k']['w/o_x'][
+                                                               'y_t'], \
+                                                           data_dict['test']['w/_AL']['w/_hx']['w/_k']['w/o_x'][
+                                                               'x_v'], \
+                                                           data_dict['test']['w/_AL']['w/_hx']['w/_k']['w/o_x'][
+                                                               'y_v'], \
+                                                           data_dict['test']['w/_AL']['w/_hx']['w/_k']['w/o_x'][
+                                                               'all_data'], \
+                                                           data_dict['test']['w/_AL']['w/_hx']['w/_k']['w/o_x'][
+                                                               'all_labels']
             else:
-                print('Conducting training under option 2.')
-                x_t, y_t, x_v, y_v, all_data, all_labels = data_dict['test']['without_AL']['option_2']['x_t'], \
-                                                           data_dict['test']['without_AL']['option_2']['y_t'], \
-                                                           data_dict['test']['without_AL']['option_2']['x_v'], \
-                                                           data_dict['test']['without_AL']['option_2']['y_v'], \
-                                                           data_dict['test']['without_AL']['option_2']['all_data'], \
-                                                           data_dict['test']['without_AL']['option_2']['all_labels']
+                print('Training category 5(ii) models.')
+                x_t, y_t, x_v, y_v, all_data, all_labels = data_dict['test']['w/_AL']['w/o_hx']['w/_k']['w/o_x'][
+                                                               'x_t'], \
+                                                           data_dict['test']['w/_AL']['w/o_hx']['w/_k']['w/o_x'][
+                                                               'y_t'], \
+                                                           data_dict['test']['w/_AL']['w/o_hx']['w/_k']['w/o_x'][
+                                                               'x_v'], \
+                                                           data_dict['test']['w/_AL']['w/o_hx']['w/_k']['w/o_x'][
+                                                               'y_v'], \
+                                                           data_dict['test']['w/_AL']['w/o_hx']['w/_k']['w/o_x'][
+                                                               'all_data'], \
+                                                           data_dict['test']['w/_AL']['w/o_hx']['w/_k']['w/o_x'][
+                                                               'all_labels']
 
     amine_list = list(x_t.keys())
 
     return amine_list, x_t, y_t, x_v, y_v, all_data, all_labels
+
 
 if __name__ == "__main__":
     meta_batch_size = 10
