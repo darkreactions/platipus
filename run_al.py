@@ -8,6 +8,14 @@ from utils import read_pickle, write_pickle, define_non_meta_model_name, find_av
 from model_params import common_params, knn_params, svm_params, randomforest_params, logisticregression_params, decisiontree_params,  meta_train, meta_test
 
 
+# TODO: Do we need active_learning, w_hx and w_k as inputs, can we just load then with model_params?
+def run_model(base_model, common_params, model_params, active_learning, w_hx, w_k):
+    base_model_params = {**common_params, **model_params}
+    base_model_params['model_name'] = define_non_meta_model_name(base_model_params['model_name'], active_learning, w_hx,w_k)
+    base_model.run_model(base_model_params)
+    return base_model_params
+
+
 if __name__ == '__main__':
 
     # Set up the results directory
@@ -47,17 +55,15 @@ if __name__ == '__main__':
 
     # KNN w/ active learning
     # Trained under option 1
-    KNN1_params = {**common_params, **knn_params}
-    KNN1_params['model_name'] = define_non_meta_model_name(KNN1_params['model_name'], KNN1_params['pretrain'])
-    models_to_plot.append(KNN1_params['model_name'])
-    KNN.run_model(KNN1_params)
+    KNN_C3 = run_model(base_model=KNN, common_params=common_params, model_params=knn_params, active_learning=False, w_hx=True, w_k=False)
+    models_to_plot.append(KNN_C3['model_name'])
 
     # Trained under option 2
-    KNN2_params = {**common_params, **knn_params}
+    '''KNN2_params = {**common_params, **knn_params}
     KNN2_params['pretrain'] = False
     KNN2_params['model_name'] = define_non_meta_model_name(KNN2_params['model_name'], KNN2_params['pretrain'])
     models_to_plot.append(KNN2_params['model_name'])
-    KNN.run_model(KNN2_params)
+    KNN.run_model(KNN2_params)'''
 
     """
     # SVM w/ active learning
@@ -78,7 +84,7 @@ if __name__ == '__main__':
 
     # Random Forest w/ active learning
     # Trained under option 1
-    RF1_params = {**common_params, **randomforest_params}
+    '''RF1_params = {**common_params, **randomforest_params}
     RF1_params['model_name'] = define_non_meta_model_name(RF1_params['model_name'], RF1_params['pretrain'])
     models_to_plot.append(RF1_params['model_name'])
     RandomForest.run_model(RF1_params)
@@ -95,7 +101,7 @@ if __name__ == '__main__':
     LR1_params = {**common_params, **logisticregression_params}
     LR1_params['model_name'] = define_non_meta_model_name(LR1_params['model_name'], LR1_params['pretrain'])
     models_to_plot.append(LR1_params['model_name'])
-    LogisticRegression.run_model(LR1_params)
+    LogisticRegression.run_model(LR1_params)'''
 
     """# Trained under option 2
     # TODO: CAN'T RUN DUE TO INSUFFICIENT SUCCESSES
@@ -107,7 +113,7 @@ if __name__ == '__main__':
 
     # Decision Tree w/ active learning
     # Trained under option 1
-    DT1_params = {**common_params, **decisiontree_params}
+    '''DT1_params = {**common_params, **decisiontree_params}
     DT1_params['model_name'] = define_non_meta_model_name(DT1_params['model_name'], DT1_params['pretrain'])
     models_to_plot.append(DT1_params['model_name'])
     DecisionTree.run_model(DT1_params)
@@ -117,7 +123,7 @@ if __name__ == '__main__':
     DT2_params['pretrain'] = False
     DT2_params['model_name'] = define_non_meta_model_name(DT2_params['model_name'], DT2_params['pretrain'])
     models_to_plot.append(DT2_params['model_name'])
-    DecisionTree.run_model(DT2_params)
+    DecisionTree.run_model(DT2_params)'''
 
     cv_stats = read_pickle(common_params['stats_path'])
     amines = cv_stats[models_to_plot[0]]['amine']
