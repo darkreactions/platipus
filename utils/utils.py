@@ -12,6 +12,7 @@ from matplotlib import pyplot as plt
 from utils.dataset import (import_chemdata, cross_validation_data, hold_out_data,
                            import_test_dataset, import_full_dataset)
 
+
 def write_pickle(path, data):
     """Write pickle file
 
@@ -348,31 +349,51 @@ def update_cv_stats_dict(cv_stats_dict, model, correct, cm, accuracy, precision,
 
     return cv_stats_dict
 
-def define_non_meta_model_name(model_name, pretrain):
+
+def define_non_meta_model_name(model_name, active_learning, w_hx, w_k):
     """ Function to define the suffix of non-meta model
     Args:
-        model_name:     A string representing the base model name of the non-meta model.
-        pretrain:       A boolean representing whether we are training/testing the model under option 1 or option 2.
-                            See non-meta models for more details on option 1 and option 2.
+        model_name:         A string representing the base model name of the non-meta model.
+        active_learning:    A boolean representing if the model will conduct active learning or not.
+        w_hx:               A boolean representing if the model will be trained with historical data or not.
+        w_k:                A boolean representing if the model will be trained with k additional experiments of the
+                                task-specific experiments or not.
     returns:
         A string representing the model name with proper suffix
     """
 
-    return model_name + '_option_1' if pretrain else model_name + '_option_2'
+    suffix = ''
 
+    if not active_learning:
+        if w_hx:
+            if not w_k:
+                suffix = '_category_3'
+            else:
+                suffix = '_category_4_i'
+        else:
+            if w_k:
+                suffix = '_category_4_ii'
+            else:
+                print('Invalid combination of parameters.')
+                print("Can't find appropriate category for the model.")
+                print("Using default name instead.")
+    else:
+        if w_hx:
+            if w_k:
+                suffix = '_category_5_i'
+            else:
+                print('Invalid combination of parameters.')
+                print("Can't find appropriate category for the model.")
+                print("Using default name instead.")
+        else:
+            if w_k:
+                suffix = '_category_5_ii'
+            else:
+                print('Invalid combination of parameters.')
+                print("Can't find appropriate category for the model.")
+                print("Using default name instead.")
 
-def define_non_meta_model_name(model_name, pretrain):
-    """ Function to define the suffix of non-meta model
-    Args:
-        model_name:     A string representing the base model name of the non-meta model.
-        pretrain:       A boolean representing whether we are training/testing the model under option 1 or option 2.
-                            See non-meta models for more details on option 1 and option 2.
-
-    returns:
-        A string representing the model name with proper suffix
-    """
-
-    return model_name + '_option_1' if pretrain else model_name + '_option_2'
+    return model_name + suffix
 
 
 if __name__ == "__main__":
@@ -380,3 +401,4 @@ if __name__ == "__main__":
     params["cross_validate"] = True
     load_chem_dataset(5, params, meta_batch_size=32,
                       num_batches=100, verbose=True)
+
