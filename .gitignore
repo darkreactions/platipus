@@ -8,3 +8,4 @@ PLATIPUS_*/
 MAML_*/
 .vscode/
 *.ipynb
+results/
