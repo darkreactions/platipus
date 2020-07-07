@@ -3,17 +3,36 @@ from pathlib import Path
 import os
 
 from models.non_meta import RandomForest, KNN, SVM, DecisionTree, LogisticRegression
-from utils.plot import plot_metrics_graph
+from utils.plot import plot_metrics_graph, plot_all_graphs
 from utils import read_pickle, write_pickle, define_non_meta_model_name, find_avg_metrics
 from model_params import common_params, knn_params, svm_params, randomforest_params, logisticregression_params, decisiontree_params,  meta_train, meta_test
 
 
-# TODO: Do we need active_learning, w_hx and w_k as inputs, can we just load then with model_params?
-def run_model(base_model, common_params, model_params, active_learning, w_hx, w_k):
+# TODO: move to utils maybe?
+def run_non_meta_model(base_model, common_params, model_params, category):
+    """TODO: DOCUMENTATION"""
+
+    settings = {
+        'category_3': [False, True, False],
+        'category_4_i': [False, True, True],
+        'category_4_ii': [False, False, False],
+        'category_5_i': [True, True, True],
+        'category_5_ii': [True, False, True],
+    }
+
     base_model_params = {**common_params, **model_params}
-    base_model_params['model_name'] = define_non_meta_model_name(base_model_params['model_name'], active_learning, w_hx,w_k)
+
+    base_model_params['active_learning'] = settings[category][0]
+    base_model_params['with_historical_data'] = settings[category][1]
+    base_model_params['with_k'] = settings[category][2]
+
+    base_model_params['model_name'] = define_non_meta_model_name(
+        base_model_params['model_name'],
+        base_model_params['active_learning'],
+        base_model_params['with_historical_data'],
+        base_model_params['with_k'])
+
     base_model.run_model(base_model_params)
-    return base_model_params
 
 
 if __name__ == '__main__':
@@ -38,10 +57,10 @@ if __name__ == '__main__':
         print('Overwriting the current cv_stats.pkl')
         os.remove(cv_stats_dst)
 
-    # Record used models for plotting later
-    models_to_plot = []
+    # Listing the categories of experiments we are running
+    categories = ['category_3', 'category_4_i', 'category_4_ii', 'category_5_i', 'category_5_ii']
 
-    # Training different models
+    # Meta-models
     # PLATIPUS
     # platipus_train_params = {**common_params, **meta_params, **meta_train}
     # params = platipus.initialize(["PLATIPUS"], platipus_train_params)
@@ -53,93 +72,67 @@ if __name__ == '__main__':
 
     # TODO: MAML
 
-    # KNN w/ active learning
-    # Trained under option 1
-    KNN_C3 = run_model(base_model=KNN, common_params=common_params, model_params=knn_params, active_learning=False, w_hx=True, w_k=False)
-    models_to_plot.append(KNN_C3['model_name'])
+    # Non-meta models
+    # KNN
+    base_model = KNN
+    model_params = knn_params
+    for category in categories:
+        run_non_meta_model(
+            base_model,
+            common_params,
+            model_params,
+            category
+        )
 
-    RF_C3 = run_model(base_model=RandomForest, common_params=common_params, model_params=randomforest_params, active_learning=False, w_hx=True, w_k=False)
-    models_to_plot.append(RF_C3['model_name'])
+    # SVM
+    base_model = SVM
+    model_params = svm_params
+    for category in categories:
+        if '4_ii' not in category and '5_ii' not in category:
+            # Excluding categories that have too few
+            # successful experiments for training
+            run_non_meta_model(
+                base_model,
+                common_params,
+                model_params,
+                category
+            )
 
-    # Trained under option 2
-    '''KNN2_params = {**common_params, **knn_params}
-    KNN2_params['pretrain'] = False
-    KNN2_params['model_name'] = define_non_meta_model_name(KNN2_params['model_name'], KNN2_params['pretrain'])
-    models_to_plot.append(KNN2_params['model_name'])
-    KNN.run_model(KNN2_params)'''
+    # Random Forest
+    base_model = RandomForest
+    model_params = randomforest_params
+    for category in categories:
+        run_non_meta_model(
+            base_model,
+            common_params,
+            model_params,
+            category
+        )
 
-    """
-    # SVM w/ active learning
-    # Trained under option 1
-    SVM1_params = {**common_params, **svm_params}
-    SVM1_params['model_name'] = define_non_meta_model_name(SVM1_params['model_name'], SVM1_params['pretrain'])
-    models_to_plot.append(SVM1_params['model_name'])
-    SVM.run_model(SVM1_params)
+    # logistic Regression
+    base_model = LogisticRegression
+    model_params = logisticregression_params
+    for category in categories:
+        if '4_ii' not in category and '5_ii' not in category:
+            # Excluding categories that have too few 
+            # successful experiments for training
+            run_non_meta_model(
+                base_model,
+                common_params,
+                model_params,
+                category
+            )
 
-    # Trained under option 2
-    # TODO: CAN'T RUN DUE TO INSUFFICIENT SUCCESSES
-    SVM2_params = {**common_params, **svm_params}
-    SVM2_params['pretrain'] = False
-    SVM2_params['model_name'] = define_non_meta_model_name(SVM2_params['model_name'], SVM2_params['pretrain'])
-    models_to_plot.append(SVM2_params['model_name'])
-    SVM.run_model(SVM2_params)
-    """
+    # DecisionTree
+    base_model = DecisionTree
+    model_params = decisiontree_params
+    for category in categories:
+        run_non_meta_model(
+            base_model,
+            common_params,
+            model_params,
+            category
+        )
 
-    # Random Forest w/ active learning
-    # Trained under option 1
-    '''RF1_params = {**common_params, **randomforest_params}
-    RF1_params['model_name'] = define_non_meta_model_name(RF1_params['model_name'], RF1_params['pretrain'])
-    models_to_plot.append(RF1_params['model_name'])
-    RandomForest.run_model(RF1_params)
-
-    # Trained under option 2
-    RF2_params = {**common_params, **randomforest_params}
-    RF2_params['pretrain'] = False
-    RF2_params['model_name'] = define_non_meta_model_name(RF2_params['model_name'], RF2_params['pretrain'])
-    models_to_plot.append(RF2_params['model_name'])
-    RandomForest.run_model(RF2_params)
-
-    # Logistic Regression w/ active learning
-    # Trained under option 1
-    LR1_params = {**common_params, **logisticregression_params}
-    LR1_params['model_name'] = define_non_meta_model_name(LR1_params['model_name'], LR1_params['pretrain'])
-    models_to_plot.append(LR1_params['model_name'])
-    LogisticRegression.run_model(LR1_params)'''
-
-    """# Trained under option 2
-    # TODO: CAN'T RUN DUE TO INSUFFICIENT SUCCESSES
-    LR2_params = {**common_params, **logisticregression_params}
-    LR2_params['pretrain'] = False
-    LR2_params['model_name'] = define_non_meta_model_name(LR2_params['model_name'], LR2_params['pretrain'])
-    models_to_plot.append(LR2_params['model_name'])
-    LogisticRegression.run_model(LR2_params)"""
-
-    # Decision Tree w/ active learning
-    # Trained under option 1
-    '''DT1_params = {**common_params, **decisiontree_params}
-    DT1_params['model_name'] = define_non_meta_model_name(DT1_params['model_name'], DT1_params['pretrain'])
-    models_to_plot.append(DT1_params['model_name'])
-    DecisionTree.run_model(DT1_params)
-
-    # Trained under option 2
-    DT2_params = {**common_params, **decisiontree_params}
-    DT2_params['pretrain'] = False
-    DT2_params['model_name'] = define_non_meta_model_name(DT2_params['model_name'], DT2_params['pretrain'])
-    models_to_plot.append(DT2_params['model_name'])
-    DecisionTree.run_model(DT2_params)'''
-
-    cv_stats = read_pickle(common_params['stats_path'])
-    amines = cv_stats[models_to_plot[0]]['amine']
-    # print(cv_stats.keys())
-    # print(amines)
-
-    # Plotting individual graphs for each task-specific model
-    for i, amine in enumerate(amines):
-        plot_metrics_graph(96, cv_stats, './results', amine=amine, amine_index=i, models=models_to_plot)
-
-    # Plotting avg graphs for all models
-    avg_stats = find_avg_metrics(cv_stats)
-
-    rand_model = list(avg_stats.keys())[0]
-    num_examples = len(avg_stats[rand_model]['accuracies'])
-    plot_metrics_graph(num_examples, avg_stats, './results')
+    # Use cv_stats.pkl to plot all graphs
+    plot_all_graphs(common_params)

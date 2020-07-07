@@ -515,7 +515,7 @@ def process_dataset(train_size=10, active_learning_iter=10, verbose=True, cross_
             # Select k many more for training before active learning loop
             # qry = np.random.choice(x_v.shape[0], size=train_size, replace=False)
             qry = find_index(k_x, x_v)
-    
+
             # Update training and validation set with the selection
             x_t = np.append(x_t, x_v[qry]).reshape(-1, x_t.shape[1])
             y_t = np.append(y_t, y_v[qry])
