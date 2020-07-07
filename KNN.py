@@ -11,17 +11,16 @@ python KNN.py --datasource=drp_chem --k_shot=20 --n_way=2 --meta_batch_size=10 -
 import argparse
 import os
 import pickle
+import sys
 
 import numpy as np
+from dataset import import_full_dataset, import_test_dataset
+from modAL.models import ActiveLearner
 from sklearn.datasets import load_iris
-from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix
+from sklearn.model_selection import train_test_split
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.preprocessing import StandardScaler
-
-from modAL.models import ActiveLearner
-
-from dataset import import_full_dataset, import_test_dataset
 
 
 class ActiveKNN:
@@ -109,7 +108,7 @@ class ActiveKNN:
         num_iter = num_iter if num_iter else self.x_v.shape[0]
 
         for _ in range(num_iter):
-            # TODO: Comment
+            # Query the most uncertain point from the active learning pool
             query_index, query_instance = self.learner.query(self.x_v)
 
             # Teach our ActiveLearner model the record it has requested.
@@ -143,7 +142,13 @@ class ActiveKNN:
         preds = self.learner.predict(self.pool_data)
         cm = confusion_matrix(self.pool_labels, preds)
 
-        precision = cm[1][1] / (cm[1][1] + cm[0][1])
+        # To prevent nan value for precision, we set it to 1 and send out a warning message
+        if cm[1][1] + cm[0][1] != 0:
+            precision = cm[1][1] / (cm[1][1] + cm[0][1])
+        else:
+            precision = 1.0     # TODO: I still think 0.0 is better
+            print('WARNING: zero division during precision calculation')
+
         recall = cm[1][1] / (cm[1][1] + cm[1][0])
         true_negative = cm[0][0] / (cm[0][0] + cm[0][1])
         bcr = 0.5 * (recall + true_negative)
@@ -192,7 +197,7 @@ class ActiveKNN:
         Dump the cross validation statistics to a pickle file.
         """
 
-        model = 'KNN'
+        model = 'KNN'   # TODO: Implement a way to identify models under meta or not
 
         with open(os.path.join("./data", "cv_statistics.pkl"), "rb") as f:
             stats_dict = pickle.load(f)
@@ -206,12 +211,56 @@ class ActiveKNN:
         # Save this dictionary in case we need it later
         with open(os.path.join("./data", "cv_statistics.pkl"), "wb") as f:
             pickle.dump(stats_dict, f)
+            
+    def save_model(self, k_shot, n_way, meta):
+        """Save the data used to train, validate and test the model to designated folder
 
-    # TODO: Unofficial
+        Args:
+            k_shot:                 An integer representing the number of training samples per class.
+            n_way:                  An integer representing the number of classes per task.
+            meta:                   A boolean representing if it will be trained under option 1 or option 2.
+                                        Option 1 is train with observations of other tasks and validate on the
+                                        task-specific observations.
+                                        Option 2 is to train and validate on the task-specific observations.
+
+        Returns:
+            N/A
+        """
+
+        # Indicate which option we used the data for
+        option = 2 if meta else 1
+
+        # Set up the main destination folder for the model
+        dst_root = './KNN_few_shot/option_{0:d}'.format(option)
+        if not os.path.exists(dst_root):
+            os.makedirs(dst_root)
+            print('No folder for KNN model storage found')
+            print(f'Make folder to store KNN model at')
+
+        # Set up the model specific folder
+        model_folder = '{0:s}/KNN_{1:d}_shot_{2:d}_way_option_{3:d}_{4:s}'.format(dst_root,
+                                                                                  k_shot,
+                                                                                  n_way,
+                                                                                  option,
+                                                                                  self.amine)
+        if not os.path.exists(model_folder):
+            os.makedirs(model_folder)
+            print('No folder for KNN model storage found')
+            print(f'Make folder to store KNN model of amine {self.amine} at')
+        else:
+            print(f'Found existing folder. Model of amine {self.amine} will be stored at')
+        print(model_folder)
+
+        # Dump the model into the designated folder
+        file_name = "KNN_{0:s}_option_{1:d}.pkl".format(self.amine, option)
+        with open(os.path.join(model_folder, file_name), "wb") as f:
+            pickle.dump(self, f)
+
     def __str__(self):
-        return 'A {0:d}-neighbor KNN model using active learning'.format(self.n_neighbors)
+        return 'A {0:d}-neighbor KNN model for amine {1:s} using active learning'.format(self.n_neighbors, self.amine)
 
 
+# TODO: may have to change this
 def parse_args():
     """Set up the initial variables for running KNN.
 
@@ -234,8 +283,10 @@ def parse_args():
             test:               A train_flag attribute. Including it in the command line will set the train_flag to
                                     False.
             cross_validate:     A boolean. Including it in the command line will run the model with cross-validation.
-            meta:               A boolean. Including it in the command line will load the meta training/testing dataset.
-            # TODO: make the description for meta better
+            meta:               A boolean representing if it will be trained under option 1 or option 2.
+                                        Option 1 is train with observations of other tasks and validate on the
+                                        task-specific observations.
+                                        Option 2 is to train and validate on the task-specific observations.
             verbose:            A boolean. Including it in the command line will output additional information to the
                                     terminal for functions with verbose feature.
     """
@@ -259,7 +310,7 @@ def parse_args():
     parser.set_defaults(train_flag=True)
 
     parser.add_argument('--cross_validate', action='store_true')
-    parser.add_argument('--meta', action='store_true') # TODO: add help and comments
+    parser.add_argument('--meta', action='store_true')
     parser.add_argument('--full', action='store_true')
     parser.add_argument('--verbose', action='store_true')
 
@@ -268,6 +319,7 @@ def parse_args():
     return args
 
 
+# TODO: may have to change this
 def initialize():
     """Initializes a dictionary of parameters corresponding to the arguments
 
@@ -327,6 +379,50 @@ def initialize():
     return KNN_params
 
 
+def save_used_data(training_batches, validation_batches, testing_batches, counts, meta):
+    """Save the data used to train, validate and test the model to designated folder
+
+    Args:
+        training_batches:       A dictionary representing the training batches used to train.
+                                    See dataset.py for specific structure.
+        validation_batches:     A dictionary representing the training batches used to train.
+                                    See dataset.py for specific structure.
+        testing_batches:        A dictionary representing the training batches used to train.
+                                    See dataset.py for specific structure.
+        counts:                 A dictionary with 'total' and each available amines as keys and lists of length 2 as
+                                    values in the format of: [# of failed reactions, # of successful reactions]
+
+    Returns:
+        N/A
+    """
+
+    # Indicate which option we used the data for
+    option = 2 if meta else 1
+
+    # Set up the destination folder to save the data
+    data_folder = './KNN_few_shot/option_{0:d}/data'.format(option)
+    if not os.path.exists(data_folder):
+        os.makedirs(data_folder)
+        print('No folder for KNN model data storage found')
+        print('Make folder to store data used for KNN models at')
+    else:
+        print('Found existing folder. Data used for models will be stored at')
+    print(data_folder)
+
+    # Put all data into a dictionary for easier use later
+    data = {
+        'training_batches': training_batches,
+        'validation_batches': validation_batches,
+        'testing_batches': testing_batches,
+        'counts': counts
+    }
+
+    # Save the file using pickle
+    file_name = "KNN_data.pkl"
+    with open(os.path.join(data_folder, file_name), "wb") as f:
+        pickle.dump(data, f)
+
+
 def iris_test():
     """Test the model on the iris data provided in the scikit-learn package.
 
@@ -383,7 +479,9 @@ def small_scale(KNN_params):
                                                                                         verbose=verbose,
                                                                                         cross_validation=True,
                                                                                         meta=meta)
-
+    
+    save_used_data(training_batches, validation_batches, testing_batches, counts, meta)
+    
     for amine in training_batches:
         print(f'Training and cross-validation amine {amine}')
         # Create the KNN model instance for the specific amine
@@ -410,7 +508,7 @@ def small_scale(KNN_params):
         KNN.train()
 
         # Conduct active learning with all the observations available in the pool
-        KNN.active_learning(to_params=False)
+        KNN.active_learning(to_params=False)    # TODO: delete this when running full models
 
 
 def full_dataset(KNN_params):
@@ -441,6 +539,8 @@ def full_dataset(KNN_params):
                                                                                         cross_validation=cross_validation,
                                                                                         meta=meta)
 
+    save_used_data(training_batches, validation_batches, testing_batches, counts, meta)
+    
     for amine in training_batches:
         print(f'Training and active learning on amine {amine}')
         # Create the KNN model instance for the specific amine
@@ -459,6 +559,8 @@ def full_dataset(KNN_params):
                 x_t, y_t = validation_batches[amine][0], validation_batches[amine][1]
                 x_v, y_v = validation_batches[amine][2], validation_batches[amine][3]
                 all_data, all_labels = np.concatenate((x_t, x_v)), np.concatenate((y_t, y_v))
+        else:
+            sys.exit('Testing portion not implemented yet.')
 
         # Load the training and validation set into the model
         KNN.load_dataset(x_t, x_v, y_t, y_v, all_data, all_labels)
@@ -467,9 +569,12 @@ def full_dataset(KNN_params):
         KNN.train()
 
         # Conduct active learning with all the observations available in the pool
-        KNN.active_learning(to_params=False)
+        KNN.active_learning(to_params=False)    # TODO: delete this when running full models
 
-    # TODO: testing part not implemented
+        # Save model to designated folder
+        KNN.save_model(k_shot=k_shot, n_way=2, meta=meta)
+
+    # TODO: model saving and testing part not implemented
 
 
 def main():
