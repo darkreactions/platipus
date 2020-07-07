@@ -21,7 +21,7 @@ from sklearn.ensemble import RandomForestClassifier
 
 from modAL.models import ActiveLearner
 
-from utils.dataset import import_full_dataset, import_test_dataset, process_dataset
+from utils.dataset import  process_dataset
 
 
 class ActiveRandomForest:
@@ -83,7 +83,7 @@ class ActiveRandomForest:
             N/A
         """
 
-        self.x_t, self.x_v, self.y_t, self.y_v = x_t, y_t, x_v, y_v
+        self.x_t, self.y_t, self.x_v, self.y_v = x_t, y_t, x_v, y_v
 
         self.all_data = all_data
         self.all_labels = all_labels
@@ -228,43 +228,22 @@ class ActiveRandomForest:
         with open(self.stats_path, "wb") as f:
             pickle.dump(stats_dict, f)
 
-    def save_model(self, train_size, n_way, pretrain):
-        """Save the data used to train, validate and test the model to designated folder.
-
+    def save_model(self, model_name):
+        """Save the data used to train, validate and test the model to designated folder
         Args:
-            k_shot:                 An integer representing the number of training samples per class.
-            n_way:                  An integer representing the number of classes per task.
-            pretrain:               A boolean representing if it will be trained under option 1 or option 2.
-                                        Option 1 is train with observations of other tasks and validate on the
-                                        task-specific observations.
-                                        Option 2 is to train and validate on the task-specific observations.
+            model_name:         A string representing the name of the model.
         """
 
-        option = 1 if pretrain else 2
-
-        dst_root = './results/RandomForest_few_shot/option_{0:d}'.format(option)
-
+        # Set up the main destination folder for the model
+        dst_root = './data/RandomForest/{0:s}'.format(model_name)
         if not os.path.exists(dst_root):
             os.makedirs(dst_root)
-            print('No folder for RandomForest model storage found')
-            print(f'Make folder to store RandomForest model at')
+            print(f'No folder for RandomForest model {model_name} storage found')
+            print(f'Make folder to store model at')
 
-        model_folder = '{0:s}/RandomForest_{1:d}_shot_{2:d}_way_option_{3:d}_{4:s}'.format(dst_root,
-                                                                                           train_size,
-                                                                                           n_way,
-                                                                                           option,
-                                                                                           self.amine)
-        if not os.path.exists(model_folder):
-            os.makedirs(model_folder)
-            print('No folder for RandomForest model storage found')
-            print(f'Make folder to store RandomForest model of amine {self.amine} at')
-        else:
-            print(f'Found existing folder. Model of amine {self.amine} will be stored at')
-        print(model_folder)
-
-        # Dump the model
-        file_name = "RandomForest_{0:s}_option_{1:d}.pkl".format(self.amine, option)
-        with open(os.path.join(model_folder, file_name), "wb") as f:
+        # Dump the model into the designated folder
+        file_name = "{0:s}_{1:s}.pkl".format(model_name, self.amine)
+        with open(os.path.join(dst_root, file_name), "wb") as f:
             pickle.dump(self, f)
 
 
@@ -305,11 +284,13 @@ def fine_tune(info=False):
 
     amine_list, train_data, train_labels, val_data, val_labels, all_data, all_labels = process_dataset(
         train_size=10,
-        pre_learn_size=10,
+        active_learning_iter=10,
         verbose=False,
         cross_validation=True,
         full=True,
-        pretrain=True
+        active_learning=False,
+        w_hx=True,
+        w_k=False
     )
 
     # Set baseline performance
@@ -327,7 +308,7 @@ def fine_tune(info=False):
         all_data, all_labels = all_data[amine], all_labels[amine]
 
         # Load the training and validation set into the model
-        ARF.load_dataset(x_t, x_v, y_t, y_v, all_data, all_labels)
+        ARF.load_dataset(x_t, y_t, x_v, y_v, all_data, all_labels)
 
         ARF.train()
 
@@ -379,7 +360,7 @@ def fine_tune(info=False):
             all_data, all_labels = all_data[amine], all_labels[amine]
 
             # Load the training and validation set into the model
-            ARF.load_dataset(x_t, x_v, y_t, y_v, all_data, all_labels)
+            ARF.load_dataset(x_t, y_t, x_v, y_v, all_data, all_labels)
             ARF.train()
 
             # Calculate AUC
@@ -490,14 +471,15 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Setup variables for active learning SVM.')
     parser.add_argument('--datasource', type=str, default='drp_chem', help='datasource to be used')
 
-    parser.add_argument('--train_size', dest='train_size', default=1, help='number of samples used for training')
+    parser.add_argument('--train_size', dest='train_size', default=10, help='number of samples used for training after '
+                                                                            'pre-training')
+    parser.add_argument('--pre_learn_size', dest='pre_learn_size', default=10, help='number of samples used for '
+                                                                                    'training before active learning')
 
     parser.add_argument('--train', dest='train_flag', action='store_true')
     parser.add_argument('--test', dest='train_flag', action='store_false')
     parser.set_defaults(train_flag=True)
 
-    parser.add_argument('--pre_learn_size', dest='pre_learn_size', default=10, help='number of samples used for '
-                                                                                    'training before active learning')
     parser.add_argument('--cross_validate', action='store_true', help='use cross-validation for training')
     parser.add_argument('--pretrain', action='store_true', help='load the dataset under option 1. Not include this will'
                                                                 ' load the dataset under option 2. See documentation in'
@@ -521,9 +503,12 @@ def run_model(RandomForest_params):
     # Unload parameters
     config = RandomForest_params['config']
     cross_validation = RandomForest_params['cross_validate']
+    active_learning = RandomForest_params['active_learning']
     verbose = RandomForest_params['verbose']
-    pretrain = RandomForest_params['pretrain']
-    pre_learn_size = RandomForest_params['pre_learn_size']
+
+    w_hx = RandomForest_params['with_historical_data']
+    w_k = RandomForest_params['with_k']
+    active_learning_iter = RandomForest_params['active_learning_iter']
     full = RandomForest_params['full_dataset']
     stats_path = RandomForest_params['stats_path']
     model_name = RandomForest_params['model_name']
@@ -540,11 +525,13 @@ def run_model(RandomForest_params):
     else:
         amine_list, x_t, y_t, x_v, y_v, all_data, all_labels = process_dataset(
             train_size=train_size,
-            pre_learn_size=pre_learn_size,
+            active_learning_iter=active_learning_iter,
             verbose=verbose,
             cross_validation=cross_validation,
             full=full,
-            pretrain=pretrain
+            active_learning=active_learning,
+            w_hx=w_hx,
+            w_k=w_k
         )
 
 
@@ -569,10 +556,10 @@ def run_model(RandomForest_params):
             # Train the data on the training set
             ARF.train()
             # Conduct active learning with all the observations available in the pool
-            ARF.active_learning(to_params=True)
+            ARF.active_learning(num_iter= active_learning_iter, to_params=True)
             # Save the model for future reproducibility
             if save_model:
-                ARF.save_model(train_size, 2, pretrain)
+                ARF.save_model(model_name)
 
             # TODO: testing part not implemented
 

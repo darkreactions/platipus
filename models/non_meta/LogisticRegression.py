@@ -11,7 +11,7 @@ from sklearn.linear_model import LogisticRegression
 
 from modAL.models import ActiveLearner
 
-from utils.dataset import import_full_dataset, import_test_dataset
+from utils.dataset import process_dataset
 
 
 class ActiveLogisticRegression:
@@ -51,32 +51,25 @@ class ActiveLogisticRegression:
         self.stats_path = stats_path
         self.model_name = model_name
 
-    # TODO: find out what to do with this part
-    def load_dataset(self, training_batches, cross_validation_batches, meta=False):
-        """TODO: Documentation
+    def load_dataset(self, x_t, y_t, x_v, y_v, all_data, all_labels):
+        """Load the input training and validation data and labels into the model.
 
+        Args:
+            x_t:                A 2-D numpy array representing the training data.
+            y_t:                A 2-D numpy array representing the training labels.
+            x_v:                A 2-D numpy array representing the validation data.
+            y_v:                A 2-D numpy array representing the validation labels.
+            all_data:           A 2-D numpy array representing all the data in the active learning pool.
+            all_labels:         A 2-D numpy array representing all the labels in the active learning pool.
+
+        Returns:
+            N/A
         """
 
-        if meta is True:
-            # option 2
-            print("Conducting Training under Option 2.")
-            self.x_t = cross_validation_batches[self.amine][0]
-            self.y_t = cross_validation_batches[self.amine][1]
-            self.x_v = cross_validation_batches[self.amine][2]
-            self.y_v = cross_validation_batches[self.amine][3]
+        self.x_t, self.y_t, self.x_v, self.y_v = x_t, y_t, x_v, y_v
 
-            self.all_data = np.concatenate((self.x_t, self.x_v))
-            self.all_labels = np.concatenate((self.y_t, self.y_v))
-
-        else:
-            print("Conducting Training under Option 1.")
-            self.x_t = training_batches[self.amine][0]
-            self.y_t = training_batches[self.amine][1]
-            self.x_v = cross_validation_batches[self.amine][0]
-            self.y_v = cross_validation_batches[self.amine][1]
-
-            self.all_data = self.x_v
-            self.all_labels = self.y_v
+        self.all_data = all_data
+        self.all_labels = all_labels
 
         if self.verbose:
             print(f'The training data has dimension of {self.x_t.shape}.')
@@ -85,7 +78,7 @@ class ActiveLogisticRegression:
             print(f'The testing labels has dimension of {self.y_v.shape}.')
 
     def train(self):
-        """Train the Random Forest model by setting up the ActiveLearner."""
+        """Train the Logistic Regression model by setting up the ActiveLearner."""
 
         self.learner = ActiveLearner(estimator=self.model, X_training=self.x_t, y_training=self.y_t)
         # Evaluate zero-point performance
@@ -103,9 +96,8 @@ class ActiveLogisticRegression:
             to_params:  A boolean that decide if to store the metrics to the dictionary,
                         detail see "store_metrics_to_params" function.
                         Default = True
-
-        return: N/A
         """
+
         num_iter = num_iter if num_iter else self.x_v.shape[0]
 
         for _ in range(num_iter):
@@ -133,9 +125,8 @@ class ActiveLogisticRegression:
         Args:
             store:  A boolean that decides if to store the metrics of the performance of the model.
                     Default = True
-
-        return: N/A
         """
+
         # Calculate and report our model's accuracy.
         accuracy = self.learner.score(self.all_data, self.all_labels)
 
@@ -166,18 +157,16 @@ class ActiveLogisticRegression:
         precisions, recalls and balanced classification rates.
 
         Args:
-           cm:              A numpy array representing the confusion matrix given our predicted labels and the actual
-                            corresponding labels. It's a 2x2 matrix for the drp_chem model.
-            accuracy:       A float representing the accuracy rate of the model: the rate of correctly predicted reactions
-                            out of all reactions.
+            cm:             A numpy array representing the confusion matrix given our predicted labels and the actual
+                                corresponding labels. It's a 2x2 matrix for the drp_chem model.
+            accuracy:       A float representing the accuracy rate of the model: the rate of correctly predicted
+                                reactions out of all reactions.
             precision:      A float representing the precision rate of the model: the rate of the number of actually
-                            successful reactions out of all the reactions predicted to be successful.
-            recall:         A float representing the recall rate of the model: the rate of the number of reactions predicted
-                            to be successful out of all the acutal successful reactions.
-            bcr:            A float representing the balanced classification rate of the model. It's the average value of
-                            recall rate and true negative rate.
-
-        return: N/A
+                                successful reactions out of all the reactions predicted to be successful.
+            recall:         A float representing the recall rate of the model: the rate of the number of reactions
+                                predicted to be successful out of all the actual successful reactions.
+            bcr:            A float representing the balanced classification rate of the model. It's the average value
+                                of recall rate and true negative rate.
         """
 
         self.metrics['confusion_matrices'].append(cm)
@@ -222,44 +211,22 @@ class ActiveLogisticRegression:
         with open(self.stats_path, "wb") as f:
             pickle.dump(stats_dict, f)
 
-    def save_model(self, train_size, n_way, pretrain):
+    def save_model(self, model_name):
         """Save the data used to train, validate and test the model to designated folder
-                Args:
-                    k_shot:                 An integer representing the number of training samples per class.
-                    n_way:                  An integer representing the number of classes per task.
-                    meta:                   A boolean representing if it will be trained under option 1 or option 2.
-                                                Option 1 is train with observations of other tasks and validate on the
-                                                task-specific observations.
-                                                Option 2 is to train and validate on the task-specific observations.
-                Returns:
-                    N/A
-                """
+        Args:
+            model_name:         A string representing the name of the model.
+        """
 
-        option = 1 if pretrain else 2
-
-        dst_root = './results/LogisticRegression_few_shot/option_{0:d}'.format(option)
-
+        # Set up the main destination folder for the model
+        dst_root = './data/LogisticRegression/{0:s}'.format(model_name)
         if not os.path.exists(dst_root):
             os.makedirs(dst_root)
-            print('No folder for Logistic Regression model storage found')
-            print(f'Make folder to store Logistic Regression model at')
+            print(f'No folder for LogisticRegression model {model_name} storage found')
+            print(f'Make folder to store model at')
 
-        model_folder = '{0:s}/LogisticRegression_{1:d}_shot_{2:d}_way_option_{3:d}_{4:s}'.format(dst_root,
-                                                                                           train_size,
-                                                                                           n_way,
-                                                                                           option,
-                                                                                           self.amine)
-        if not os.path.exists(model_folder):
-            os.makedirs(model_folder)
-            print('No folder for Logistic Regression model storage found')
-            print(f'Make folder to store Logistic Regression model of amine {self.amine} at')
-        else:
-            print(f'Found existing folder. Model of amine {self.amine} will be stored at')
-        print(model_folder)
-
-        # Dump the model
-        file_name = "LogisticRegression_{0:s}_option_{1:d}.pkl".format(self.amine, option)
-        with open(os.path.join(model_folder, file_name), "wb") as f:
+        # Dump the model into the designated folder
+        file_name = "{0:s}_{1:s}.pkl".format(model_name, self.amine)
+        with open(os.path.join(dst_root, file_name), "wb") as f:
             pickle.dump(self, f)
 
 
@@ -296,6 +263,20 @@ def fine_tune(training_batches, cross_validation_batches, info=False):
     for bundle in itertools.product(*values):
         combinations.append(dict(zip(keys, bundle)))
 
+    if info:
+        print(f'There are {len(combinations)} many combinations to try.')
+
+    amine_list, train_data, train_labels, val_data, val_labels, all_data, all_labels = process_dataset(
+        train_size=10,
+        active_learning_iter=10,
+        verbose=False,
+        cross_validation=True,
+        full=True,
+        active_learning=False,
+        w_hx=True,
+        w_k=False
+    )
+
     # Set baseline performance
     base_accuracies = []
     base_precisions = []
@@ -305,7 +286,13 @@ def fine_tune(training_batches, cross_validation_batches, info=False):
 
     for amine in training_batches:
         ALR = ActiveLogisticRegression(amine=amine, verbose=False)
-        ALR.load_dataset(training_batches, cross_validation_batches)
+
+        x_t, y_t = train_data[amine], train_labels[amine]
+        x_v, y_v = val_data[amine], val_labels[amine]
+        all_data, all_labels = all_data[amine], all_labels[amine]
+
+        ALR.load_dataset(x_t, y_t, x_v, y_v, all_data, all_labels)
+
         ALR.train()
 
         # Calculate AUC
@@ -355,7 +342,12 @@ def fine_tune(training_batches, cross_validation_batches, info=False):
             for amine in training_batches:
                 # print("Training and cross validation on {} amine.".format(amine))
                 ALR = ActiveLogisticRegression(amine=amine, config=option, verbose=False)
-                ALR.load_dataset(training_batches, cross_validation_batches)
+                x_t, y_t = train_data[amine], train_labels[amine]
+                x_v, y_v = val_data[amine], val_labels[amine]
+                all_data, all_labels = all_data[amine], all_labels[amine]
+
+                # Load the training and validation set into the model
+                ALR.load_dataset(x_t, y_t, x_v, y_v, all_data, all_labels)
                 ALR.train()
 
                 # Calculate AUC
@@ -468,10 +460,13 @@ def parse_args():
                                     terminal for functions with verbose feature.
     """
 
-    parser = argparse.ArgumentParser(description='Setup variables for active learning RandomForest.')
+    parser = argparse.ArgumentParser(description='Setup variables for active learning LogisticRegression.')
     parser.add_argument('--datasource', type=str, default='drp_chem', help='datasource to be used')
 
-    parser.add_argument('--train_size', dest='train_size', default=1, help='number of samples used for training')
+    parser.add_argument('--train_size', dest='train_size', default=10, help='number of samples used for training after '
+                                                                            'pre-training')
+    parser.add_argument('--pre_learn_size', dest='pre_learn_size', default=10, help='number of samples used for '
+                                                                                    'training before active learning')
 
     parser.add_argument('--train', dest='train_flag', action='store_true')
     parser.add_argument('--test', dest='train_flag', action='store_false')
@@ -481,7 +476,8 @@ def parse_args():
     parser.add_argument('--pretrain', action='store_true', help='load the dataset under option 1. Not include this will'
                                                                 ' load the dataset under option 2. See documentation in'
                                                                 ' codes for details.')
-    parser.add_argument('--full', action='store_true', help='load the full dataset or the test sample dataset')
+    parser.add_argument('--full', dest='full_dataset', action='store_true', help='load the full dataset or the test '
+                                                                                 'sample dataset')
     parser.add_argument('--verbose', action='store_true')
 
     args = parser.parse_args()
@@ -500,14 +496,17 @@ def run_model(LogisticRegression_params):
     # Unload parameters
     config = LogisticRegression_params['config']
     cross_validation = LogisticRegression_params['cross_validate']
+    active_learning = LogisticRegression_params['active_learning']
     verbose = LogisticRegression_params['verbose']
-    pretrain = LogisticRegression_params['pretrain']
+
+    w_hx = LogisticRegression_params['with_historical_data']
+    w_k = LogisticRegression_params['with_k']
+    active_learning_iter = LogisticRegression_params['active_learning_iter']
+    full = LogisticRegression_params['full_dataset']
     stats_path = LogisticRegression_params['stats_path']
     model_name = LogisticRegression_params['model_name']
     print(model_name)
 
-    # Set up if we want to load the meta dataset for option 2 or not
-    meta = not pretrain
     # Set up the number of samples used for training under option 2
     train_size = LogisticRegression_params['train_size']
     # Specify the desired operation
@@ -515,45 +514,44 @@ def run_model(LogisticRegression_params):
     save_model = LogisticRegression_params['save_model']
 
     if fine_tuning:
-        ft_training_batches, ft_validation_batches, ft_testing_batches, ft_counts = import_full_dataset(
-            train_size, meta_batch_size=25, num_batches=250, verbose=verbose, cross_validation=cross_validation,
-            meta=False)
-        best_config = fine_tune(ft_training_batches, ft_validation_batches, info=True)
+        best_config = fine_tune(info=True)
     else:
-        # Load the full dataset for training and validation
-        if LogisticRegression_params['full_dataset']:
-            training_batches, validation_batches, testing_batches, counts = import_full_dataset(train_size,
-                                                                                                meta_batch_size=25,
-                                                                                                num_batches=250,
-                                                                                                verbose=verbose,
-                                                                                                cross_validation=cross_validation,
-                                                                                                meta=meta)
-        else:
-            training_batches, validation_batches, testing_batches, counts = import_test_dataset(train_size,
-                                                                                                meta_batch_size=25,
-                                                                                                num_batches=250,
-                                                                                                verbose=verbose,
-                                                                                                cross_validation=cross_validation,
-                                                                                                meta=meta)
+        amine_list, x_t, y_t, x_v, y_v, all_data, all_labels = process_dataset(
+            train_size=train_size,
+            active_learning_iter=active_learning_iter,
+            verbose=verbose,
+            cross_validation=cross_validation,
+            full=full,
+            active_learning=active_learning,
+            w_hx=w_hx,
+            w_k=w_k
+        )
 
-        # Save the data used for training and testing for reproducibility
-        save_used_data(training_batches, validation_batches, testing_batches, counts, pretrain)
-
-        # print(training_batches.keys())
-        for amine in training_batches:
+        for amine in amine_list:
             print(f'Training and active learning on amine {amine}')
-            # Create the KNN model instance for the specific amine
+            # Create the LogisticRegression model instance for the specific amine
             ALR = ActiveLogisticRegression(amine=amine, config=config, verbose=verbose, stats_path=stats_path,
                                      model_name=model_name)
+
+            x_t, y_t = x_t[amine], y_t[amine]
+            # print(type(y_t))
+            # for y in y_t:
+            #     print(type(y))
+            x_v, y_v = x_v[amine], y_v[amine]
+            # print(type(y_v))
+            # for x in y_v:
+            #     print(type(x))
+            all_data, all_labels = all_data[amine], all_labels[amine]
+
             # Load the training and validation set into the model
-            ALR.load_dataset(training_batches, validation_batches, meta)
+            ALR.load_dataset(x_t, y_t, x_v, y_v, all_data, all_labels)
             # Train the data on the training set
             ALR.train()
             # Conduct active learning with all the observations available in the pool
-            ALR.active_learning(to_params=True)
+            ALR.active_learning(num_iter=active_learning_iter, to_params=True)
             # Save the model for future reproducibility
             if save_model:
-                ALR.save_model(train_size, 2, pretrain)
+                ALR.save_model(model_name)
 
             # TODO: testing part not implemented
 
