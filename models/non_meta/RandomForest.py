@@ -540,19 +540,8 @@ def run_model(RandomForest_params):
             print(f'Training and active learning on amine {amine}')
             # Create the RandomForest model instance for the specific amine
             ARF = ActiveRandomForest(amine=amine, config=config, verbose=verbose, stats_path=stats_path, model_name=model_name)
-
-            x_t, y_t = x_t[amine], y_t[amine]
-            # print(type(y_t))
-            # for y in y_t:
-            #     print(type(y))
-            x_v, y_v = x_v[amine], y_v[amine]
-            # print(type(y_v))
-            # for x in y_v:
-            #     print(type(x))
-            all_data, all_labels = all_data[amine], all_labels[amine]
-
             # Load the training and validation set into the model
-            ARF.load_dataset(x_t,y_t,x_v,y_v,all_data,all_labels)
+            ARF.load_dataset(x_t[amine],y_t[amine],x_v[amine],y_v[amine],all_data[amine],all_labels[amine])
             # Train the data on the training set
             ARF.train()
             # Conduct active learning with all the observations available in the pool
