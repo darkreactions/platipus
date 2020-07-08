@@ -340,7 +340,6 @@ def fine_tune(info=False):
     if info:
         print(f'There are {len(combinations)} many combinations to try.')
 
-    # TODO: how to load the dataset for fine tuning?
     amine_list, train_data, train_labels, val_data, val_labels, all_data, all_labels = process_dataset(
         train_size=10,
         active_learning_iter=10,
@@ -520,7 +519,6 @@ def run_model(KNN_params):
             KNN.train()
 
             # Conduct active learning with all the observations available in the pool
-            # TODO: else? how does it work with graphs
             if active_learning:
                 KNN.active_learning(num_iter=active_learning_iter, to_params=to_params)
             else:

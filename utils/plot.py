@@ -71,10 +71,13 @@ def plot_categorical_graph(num_examples, stats_dict, dst, amine=None, amine_inde
                 bcr.plot(num_examples, stats_dict[model]['bcrs'][amine_index], 'o-', label=model, alpha=0.6)
             else:
                 # Plot bar graphs for models without active learning
-                acc.bar(models.index(model)/2, stats_dict[model]['accuracies'][amine_index], 0.25, label=model, alpha=0.6)
-                prec.bar(models.index(model)/2, stats_dict[model]['precisions'][amine_index], 0.25, label=model, alpha=0.6)
-                rec.bar(models.index(model)/2, stats_dict[model]['recalls'][amine_index], 0.25, label=model, alpha=0.6)
-                bcr.bar(models.index(model)/2, stats_dict[model]['bcrs'][amine_index], 0.25, label=model, alpha=0.6)
+                acc.bar(models.index(model) / 2, stats_dict[model]['accuracies'][amine_index], 0.25, label=model,
+                        alpha=0.6)
+                prec.bar(models.index(model) / 2, stats_dict[model]['precisions'][amine_index], 0.25, label=model,
+                         alpha=0.6)
+                rec.bar(models.index(model) / 2, stats_dict[model]['recalls'][amine_index], 0.25, label=model,
+                        alpha=0.6)
+                bcr.bar(models.index(model) / 2, stats_dict[model]['bcrs'][amine_index], 0.25, label=model, alpha=0.6)
                 with_AL = False
         else:
             # Plotting avg metrics graph
@@ -87,10 +90,10 @@ def plot_categorical_graph(num_examples, stats_dict, dst, amine=None, amine_inde
                 bcr.plot(num_examples, stats_dict[model]['bcrs'], 'o-', label=model, alpha=0.6)
             else:
                 # Plot bar graphs for models without active learning
-                acc.bar(models.index(model)/2, stats_dict[model]['accuracies'], 0.25, label=model, alpha=0.6)
-                prec.bar(models.index(model)/2, stats_dict[model]['precisions'], 0.25, label=model, alpha=0.6)
-                rec.bar(models.index(model)/2, stats_dict[model]['recalls'], 0.25, label=model, alpha=0.6)
-                bcr.bar(models.index(model)/2, stats_dict[model]['bcrs'], 0.25, label=model, alpha=0.6)
+                acc.bar(models.index(model) / 2, stats_dict[model]['accuracies'], 0.25, label=model, alpha=0.6)
+                prec.bar(models.index(model) / 2, stats_dict[model]['precisions'], 0.25, label=model, alpha=0.6)
+                rec.bar(models.index(model) / 2, stats_dict[model]['recalls'], 0.25, label=model, alpha=0.6)
+                bcr.bar(models.index(model) / 2, stats_dict[model]['bcrs'], 0.25, label=model, alpha=0.6)
                 with_AL = False
 
     # Making the graphs more readable
@@ -121,7 +124,7 @@ def plot_categorical_graph(num_examples, stats_dict, dst, amine=None, amine_inde
 
     # Display legends for all subplots
     handles, labels = acc.get_legend_handles_labels()
-    num_cols = int(len(labels)/2) if len(labels) > 7 else len(labels)
+    num_cols = int(len(labels) / 2) if len(labels) > 7 else len(labels)
     fig.legend(handles, labels, loc="lower center", ncol=num_cols, fontsize=18, bbox_to_anchor=[0.5, 0.04])
 
     # Move the subplots up
@@ -212,16 +215,16 @@ def plot_all_lines(stats_dict, dst, show=False):
             style_combinations[model]['color'] = list_of_colors[5]
         if 'PLATIPUS' in model:
             style_combinations[model]['color'] = list_of_colors[6]
-        # TODO: change this according to the new model names
-        if '3' in model:
+        # TODO: THE FOLLOWING MAY HAVE TO CHANGE ONCE MAML/PLATIPUS IS HERE
+        if 'historical_only' in model:
             style_combinations[model]['linestyle'] = list_of_linestyles[0]
-        if '4_i' in model:
+        if 'historical_amine' in model:
             style_combinations[model]['linestyle'] = list_of_linestyles[1]
-        if '4_ii' in model:
+        if 'amine_only' in model:
             style_combinations[model]['linestyle'] = list_of_linestyles[2]
-        if '5_i' in model:
+        if 'historical_amine_AL' in model:
             style_combinations[model]['linestyle'] = list_of_linestyles[3]
-        if '5_ii' in model:
+        if 'amine_only_AL' in model:
             style_combinations[model]['linestyle'] = list_of_linestyles[4]
 
     # Plot each model's metrics
@@ -233,9 +236,12 @@ def plot_all_lines(stats_dict, dst, show=False):
         linestyle = style_combinations[model]['linestyle']
         if len(num_examples) != 1:
             # Plot line graphs for models with active learning
-            acc.plot(num_examples, stats_dict[model]['accuracies'], marker=linestyle, color=color, linewidth=4, label=model)
-            prec.plot(num_examples, stats_dict[model]['precisions'], marker=linestyle, color=color, linewidth=4, label=model)
-            rec.plot(num_examples, stats_dict[model]['recalls'], marker=linestyle, color=color, linewidth=4, label=model)
+            acc.plot(num_examples, stats_dict[model]['accuracies'], marker=linestyle, color=color, linewidth=4,
+                     label=model)
+            prec.plot(num_examples, stats_dict[model]['precisions'], marker=linestyle, color=color, linewidth=4,
+                      label=model)
+            rec.plot(num_examples, stats_dict[model]['recalls'], marker=linestyle, color=color, linewidth=4,
+                     label=model)
             bcr.plot(num_examples, stats_dict[model]['bcrs'], marker=linestyle, color=color, linewidth=4, label=model)
         else:
             # Plot bar graphs for models without active learning
@@ -258,7 +264,7 @@ def plot_all_lines(stats_dict, dst, show=False):
 
     # Display legends for all subplots
     handles, labels = acc.get_legend_handles_labels()
-    num_cols = int(len(labels)/4) if len(labels) > 7 else len(labels)
+    num_cols = int(len(labels) / 4) if len(labels) > 7 else len(labels)
     fig.legend(handles, labels, loc="lower center", ncol=num_cols, fontsize='x-large', bbox_to_anchor=[0.5, 0.03])
 
     # Move the subplots up
@@ -303,10 +309,9 @@ def plot_all_graphs(cv_stats):
     amines = cv_stats[models_to_plot[0]]['amine']
 
     # Parse the models into 3 main categories
-    # TODO: change if statement once the model names are changed
-    cat_3 = [model for model in models_to_plot if 'category_3' in model]
-    cat_4 = [model for model in models_to_plot if 'category_4' in model]
-    cat_5 = [model for model in models_to_plot if 'category_5' in model]
+    cat_3 = [model for model in models_to_plot if 'historical_only' in model]
+    cat_4 = [model for model in models_to_plot if 'amine' in model and not ('AL' in model)]
+    cat_5 = [model for model in models_to_plot if 'AL' in model]
 
     all_cats = {
         'category_3': cat_3,
