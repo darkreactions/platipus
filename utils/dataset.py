@@ -347,9 +347,102 @@ def find_index(selected_experiements, all_experiments):
     return qry_index
 
 
+def write_sel_to_csv(data_dict):
+    """Find the selected k amine-specific experiments and write them to two csv files
+
+    Args:
+        data_dict:          A dictionary representing the processed dataset for non-meta model training.
+                                See process_dataset() for more details.
+    """
+
+    # Load the original chem dataset to find specific experiments
+    df = pd.read_csv(path)
+
+    # Unpack the selected experiments
+    selected_experiments = defaultdict(dict)
+    sizes = ['full', 'test']
+    for size in sizes:
+        selected_experiments[size] = defaultdict(dict)
+        for amine in data_dict[size]['k_x'].keys():
+            selected_experiments[size][amine] = data_dict[size]['k_x'][amine]
+
+    full_dfs = []
+    test_dfs = []
+
+    # Find the experiments selected
+    # For the full dataset setting
+    for amine in selected_experiments['full']:
+        for exp in selected_experiments['full'][amine]:
+            df_exp = df.loc[(df['_rxn_organic-inchikey'] == amine) &
+                            (df['_rxn_M_acid'] == exp[0]) &
+                            (df['_rxn_M_inorganic'] == exp[1]) &
+                            (df['_rxn_M_organic'] == exp[2])
+                            ]
+            full_dfs.append(df_exp)
+
+    # For the test dataset setting
+    for amine in selected_experiments['test']:
+        for exp in selected_experiments['test'][amine]:
+            df_exp = df.loc[(df['_rxn_organic-inchikey'] == amine) &
+                            (df['_rxn_M_acid'] == exp[0]) &
+                            (df['_rxn_M_inorganic'] == exp[1]) &
+                            (df['_rxn_M_organic'] == exp[2])
+                            ]
+            test_dfs.append(df_exp)
+
+    # Concatenate all rows to a single df
+    full = pd.concat(full_dfs, ignore_index=True)
+    test = pd.concat(test_dfs, ignore_index=True)
+
+    # Write each df into their own dataset file
+    full.to_csv('./data/selected_k_full_dataset.csv')
+    test.to_csv('./data/selected_k_test_dataset.csv')
+
+
 def process_dataset(train_size=10, active_learning_iter=10, verbose=True, cross_validation=True, full=True,
                     active_learning=True, w_hx=True, w_k=True):
-    """TODO: DOCUMENTATION and COMMENTS"""
+    """Generate dictionary to store categorical datasets for consistency
+
+    To make sure that the experiments are consistent and scientifically rigorous,
+    all models are using the same pre-training, training, and testing experiments.
+
+    Category 3 represents the class of models that are trained on historical data
+    only without active learning involved.
+    Category 4 has 2 sub-categories:
+        Category 4.1 represents the class of models that are trained on historical
+        data and k+x many amine-specific data without active learning involved.
+        Category 4.2 represents the class of models that are trained on k+x amine
+        only data without active learning involved.
+    Category 5 has 2 sub-categories:
+        Category 5.1 represents the class of models that are trained on historical
+        data and k many amine-specific data with active learning involved. In active
+        leaning loop, only x many experiments of the amine are queried.
+        Category 5.2 represents the class of models that are trained on k amine
+        only data without active learning involved. In active leaning loop, only
+        x many experiments of the amine are queried.
+
+    Args:
+        train_size:                 An integer representing the number of amine-specific experiments used for training.
+                                        Corresponds to the k in the above description
+        active_learning_iter:       An integer representing the number of iterations in an active learning loop.
+                                        Corresponds to the x in the above description.
+        verbose:                    A boolean representing if one wants the function to print out additional information
+                                        or not.
+        cross_validation:           A boolean representing if one is doing cross-validation or not.
+        full:                       A boolean representing if one wants to load the full dataset or the test dataset.
+        active_learning:            A boolean representing if active learning will be involved in testing or not.
+        w_hx:                       A boolean representing if the models are trained with historical data or not.
+        w_k:                        A boolean representing if the modes are trained with amine-specific experiments.
+
+    Returns:
+        amine_list:                 A list representing the amines processed to train and test on.
+        x_t:                        A 2-D numpy array representing the training data.
+        y_t:                        A 2-D numpy array representing the training labels.
+        x_v:                        A 2-D numpy array representing the validation data.
+        y_v:                        A 2-D numpy array representing the validation labels.
+        all_data:                   A 2-D numpy array representing all the amine-specific data.
+        all_labels:                 A 2-D numpy array representing all the amine-specific labels.
+    """
 
     # Initialize data dict dictionary
     data_dict = defaultdict(dict)
@@ -449,6 +542,10 @@ def process_dataset(train_size=10, active_learning_iter=10, verbose=True, cross_
             # This is the selected k
             k_x = x_v[qry_k]
             k_y = y_v[qry_k]
+
+            # Load the selected k to data_dict for meta-models
+            data_dict['full']['k_x'][amine] = k_x
+            data_dict['full']['k_y'][amine] = k_y
 
             # Update training and validation set with the selection
             x_t = np.append(x_t, k_x).reshape(-1, x_t.shape[1])
@@ -586,6 +683,10 @@ def process_dataset(train_size=10, active_learning_iter=10, verbose=True, cross_
             k_x = x_v[qry_k]
             k_y = y_v[qry_k]
 
+            # Load the selected k to data_dict for meta-models
+            data_dict['test']['k_x'][amine] = k_x
+            data_dict['test']['k_y'][amine] = k_y
+
             # Update training and validation set w/ the selection
             x_t = np.append(x_t, k_x).reshape(-1, x_t.shape[1])
             y_t = np.append(y_t, k_y)
@@ -692,6 +793,10 @@ def process_dataset(train_size=10, active_learning_iter=10, verbose=True, cross_
 
         with open(data_dict_path, "wb") as f:
             pickle.dump(data_dict, f)
+
+        # Store the k experiments selected for each amine to two separate csv files
+        write_sel_to_csv(data_dict)
+
     else:
         print('Found existing data file. Loading data to model...')
         with open(data_dict_path, "rb") as f:

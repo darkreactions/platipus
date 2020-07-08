@@ -16,7 +16,7 @@ common_params = {
     'active_learning': False,
     'active_learning_iter': 10,   # x before active learning
     'stats_path': Path('./results/cv_statistics.pkl'),
-    'cv_stats_overwrite': True,
+    'cv_stats_overwrite': True,     # TODO: change this to false when running all models
     'save_model': False
 }
 
@@ -26,37 +26,10 @@ knn_params = {
     'model_name': 'KNN'
 }
 
-"""
-The format for KNN's config should be a dictionary in the following form
-{
-    'n_neighbors': 2,
-    'weights': 'uniform',
-    'algorithm': 'auto',
-    'leaf_size': 20,
-    'p': 2,
-    'metric': 'minkowski'
-}
-"""
-
 svm_params = {
     'config': None,
     'model_name': 'SVM'
 }
-
-"""
-The format for SVM config should be a dictionary in the following form
-{
-    'C':0.01,
-    'kernel':'poly',
-    'degree': 1,
-    'gammas': 'scale',
-    'shrinking': True,
-    'tol': 0.01,
-    'decision_function_shape': 'ovo',
-    'break_ties': True,
-    'class_weight': 'balanced'
-}
-"""
 
 randomforest_params = {
     'config': None,

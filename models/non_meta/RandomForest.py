@@ -401,46 +401,6 @@ def fine_tune(info=False):
     return best_option
 
 
-def save_used_data(training_batches, validation_batches, testing_batches, counts, pretrain):
-    """Save the data used to train, validate and test the model to designated folder
-    Args:
-        training_batches:       A dictionary representing the training batches used to train.
-                                    See dataset.py for specific structure.
-        validation_batches:     A dictionary representing the training batches used to train.
-                                    See dataset.py for specific structure.
-        testing_batches:        A dictionary representing the training batches used to train.
-                                    See dataset.py for specific structure.
-        counts:                 A dictionary with 'total' and each available amines as keys and lists of length 2 as
-                                    values in the format of: [# of failed reactions, # of successful reactions]
-    """
-
-    # Indicate which option we used the data for
-    option = 1 if pretrain else 2
-
-    # Set up the destination folder to save the data
-    data_folder = './results/RandomForest_few_shot/option_{0:d}/data'.format(option)
-    if not os.path.exists(data_folder):
-        os.makedirs(data_folder)
-        print('No folder for RandomForest model data storage found')
-        print('Make folder to store data used for RandomForest models at')
-    else:
-        print('Found existing folder. Data used for models will be stored at')
-    print(data_folder)
-
-    # Put all data into a dictionary for easier use later
-    data = {
-        'training_batches': training_batches,
-        'validation_batches': validation_batches,
-        'testing_batches': testing_batches,
-        'counts': counts
-    }
-
-    # Save the file using pickle
-    file_name = "RandomForest_data.pkl"
-    with open(os.path.join(data_folder, file_name), "wb") as f:
-        pickle.dump(data, f)
-
-
 def parse_args():
     """Set up the initial variables for running SVM.
 
@@ -534,8 +494,6 @@ def run_model(RandomForest_params):
             w_k=w_k
         )
 
-
-        # print(training_batches.keys())
         for amine in amine_list:
             print(f'Training and active learning on amine {amine}')
             # Create the RandomForest model instance for the specific amine
@@ -545,7 +503,10 @@ def run_model(RandomForest_params):
             # Train the data on the training set
             ARF.train()
             # Conduct active learning with all the observations available in the pool
-            ARF.active_learning(num_iter= active_learning_iter, to_params=True)
+            if active_learning:
+                ARF.active_learning(num_iter=active_learning_iter, to_params=True)
+            else:
+                ARF.store_metrics_to_params()
             # Save the model for future reproducibility
             if save_model:
                 ARF.save_model(model_name)
