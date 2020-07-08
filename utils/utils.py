@@ -184,44 +184,14 @@ def save_model(model, params, amine=None):
     # Make sure we are creating directory for all models
     dst_folder_root = './results'
     dst_folder = ""
-    if amine is not None and amine in params["training_batches"]:
-        dst_folder = '{0:s}/{1:s}_few_shot/{2:s}_{3:s}_{4:d}way_{5:d}shot_{6:s}'.format(
-            dst_folder_root,
-            model,
-            model,
-            params['datasource'],
-            params['num_classes_per_task'],
-            params['num_training_samples_per_class'],
-            amine
-        )
-    elif amine is not None and amine in params["validation_batches"]:
-        dst_folder = '{0:s}/{1:s}_few_shot/{2:s}_{3:s}_{4:d}way_{5:d}shot_{6:s}'.format(
-            dst_folder_root,
-            model,
-            model,
-            params['datasource'],
-            params['num_classes_per_task'],
-            params['num_training_samples_per_class'],
-            amine
-        )
-        return dst_folder
+    k_shot = params['k_shot']
+    if amine and (amine in params['training_batches'] or amine in params['validation_batches']):
+        dst_folder = Path(f'{dst_folder_root}/{model}_{k_shot}_shot/{amine}')
+        # return dst_folder
     else:
-        dst_folder = '{0:s}/{1:s}_few_shot/{2:s}_{3:s}_{4:d}way_{5:d}shot'.format(
-            dst_folder_root,
-            model,
-            model,
-            params['datasource'],
-            params['num_classes_per_task'],
-            params['num_training_samples_per_class']
-        )
-    if not os.path.exists(dst_folder):
-        os.makedirs(dst_folder)
-        print('No folder for storage found')
-        print(f'Make folder to store meta-parameters at')
-    else:
-        print(
-            'Found existing folder. Meta-parameters will be stored at')
-    print(dst_folder)
+        dst_folder = Path(f'{dst_folder_root}/{model}_{k_shot}_shot/testing')
+
+    dst_folder.mkdir(parents=True, exist_ok=True)
     return dst_folder
 
 
@@ -433,5 +403,5 @@ def run_non_meta_model(base_model, common_params, model_params, category):
 if __name__ == "__main__":
     params = {}
     params["cross_validate"] = True
-    load_chem_dataset(5, params, meta_batch_size=32,num_batches=100, verbose=True)
-
+    load_chem_dataset(5, params, meta_batch_size=32,
+                      num_batches=100, verbose=True)
