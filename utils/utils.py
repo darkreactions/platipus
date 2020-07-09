@@ -1,13 +1,8 @@
 import os
 
-import numpy as np
-import pandas as pd
-from sklearn.preprocessing import StandardScaler
 from pathlib import Path
 import pickle
 import torch
-
-# /from matplotlib import pyplot as plt
 
 from utils.dataset import (import_chemdata, cross_validation_data, hold_out_data,
                            import_test_dataset, import_full_dataset)
@@ -189,44 +184,14 @@ def save_model(model, params, amine=None):
     # Make sure we are creating directory for all models
     dst_folder_root = './results'
     dst_folder = ""
-    if amine is not None and amine in params["training_batches"]:
-        dst_folder = '{0:s}/{1:s}_few_shot/{2:s}_{3:s}_{4:d}way_{5:d}shot_{6:s}'.format(
-            dst_folder_root,
-            model,
-            model,
-            params['datasource'],
-            params['num_classes_per_task'],
-            params['num_training_samples_per_class'],
-            amine
-        )
-    elif amine is not None and amine in params["validation_batches"]:
-        dst_folder = '{0:s}/{1:s}_few_shot/{2:s}_{3:s}_{4:d}way_{5:d}shot_{6:s}'.format(
-            dst_folder_root,
-            model,
-            model,
-            params['datasource'],
-            params['num_classes_per_task'],
-            params['num_training_samples_per_class'],
-            amine
-        )
-        return dst_folder
+    k_shot = params['k_shot']
+    if amine and (amine in params['training_batches'] or amine in params['validation_batches']):
+        dst_folder = Path(f'{dst_folder_root}/{model}_{k_shot}_shot/{amine}')
+        # return dst_folder
     else:
-        dst_folder = '{0:s}/{1:s}_few_shot/{2:s}_{3:s}_{4:d}way_{5:d}shot'.format(
-            dst_folder_root,
-            model,
-            model,
-            params['datasource'],
-            params['num_classes_per_task'],
-            params['num_training_samples_per_class']
-        )
-    if not os.path.exists(dst_folder):
-        os.makedirs(dst_folder)
-        print('No folder for storage found')
-        print(f'Make folder to store meta-parameters at')
-    else:
-        print(
-            'Found existing folder. Meta-parameters will be stored at')
-    print(dst_folder)
+        dst_folder = Path(f'{dst_folder_root}/{model}_{k_shot}_shot/testing')
+
+    dst_folder.mkdir(parents=True, exist_ok=True)
     return dst_folder
 
 
@@ -476,12 +441,12 @@ def define_non_meta_model_name(model_name, active_learning, w_hx, w_k):
     if not active_learning:
         if w_hx:
             if not w_k:
-                suffix = '_category_3'
+                suffix = '_historical_only'
             else:
-                suffix = '_category_4_i'
+                suffix = '_historical_amine'
         else:
             if w_k:
-                suffix = '_category_4_ii'
+                suffix = '_amine_only'
             else:
                 print('Invalid combination of parameters.')
                 print("Can't find appropriate category for the model.")
@@ -489,14 +454,14 @@ def define_non_meta_model_name(model_name, active_learning, w_hx, w_k):
     else:
         if w_hx:
             if w_k:
-                suffix = '_category_5_i'
+                suffix = '_historical_amine_AL'
             else:
                 print('Invalid combination of parameters.')
                 print("Can't find appropriate category for the model.")
                 print("Using default name instead.")
         else:
             if w_k:
-                suffix = '_category_5_ii'
+                suffix = '_amine_only_AL'
             else:
                 print('Invalid combination of parameters.')
                 print("Can't find appropriate category for the model.")
@@ -505,9 +470,47 @@ def define_non_meta_model_name(model_name, active_learning, w_hx, w_k):
     return model_name + suffix
 
 
+def run_non_meta_model(base_model, common_params, model_params, category):
+    """Run non-meta models under desired category
+
+    Args:
+        base_model:         The base non-meta machine learning model to be run.
+        common_params:      A dictionary representing the common parameters used across all models.
+        model_params:       A dictionary representing the base-model specific parameters.
+        category:           A string representing the category of the model to be run.
+    """
+
+    # Set up the settings of each category
+    # The entries correspond to: With active learning? With historical data? With amine data?
+    settings = {
+        'category_3': [False, True, False],
+        'category_4_i': [False, True, True],
+        'category_4_ii': [False, False, True],
+        'category_5_i': [True, True, True],
+        'category_5_ii': [True, False, True],
+    }
+
+    # Set up the aggregated parameter dictionary
+    base_model_params = {**common_params, **model_params}
+
+    # Change the three settings based on the input category
+    base_model_params['active_learning'] = settings[category][0]
+    base_model_params['with_historical_data'] = settings[category][1]
+    base_model_params['with_k'] = settings[category][2]
+
+    # Define the model's name given the category it is in
+    base_model_params['model_name'] = define_non_meta_model_name(
+        base_model_params['model_name'],
+        base_model_params['active_learning'],
+        base_model_params['with_historical_data'],
+        base_model_params['with_k'])
+
+    # Run the non-meta models
+    base_model.run_model(base_model_params)
+
+
 if __name__ == "__main__":
     params = {}
     params["cross_validate"] = True
     load_chem_dataset(5, params, meta_batch_size=32,
                       num_batches=100, verbose=True)
-
