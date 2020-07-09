@@ -73,6 +73,11 @@ decisiontree_params = {
     'model_name': 'Decision_Tree'
 }
 
+gradientboosting_params = {
+    'config': None,
+    'model_name': 'Gradient_Boosting'
+}
+
 meta_params = {
     'k_shot': 10,
     'n_way': 2,

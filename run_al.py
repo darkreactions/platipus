@@ -2,10 +2,10 @@ import models.meta.main as platipus
 from pathlib import Path
 import os
 
-from models.non_meta import RandomForest, KNN, SVM, DecisionTree, LogisticRegression
+from models.non_meta import RandomForest, KNN, SVM, DecisionTree, LogisticRegression, GradientBoosting
 from utils.plot import plot_metrics_graph, plot_all_graphs
 from utils import read_pickle, write_pickle, define_non_meta_model_name, find_avg_metrics
-from model_params import common_params, knn_params, svm_params, randomforest_params, logisticregression_params, decisiontree_params,  meta_train, meta_test
+from model_params import common_params, knn_params, svm_params, randomforest_params, logisticregression_params, decisiontree_params,gradientboosting_params,  meta_train, meta_test
 
 
 # TODO: move to utils maybe?
@@ -133,6 +133,20 @@ if __name__ == '__main__':
             model_params,
             category
         )
+
+    # Gradient Boosting
+    base_model = GradientBoosting
+    model_params = gradientboosting_params
+    for category in categories:
+        if '4_ii' not in category and '5_ii' not in category:
+        # Excluding categories that have too few
+        # successful experiments for training
+            run_non_meta_model(
+                base_model,
+                common_params,
+                model_params,
+                category
+            )
 
     # Use cv_stats.pkl to plot all graphs
     plot_all_graphs(common_params)

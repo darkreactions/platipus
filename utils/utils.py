@@ -350,6 +350,115 @@ def update_cv_stats_dict(cv_stats_dict, model, correct, cm, accuracy, precision,
     return cv_stats_dict
 
 
+def find_success_rate():
+    missing_from_inventory = ['UMDDLGMCNFAZDX-UHFFFAOYSA-O']
+
+    missing_from_volumes = ['KFQARYBEAKAXIC-UHFFFAOYSA-N',
+                            'KOAGKPNEVYEZDU-UHFFFAOYSA-N',
+                            'FJFIJIDZQADKEE-UHFFFAOYSA-N',
+                            'BAMDIFIROXTEEM-UHFFFAOYSA-N',
+                            'XZUCBFLUEBDNSJ-UHFFFAOYSA-N']
+
+    missing_from_viable = ['QHJPGANWSLEMTI-UHFFFAOYSA-N',
+                           'GGYGJCFIYJVWIP-UHFFFAOYSA-N',
+                           'PXWSKGXEHZHFJA-UHFFFAOYSA-N',
+                           'DMFMZFFIQRMJQZ-UHFFFAOYSA-N',
+                           'NOHLSFNWSBZSBW-UHFFFAOYSA-N']
+
+    distribution_header = '_raw_modelname'
+    amine_header = '_rxn_organic-inchikey'
+    score_header = '_out_crystalscore'
+    name_header = 'name'
+    SUCCESS = 4
+    viable_amines = ['ZEVRFFCPALTVDN-UHFFFAOYSA-N',
+                     'KFQARYBEAKAXIC-UHFFFAOYSA-N',
+                     'NLJDBTZLVTWXRG-UHFFFAOYSA-N',
+                     'LCTUISCIGMWMAT-UHFFFAOYSA-N',
+                     'JERSPYRKVMAEJY-UHFFFAOYSA-N',
+                     'JMXLWMIFDJCGBV-UHFFFAOYSA-N',
+                     'VAWHFUNJDMQUSB-UHFFFAOYSA-N',
+                     'WGYRINYTHSORGH-UHFFFAOYSA-N',
+                     'FCTHQYIDLRRROX-UHFFFAOYSA-N',
+                     'VNAAUNTYIONOHR-UHFFFAOYSA-N',
+                     'KOAGKPNEVYEZDU-UHFFFAOYSA-N',
+                     'FJFIJIDZQADKEE-UHFFFAOYSA-N',
+                     'XFYICZOIWSBQSK-UHFFFAOYSA-N',
+                     'HBPSMMXRESDUSG-UHFFFAOYSA-N',
+                     'NXRUEVJQMBGVAT-UHFFFAOYSA-N',
+                     'CALQKRVFTWDYDG-UHFFFAOYSA-N',
+                     'LLWRXQXPJMPHLR-UHFFFAOYSA-N',
+                     'BAMDIFIROXTEEM-UHFFFAOYSA-N',
+                     'XZUCBFLUEBDNSJ-UHFFFAOYSA-N']
+
+    held_out = ['CALQKRVFTWDYDG-UHFFFAOYSA-N',
+                'KOAGKPNEVYEZDU-UHFFFAOYSA-N',
+                'FCTHQYIDLRRROX-UHFFFAOYSA-N',
+                'JMXLWMIFDJCGBV-UHFFFAOYSA-N']
+
+    viable_amines = [a for a in viable_amines if a not in held_out]
+
+    df = pd.read_csv('./data/0050.perovskitedata_DRP.csv')
+    df = df[df[distribution_header].str.contains('Uniform')]
+    df = df[df[amine_header].isin(viable_amines)]
+    df[score_header] = [1 if val == SUCCESS else 0 for val in df[score_header].values]
+    amines = df[amine_header].unique().tolist()
+    inventory = pd.read_csv('./data/inventory.csv')
+    percent_volume = pd.read_csv('./data/percent.csv', sep=',')
+
+    percent_volume['Full Name'].str.lower()
+    inventory['Chemical Name'].str.lower()
+
+    total = percent_volume.set_index('Full Name').join(inventory.set_index('Chemical Name'))
+
+    # percent_vol = []
+
+    filtered = percent_volume[percent_volume['Inchi'].isin(amines)].sort_values(['Success'], axis=0, ascending=False)
+    amines_new = filtered['Inchi'].values
+
+    success_rate = filtered['Success'].to_numpy()
+    success_rate = np.expand_dims(success_rate, axis=1)
+
+    counts1 = []
+    counts0 = []
+    names = []
+    percent_success = []
+    for amine in amines_new:
+        results = df[df[amine_header] == amine][score_header].value_counts()
+        name = inventory[inventory['InChI Key (ID)'] == amine]['InChI Key (ID)'].values
+        names.append(name[0])
+        counts0.append(results[0])
+        counts1.append(results[1])
+        percent_success.append(results[1] * 100 / (results[1] + results[0]))
+    percent_success = np.array(percent_success)
+    percent_success = np.expand_dims(percent_success, axis=1)
+
+    return names, success_rate, percent_success
+
+
+def find_bcr(category, cv_stats, amine_names):
+    """
+    for plotting the success rate graph
+    """
+    wanted_index = []
+    for amine in amine_names:
+        i = 0
+        found = False
+        while i < len(cv_stats[category]['amine']) and found == False:
+            if cv_stats[category]['amine'][i] == amine:
+                wanted_index.append(i)
+                found = True
+            else:
+                i += 1
+    wanted_bcrs = []
+    wanted_names = []
+    for index in wanted_index:
+        wanted_bcrs.append(cv_stats[category]['bcrs'][index][-1])
+        wanted_names.append(cv_stats[category]['amine'][index])
+    # print(wanted_bcrs)
+    # print(wanted_names)
+    return wanted_bcrs
+
+
 def define_non_meta_model_name(model_name, active_learning, w_hx, w_k):
     """ Function to define the suffix of non-meta model
     Args:

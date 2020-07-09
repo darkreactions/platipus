@@ -3,7 +3,7 @@ import os
 from matplotlib import pyplot as plt
 from pathlib import Path
 
-from utils import read_pickle, find_avg_metrics
+from utils import read_pickle, find_avg_metrics, find_success_rate, find_bcr
 
 
 def plot_metrics_graph(num_examples, stats_dict, dst, amine=None, amine_index=None, models=[], show=False):
@@ -151,10 +151,48 @@ def plot_metrics_graph(num_examples, stats_dict, dst, amine=None, amine_index=No
     plt.close()
 
 
-# TODO: finish this function
-def plot_bcr_vs_success_rate():
-    """TODO: DOCUMENTATION"""
-    return
+def plot_bcr_vs_success_rate(model, models_dict, cv_stats,dst, names, success_volume, success_percentage,show=False):
+    # wanted_bcrs=np.squeeze(wanted_bcrs)
+    # success_volume= np.squeeze(success_volume)
+    # success_percentage = np.squeeze(success_percentage)
+    # print(wanted_bcrs)
+    # print(success_percentage)
+    plt.figure(figsize=(24, 12))
+    vol = plt.subplot(121)
+
+    vol.set_title('Success volume vs BCR for {}'.format(model), fontsize=20)
+    vol.set_xlabel("Success volume", fontsize=20)
+    vol.set_ylabel("BCR", fontsize=20)
+    for cat in models_dict[model]:
+        wanted_bcrs = find_bcr(cat, cv_stats, names)
+        vol.scatter(success_volume, wanted_bcrs, label=cat)
+
+    per = plt.subplot(122)
+    per.set_title('Success percentage vs BCR for {}'.format(model), fontsize=20)
+    per.set_xlabel("Success percentage", fontsize=20)
+    per.set_ylabel("BCR", fontsize=20)
+    for cat in models_dict[model]:
+        wanted_bcrs = find_bcr(cat, cv_stats, names)
+        per.scatter(success_percentage, wanted_bcrs, label=cat)
+
+    plt.subplots_adjust(wspace=0.2)
+
+    graph_dst = Path(dst)
+
+    # Remove duplicate graphs in case we can't directly overwrite the files
+    if graph_dst.exists():
+        graph_dst.unlink()
+
+    # Save graph in folder
+    plt.savefig(graph_dst)
+    # TODO: change to logging.info
+    print(f"Graph saved at {graph_dst}")
+
+    if show:
+        plt.show()
+    plt.close()
+
+
 
 
 def plot_all_graphs(common_params):
@@ -164,6 +202,29 @@ def plot_all_graphs(common_params):
     amines = cv_stats[models_to_plot[0]]['amine']
     # print(cv_stats.keys())
     # print(amines)
+
+    non_meta_models = ['KNN', 'SVM', 'Random_Forest', 'Linear_Regression', 'Decision_Tree','Gradient_Boosting']
+    # a dictionary with keys with names of the non meta models and the list of categories that needed to be plotted as index
+    models_dict = {}
+    model_cats = list(cv_stats.keys())
+    for model in non_meta_models:
+        models_dict[model] = [cat for cat in model_cats if model in cat]
+
+    graph_folder = './results/success_rate'
+    if not os.path.exists(graph_folder):
+        os.makedirs(graph_folder)
+        print(f'No folder for graphs of success rate vs bcr not found')
+        print('Make folder to store results at')
+    else:
+        print('Found existing folder. Graphs will be stored at')
+    print(graph_folder)
+
+    # print(cats)
+    names, success_volume, success_percentage = find_success_rate()
+    # print(names)
+    for models in list(models_dict.keys()):
+        graph_dst = '{0:s}/bcr_against_{1:s}.png'.format(graph_folder, models)
+        plot_bcr_vs_success_rate(models, models_dict, cv_stats, graph_dst, names, success_volume, success_percentage)
 
     # Plotting portion
     # Plot the models based on categories
