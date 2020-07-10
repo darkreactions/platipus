@@ -42,10 +42,15 @@ class ActiveDecisionTree:
         self.amine = amine
 
         if config:
-            self.model = DecisionTreeClassifier(max_depth=config['max_depth'],
-                                                min_samples_split=config['min_samples_split'],
-                                                min_samples_leaf=config['min_samples_leaf'],
-                                                max_leaf_nodes=config['max_leaf_nodes'])
+            self.model = DecisionTreeClassifier(
+                criterion=config['criterion'],
+                splitter=config['splitter'],
+                max_depth=config['max_depth'],
+                min_samples_split=config['min_samples_split'],
+                min_samples_leaf=config['min_samples_leaf'],
+                max_leaf_nodes=config['max_leaf_nodes'],
+                random_state=config['random_state']
+            )
         else:
             self.model = DecisionTreeClassifier()
 
@@ -287,25 +292,35 @@ def parse_args():
     return args
 
 
-def fine_tune(info=False):
+def fine_tune(train_size, active_learning_iter, active_learning=True, w_hx=True, w_k=True, info=False):
     """Fine tune the model based on average bcr performance to find the best model hyper-parameters.
     Args:
-        info:                   A boolean. Setting it to True will make the function print out additional information
-                                    during the fine-tuning stage.
-                                    Default to False.
+        train_size:                 An integer representing the number of amine-specific experiments used for training.
+                                        Corresponds to the k in the category description.
+        active_learning_iter:       An integer representing the number of iterations in an active learning loop.
+                                        Corresponds to the x in the category description.
+        active_learning:            A boolean representing if active learning will be involved in testing or not.
+        w_hx:                       A boolean representing if the models are trained with historical data or not.
+        w_k:                        A boolean representing if the modes are trained with amine-specific experiments.
+        info:                       A boolean. Setting it to True will make the function print out additional
+                                        information during the fine-tuning stage.
+                                        Default to False.
     Returns:
-        best_option:            A dictionary representing the hyper-parameters that yields the best performance on
-                                    average. For DecisionTree, the current keys are: 'criterion', 'splitter',
-                                    'max_depth', 'min_samples_split', 'min_samples_leaf', 'max_features',
-                                    'max_leaf_nodes', 'class_weight', 'ccp_alpha'.
+        best_option:                A dictionary representing the hyper-parameters that yields the best performance on
+                                        average. For DecisionTree, the current keys are: 'criterion', 'splitter',
+                                        'max_depth', 'min_samples_split', 'min_samples_leaf', 'max_features',
+                                        'max_leaf_nodes', 'class_weight', 'ccp_alpha'.
     """
 
     # Set all possible combinations
     params = {
-        'max_depth': [i for i in range(1, 11)],
+        'criterion': ['gini', 'entropy'],
+        'splitter': ['best', 'random'],
+        'max_depth': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 25, 30, None],
         'min_samples_split': [i for i in range(2, 11)],
         'min_samples_leaf': [i for i in range(1, 6)],
-        'max_leaf_nodes': []
+        'max_leaf_nodes': [None],
+        'random_state': [i for i in range(20)]
     }
 
     combinations = []
@@ -314,16 +329,16 @@ def fine_tune(info=False):
     for bundle in itertools.product(*values):
         combinations.append(dict(zip(keys, bundle)))
 
-    # Load the full dataset under option 1
+    # Load the full dataset under specific categorical option
     amine_list, train_data, train_labels, val_data, val_labels, all_data, all_labels = process_dataset(
-        train_size=10,
-        active_learning_iter=10,
+        train_size=train_size,
+        active_learning_iter=active_learning_iter,
         verbose=False,
         cross_validation=True,
         full=True,
-        active_learning=False,
-        w_hx=True,
-        w_k=False
+        active_learning=active_learning,
+        w_hx=w_hx,
+        w_k=w_k
     )
 
     # Set baseline performance
@@ -340,7 +355,7 @@ def fine_tune(info=False):
         x_t, y_t = train_data[amine], train_labels[amine]
         x_v, y_v = val_data[amine], val_labels[amine]
         all_task_data, all_task_labels = all_data[amine], all_labels[amine]
-        ADT.load_dataset(x_t, x_v, y_t, y_v, all_task_data, all_task_labels)
+        ADT.load_dataset(x_t, y_t, x_v, y_v, all_task_data, all_task_labels)
 
         ADT.train()
 
@@ -394,7 +409,7 @@ def fine_tune(info=False):
             x_v, y_v = val_data[amine], val_labels[amine]
             all_task_data, all_task_labels = all_data[amine], all_labels[amine]
 
-            ADT.load_dataset(x_t, x_v, y_t, y_v, all_task_data, all_task_labels)
+            ADT.load_dataset(x_t, y_t, x_v, y_v, all_task_data, all_task_labels)
             ADT.train()
 
             # Calculate AUC
@@ -435,11 +450,12 @@ def fine_tune(info=False):
     return best_option
 
 
-def run_model(DecisionTree_params):
+def run_model(DecisionTree_params, category):
     """Full-scale training, validation and testing using all amines.
     Args:
         DecisionTree_params:         A dictionary of the parameters for the decision tree model.
                                         See initialize() for more information.
+        category:                    A string representing the category the model is classified under.
     """
 
     # For visualization, may need deletion
@@ -458,12 +474,13 @@ def run_model(DecisionTree_params):
                 '_raw_RelativeHumidity']
 
     # Unload common parameters
-    config = DecisionTree_params['config']
+    config = DecisionTree_params['configs'][category]
     verbose = DecisionTree_params['verbose']
     stats_path = DecisionTree_params['stats_path']
 
     model_name = DecisionTree_params['model_name']
-    print(model_name)
+    if verbose:
+        print(model_name)
 
     # Unload the training data specific parameters
     train_size = DecisionTree_params['train_size']
@@ -480,7 +497,14 @@ def run_model(DecisionTree_params):
     visualize = False
 
     if fine_tuning:
-        best_config = fine_tune(info=True)
+        _ = fine_tune(
+            train_size,
+            active_learning_iter,
+            active_learning=active_learning,
+            w_hx=w_hx,
+            w_k=w_k,
+            info=True
+        )
     else:
         # Load the desired sized dataset under desired option
         amine_list, x_t, y_t, x_v, y_v, all_data, all_labels = process_dataset(

@@ -45,9 +45,7 @@ class ActiveKNN:
         learner:        An ActiveLearner to conduct active learning with. See modAL documentation for more details.
     """
 
-    def __init__(self, amine=None, config=None,
-                 verbose=True, stats_path=Path('./results/stats.pkl'),
-                 model_name='KNN'):
+    def __init__(self, amine=None, config=None, verbose=True, stats_path=Path('./results/stats.pkl'), model_name='KNN'):
         """Initialize the ActiveKNN object."""
         self.amine = amine
 
@@ -55,8 +53,6 @@ class ActiveKNN:
         if config:
             self.model = KNeighborsClassifier(
                 n_neighbors=config['n_neighbors'],
-                weights=config['weights'],
-                algorithm=config['algorithm'],
                 leaf_size=config['leaf_size'],
                 p=config['p']
             )
@@ -308,26 +304,28 @@ def parse_args():
     return args
 
 
-def fine_tune(info=False):
+def fine_tune(train_size, active_learning_iter, active_learning=True, w_hx=True, w_k=True, info=False):
     """Fine tune the model based on average bcr performance to find the best model hyper-parameters.
-
     Args:
-        info:                A boolean. Setting it to True will make the function print out additional information
-                                    during the fine-tuning stage.
-                                    Default to False.
-
+        train_size:                 An integer representing the number of amine-specific experiments used for training.
+                                        Corresponds to the k in the category description.
+        active_learning_iter:       An integer representing the number of iterations in an active learning loop.
+                                        Corresponds to the x in the category description.
+        active_learning:            A boolean representing if active learning will be involved in testing or not.
+        w_hx:                       A boolean representing if the models are trained with historical data or not.
+        w_k:                        A boolean representing if the modes are trained with amine-specific experiments.
+        info:                       A boolean. Setting it to True will make the function print out additional
+                                        information during the fine-tuning stage.
+                                        Default to False.
     Returns:
         best_option:            A dictionary representing the hyper-parameters that yields the best performance on
-                                    average. For KNN, the current keys are: n_neighbors', 'weights', 'algorithm',
-                                    'leaf_size', 'p', 'metric'.
+                                    average. For KNN, the current keys are: n_neighbors', 'leaf_size', 'p'.
     """
 
     # Set all possible combinations
     params = {
-        'n_neighbors': [i for i in range(1, 11)],
-        'weights': ['uniform', 'distance'],
-        'algorithm': ['auto'],
-        'leaf_size': [i for i in range(10, 21)],
+        'n_neighbors': [i for i in range(1, 31)],
+        'leaf_size': [i for i in range(1, 51)],
         'p': [i for i in range(1, 4)]
     }
 
@@ -340,15 +338,16 @@ def fine_tune(info=False):
     if info:
         print(f'There are {len(combinations)} many combinations to try.')
 
+    # Load the full dataset under specific categorical option
     amine_list, train_data, train_labels, val_data, val_labels, all_data, all_labels = process_dataset(
-        train_size=10,
-        active_learning_iter=10,
+        train_size=train_size,
+        active_learning_iter=active_learning_iter,
         verbose=False,
         cross_validation=True,
         full=True,
-        active_learning=False,
-        w_hx=True,
-        w_k=False
+        active_learning=active_learning,
+        w_hx=w_hx,
+        w_k=w_k
     )
 
     # Set baseline performance
@@ -366,7 +365,7 @@ def fine_tune(info=False):
         x_t, y_t = train_data[amine], train_labels[amine]
         x_v, y_v = val_data[amine], val_labels[amine]
         all_task_data, all_task_labels = all_data[amine], all_labels[amine]
-        KNN.load_dataset(x_t, x_v, y_t, y_v, all_task_data, all_task_labels)
+        KNN.load_dataset(x_t, y_t, x_v, y_v, all_task_data, all_task_labels)
 
         KNN.train()
 
@@ -418,7 +417,7 @@ def fine_tune(info=False):
             x_t, y_t = train_data[amine], train_labels[amine]
             x_v, y_v = val_data[amine], val_labels[amine]
             all_task_data, all_task_labels = all_data[amine], all_labels[amine]
-            KNN.load_dataset(x_t, x_v, y_t, y_v, all_task_data, all_task_labels)
+            KNN.load_dataset(x_t, y_t, x_v, y_v, all_task_data, all_task_labels)
 
             KNN.train()
 
@@ -460,19 +459,17 @@ def fine_tune(info=False):
     return best_option
 
 
-def run_model(KNN_params):
+def run_model(KNN_params, category):
     """Full-scale training, validation and testing using all amines.
 
     Args:
         KNN_params:         A dictionary of the parameters for the KNN model.
                                 See initialize() for more information.
-
-    Returns:
-        N/A
+        category:           A string representing the category the model is classified under.
     """
 
     # Unload common parameters
-    config = KNN_params['config']
+    config = KNN_params['configs'][category]
     verbose = KNN_params['verbose']
     stats_path = KNN_params['stats_path']
 
@@ -494,7 +491,14 @@ def run_model(KNN_params):
     to_params = True
 
     if fine_tuning:
-        best_config = fine_tune(info=True)
+        _ = fine_tune(
+            train_size,
+            active_learning_iter,
+            active_learning=active_learning,
+            w_hx=w_hx,
+            w_k=w_k,
+            info=True
+        )
     else:
         # Load the desired sized dataset under desired option
         amine_list, x_t, y_t, x_v, y_v, all_data, all_labels = process_dataset(

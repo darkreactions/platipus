@@ -61,11 +61,9 @@ class ActiveSVM:
                     kernel=config['kernel'],
                     degree=config['degree'],
                     gamma=config['gammas'],
-                    shrinking=config['shrinking'],
                     tol=config['tol'],
                     decision_function_shape=config['decision_function_shape'],
                     break_ties=config['break_ties'],
-                    class_weight=config['class_weight']
                 ))
 
             else:
@@ -73,11 +71,9 @@ class ActiveSVM:
                     C=config['C'],
                     kernel=config['kernel'],
                     gamma=config['gammas'],
-                    shrinking=config['shrinking'],
                     tol=config['tol'],
                     decision_function_shape=config['decision_function_shape'],
                     break_ties=config['break_ties'],
-                    class_weight=config['class_weight']
                 ))
         else:
             # Fine tuned model
@@ -86,11 +82,9 @@ class ActiveSVM:
                 kernel='poly',
                 degree=3,
                 gamma='scale',
-                shrinking=True,
                 tol=1,
                 decision_function_shape='ovo',
                 break_ties=True,
-                class_weight=None
             ))
 
         self.metrics = defaultdict(list)
@@ -336,13 +330,19 @@ def parse_args():
     return args
 
 
-def fine_tune(info=False):
+def fine_tune(train_size, active_learning_iter, active_learning=True, w_hx=True, w_k=True, info=False):
     """Fine tune the model based on average bcr performance to find the best model hyper-parameters.
-
     Args:
-        info:                A boolean. Setting it to True will make the function print out additional information
-                                    during the fine-tuning stage.
-                                    Default to False.
+        train_size:                 An integer representing the number of amine-specific experiments used for training.
+                                        Corresponds to the k in the category description.
+        active_learning_iter:       An integer representing the number of iterations in an active learning loop.
+                                        Corresponds to the x in the category description.
+        active_learning:            A boolean representing if active learning will be involved in testing or not.
+        w_hx:                       A boolean representing if the models are trained with historical data or not.
+        w_k:                        A boolean representing if the modes are trained with amine-specific experiments.
+        info:                       A boolean. Setting it to True will make the function print out additional
+                                        information during the fine-tuning stage.
+                                        Default to False.
 
     Returns:
         best_option:            A dictionary representing the hyper-parameters that yields the best performance on
@@ -352,15 +352,13 @@ def fine_tune(info=False):
 
     # Set all possible combinations
     params = {
-        'C': [i / 1000 for i in range(1, 51)],
-        'kernel': ['poly', 'sigmoid'],
+        'C': [.001, .01, .1, 1, 10, 100],
+        'kernel': ['poly', 'sigmoid', 'rbf'],
         'degree': [0, 1, 2, 3],
-        'gammas': ['scale'],
-        'shrinking': [True],
-        'tol': [.1, 1, 2],
+        'gammas': ['auto', 'scale'],
+        'tol': [.0001, .001, .01, .1, 1, 10],
         'decision_function_shape': ['ovo'],
         'break_ties': [True],
-        'class_weight': [None]
     }
 
     combinations = []
@@ -369,19 +367,24 @@ def fine_tune(info=False):
     for bundle in itertools.product(*values):
         combinations.append(dict(zip(keys, bundle)))
 
+    # Remove redundant configurations that doesn't require degree input
+    for config in combinations:
+        if config['kernel'] != 'poly' and config['degree'] != 0:
+            combinations.remove(config)
+
     if info:
         print(f'There are {len(combinations)} many combinations to try.')
 
-    # Load the full dataset under option 1
+    # Load the full dataset under specific categorical option
     amine_list, train_data, train_labels, val_data, val_labels, all_data, all_labels = process_dataset(
-        train_size=10,
-        active_learning_iter=10,
+        train_size=train_size,
+        active_learning_iter=active_learning_iter,
         verbose=False,
         cross_validation=True,
         full=True,
-        active_learning=False,
-        w_hx=True,
-        w_k=False
+        active_learning=active_learning,
+        w_hx=w_hx,
+        w_k=w_k
     )
 
     # Set baseline performance
@@ -400,7 +403,7 @@ def fine_tune(info=False):
         all_task_data, all_task_labels = all_data[amine], all_labels[amine]
 
         # Load the training and validation set into the model
-        ASVM.load_dataset(x_t, x_v, y_t, y_v, all_task_data, all_task_labels)
+        ASVM.load_dataset(x_t, y_t, x_v, y_v, all_task_data, all_task_labels)
 
         ASVM.train()
 
@@ -453,7 +456,7 @@ def fine_tune(info=False):
             x_v, y_v = val_data[amine], val_labels[amine]
             all_task_data, all_task_labels = all_data[amine], all_labels[amine]
 
-            ASVM.load_dataset(x_t, x_v, y_t, y_v, all_task_data, all_task_labels)
+            ASVM.load_dataset(x_t, y_t, x_v, y_v, all_task_data, all_task_labels)
 
             ASVM.train()
 
@@ -495,16 +498,17 @@ def fine_tune(info=False):
     return best_option
 
 
-def run_model(SVM_params):
+def run_model(SVM_params, category):
     """Full-scale training, validation and testing using all amines.
 
     Args:
         SVM_params:         A dictionary of the parameters for the SVM model.
                                 See initialize() for more information.
+        category:           A string representing the category the model is classified under.
      """
     
     # Unload common parameters
-    config = SVM_params['config']
+    config = SVM_params['configs'][category]
     verbose = SVM_params['verbose']
     stats_path = SVM_params['stats_path']
 
@@ -526,7 +530,14 @@ def run_model(SVM_params):
     to_params = True
 
     if fine_tuning:
-        best_config = fine_tune(info=True)
+        _ = fine_tune(
+            train_size,
+            active_learning_iter,
+            active_learning=active_learning,
+            w_hx=w_hx,
+            w_k=w_k,
+            info=True
+        )
     else:
         # Load the desired sized dataset under desired option
         amine_list, x_t, y_t, x_v, y_v, all_data, all_labels = process_dataset(
