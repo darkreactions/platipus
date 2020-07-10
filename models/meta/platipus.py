@@ -684,7 +684,7 @@ def active_learning_platipus(preds, sm_loss, all_labels, params, x_t, y_t, x_v, 
         precision = cm[1][1] / (cm[1][1] + cm[0][1])
     else:
         precision = 1.0
-        logging.warn('WARNING: zero division during precision calculation')
+        logging.warn('zero division during precision calculation')
 
     recall = cm[1][1] / (cm[1][1] + cm[1][0])
     true_negative = cm[0][0] / (cm[0][0] + cm[0][1])
