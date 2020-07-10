@@ -5,10 +5,15 @@ import os
 from models.non_meta import RandomForest, KNN, SVM, DecisionTree, LogisticRegression, GradientBoosting
 from utils.plot import plot_all_graphs
 from utils import read_pickle, write_pickle, define_non_meta_model_name, run_non_meta_model, find_avg_metrics
-from model_params import common_params, knn_params, svm_params, randomforest_params, logisticregression_params, decisiontree_params, gradientboosting_params,  meta_train, meta_test
-
+from model_params import common_params, knn_params, svm_params, randomforest_params, logisticregression_params, \
+    decisiontree_params, gradientboosting_params, meta_train, meta_test
 
 if __name__ == '__main__':
+    # Just in case you want to plot graphs
+    # and don't want to accidentally delete
+    # the cv_statistics.pkl file
+    run_models = False
+
     # Set up the results directory
     results_folder = './results'
 
@@ -42,6 +47,7 @@ if __name__ == '__main__':
 
     # TODO: MAML
 
+    """
     # Non-meta models
     # KNN
     base_model = KNN
@@ -53,6 +59,7 @@ if __name__ == '__main__':
             model_params,
             category
         )
+    """
 
     # SVM
     base_model = SVM
@@ -68,6 +75,20 @@ if __name__ == '__main__':
                 category
             )
 
+    """
+    # DecisionTree
+    base_model = DecisionTree
+    model_params = decisiontree_params
+    for category in categories:
+        run_non_meta_model(
+            base_model,
+            common_params,
+            model_params,
+            category
+        )
+    """
+
+    """
     # Random Forest
     base_model = RandomForest
     model_params = randomforest_params
@@ -84,7 +105,7 @@ if __name__ == '__main__':
     model_params = logisticregression_params
     for category in categories:
         if '4_ii' not in category and '5_ii' not in category:
-            # Excluding categories that have too few 
+            # Excluding categories that have too few
             # successful experiments for training
             run_non_meta_model(
                 base_model,
@@ -93,24 +114,13 @@ if __name__ == '__main__':
                 category
             )
 
-    # DecisionTree
-    base_model = DecisionTree
-    model_params = decisiontree_params
-    for category in categories:
-        run_non_meta_model(
-            base_model,
-            common_params,
-            model_params,
-            category
-        )
-
     # Gradient Boosting
     base_model = GradientBoosting
     model_params = gradientboosting_params
     for category in categories:
         if '4_ii' not in category and '5_ii' not in category:
-        # Excluding categories that have too few
-        # successful experiments for training
+            # Excluding categories that have too few
+            # successful experiments for training
             run_non_meta_model(
                 base_model,
                 common_params,
@@ -121,3 +131,4 @@ if __name__ == '__main__':
     # Use cv_stats.pkl to plot all graphs
     cv_stats = read_pickle(common_params['stats_path'])
     plot_all_graphs(cv_stats)
+    """
