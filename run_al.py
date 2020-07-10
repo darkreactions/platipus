@@ -61,6 +61,7 @@ if __name__ == '__main__':
         )
     """
 
+    '''
     # SVM
     base_model = SVM
     model_params = svm_params
@@ -74,8 +75,8 @@ if __name__ == '__main__':
                 model_params,
                 category
             )
+    '''
 
-    """
     # DecisionTree
     base_model = DecisionTree
     model_params = decisiontree_params
@@ -86,7 +87,7 @@ if __name__ == '__main__':
             model_params,
             category
         )
-    """
+
 
     """
     # Random Forest
