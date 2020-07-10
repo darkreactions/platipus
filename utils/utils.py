@@ -1,8 +1,9 @@
-import os
-
 from pathlib import Path
 import pickle
 import torch
+
+import pandas as pd
+import numpy as np
 
 from utils.dataset import (import_chemdata, cross_validation_data, hold_out_data,
                            import_test_dataset, import_full_dataset)
@@ -408,7 +409,7 @@ def find_bcr(category, cv_stats, amine_names):
     for amine in amine_names:
         i = 0
         found = False
-        while i < len(cv_stats[category]['amine']) and found == False:
+        while i < len(cv_stats[category]['amine']) and not found:
             if cv_stats[category]['amine'][i] == amine:
                 wanted_index.append(i)
                 found = True
@@ -506,11 +507,10 @@ def run_non_meta_model(base_model, common_params, model_params, category):
         base_model_params['with_k'])
 
     # Run the non-meta models
-    base_model.run_model(base_model_params)
+    base_model.run_model(base_model_params, category)
 
 
 if __name__ == "__main__":
-    params = {}
-    params["cross_validate"] = True
+    params = {"cross_validate": True}
     load_chem_dataset(5, params, meta_batch_size=32,
                       num_batches=100, verbose=True)
