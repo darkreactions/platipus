@@ -124,11 +124,11 @@ def plot_categorical_graph(num_examples, stats_dict, dst, amine=None, amine_inde
 
     # Display legends for all subplots
     handles, labels = acc.get_legend_handles_labels()
-    num_cols = int(len(labels) / 2) if len(labels) > 7 else len(labels)
-    fig.legend(handles, labels, loc="lower center", ncol=num_cols, fontsize=18, bbox_to_anchor=[0.5, 0.04])
+    num_cols = int(len(labels) / 2) if len(labels) > 7 else int(len(labels)/2)
+    fig.legend(handles, labels, loc="lower center", ncol=num_cols, fontsize=16, bbox_to_anchor=[0.5, 0.04])
 
     # Move the subplots up
-    plt.subplots_adjust(top=.95, bottom=.14)
+    plt.subplots_adjust(top=.95, bottom=.12)
 
     # Put x-axis label at the bottom
     fig.text(0.5, 0.02, "Number of samples given", ha="center", va="center", fontsize=28)
@@ -152,7 +152,7 @@ def plot_categorical_graph(num_examples, stats_dict, dst, amine=None, amine_inde
     plt.close()
 
 
-def plot_all_lines(stats_dict, dst, show=False):
+def plot_all_lines(stats_dict, dst, style_combinations, show=False):
     """Plot metrics graphs for all models under all categories in comparison
 
     The graph will have 4 subplots, which are for: accuracy, precision, recall, and bcr, from left to right,
@@ -164,6 +164,8 @@ def plot_all_lines(stats_dict, dst, show=False):
                                 and their corresponding list of values for each model as dictionary values.
         dst:                A string representing the relative path that the graph will be saved to.
                                 Graph name and format should be included.
+        style_combinations: A dictionary with each model as key and another dictionary as value, which has
+                                color/linestyle as key and the corresponding color/marker/linestyle as value.
         show:               A boolean representing whether we want to show the graph or not. Default to False to
                                 seamlessly run the whole model.
     """
@@ -191,41 +193,6 @@ def plot_all_lines(stats_dict, dst, show=False):
 
     # Exact all models available for plotting
     models = list(stats_dict.keys())
-
-    # Have a list of colors and line-styles/markers for different models and categories
-    # I wish there's a better way to do this but it's matplotlib
-    list_of_colors = ['violet', 'orangered', 'darkorange', 'seagreen', 'dodgerblue', 'darkviolet', 'teal']
-    list_of_linestyles = ['dotted', 'solid', '-.', 'o', '*']
-
-    # Set same color for models and line-style for categories
-    style_combinations = defaultdict(dict)
-    for model in models:
-        style_combinations[model] = defaultdict(dict)
-        if 'KNN' in model:
-            style_combinations[model]['color'] = list_of_colors[0]
-        if 'SVM' in model:
-            style_combinations[model]['color'] = list_of_colors[1]
-        if 'Random' in model:
-            style_combinations[model]['color'] = list_of_colors[2]
-        if 'Logistic' in model:
-            style_combinations[model]['color'] = list_of_colors[3]
-        if 'Decision' in model:
-            style_combinations[model]['color'] = list_of_colors[4]
-        if 'MAML' in model:
-            style_combinations[model]['color'] = list_of_colors[5]
-        if 'PLATIPUS' in model:
-            style_combinations[model]['color'] = list_of_colors[6]
-        # TODO: THE FOLLOWING MAY HAVE TO CHANGE ONCE MAML/PLATIPUS IS HERE
-        if 'historical_only' in model:
-            style_combinations[model]['linestyle'] = list_of_linestyles[0]
-        if 'historical_amine' in model:
-            style_combinations[model]['linestyle'] = list_of_linestyles[1]
-        if 'amine_only' in model:
-            style_combinations[model]['linestyle'] = list_of_linestyles[2]
-        if 'historical_amine_AL' in model:
-            style_combinations[model]['linestyle'] = list_of_linestyles[3]
-        if 'amine_only_AL' in model:
-            style_combinations[model]['linestyle'] = list_of_linestyles[4]
 
     # Plot each model's metrics
     for model in models:
@@ -264,11 +231,11 @@ def plot_all_lines(stats_dict, dst, show=False):
 
     # Display legends for all subplots
     handles, labels = acc.get_legend_handles_labels()
-    num_cols = int(len(labels) / 4) if len(labels) > 7 else len(labels)
+    num_cols = int(len(labels) / 5) if len(labels) > 7 else int(len(labels)/2)
     fig.legend(handles, labels, loc="lower center", ncol=num_cols, fontsize='x-large', bbox_to_anchor=[0.5, 0.03])
 
     # Move the subplots up
-    plt.subplots_adjust(top=.95, bottom=.14)
+    plt.subplots_adjust(top=.95, bottom=.18)
 
     # Put x-axis label at the bottom
     fig.text(0.5, 0.02, "Number of samples given", ha="center", va="center", fontsize=20)
@@ -291,31 +258,46 @@ def plot_all_lines(stats_dict, dst, show=False):
     plt.close()
 
 
-def plot_bcr_vs_success_rate(model, models_dict, cv_stats,dst, names, success_volume, success_percentage,show=False):
-    # wanted_bcrs=np.squeeze(wanted_bcrs)
-    # success_volume= np.squeeze(success_volume)
-    # success_percentage = np.squeeze(success_percentage)
-    # print(wanted_bcrs)
-    # print(success_percentage)
-    plt.figure(figsize=(24, 12))
-    vol = plt.subplot(121)
+def plot_bcr_vs_success_rate(models, cv_stats, dst, names, success_volume, success_percentage, category=None, style_combinations = None, show=False):
+    """TODO: DOCUMENTATION"""
+    fig = plt.figure(figsize=(24, 12))
+    vol = plt.subplot(1, 2, 1)
+    per = plt.subplot(1, 2, 2)
 
-    vol.set_title('Success volume vs BCR for {}'.format(model), fontsize=20)
+    vol.set_title('BCR VS. Success Volume', fontsize=20)
+    per.set_title('BCR VS. Success percentage', fontsize=20)
+
     vol.set_xlabel("Success volume", fontsize=20)
     vol.set_ylabel("BCR", fontsize=20)
-    for cat in models_dict[model]:
-        wanted_bcrs = find_bcr(cat, cv_stats, names)
-        vol.scatter(success_volume, wanted_bcrs, label=cat)
 
-    per = plt.subplot(122)
-    per.set_title('Success percentage vs BCR for {}'.format(model), fontsize=20)
     per.set_xlabel("Success percentage", fontsize=20)
     per.set_ylabel("BCR", fontsize=20)
-    for cat in models_dict[model]:
-        wanted_bcrs = find_bcr(cat, cv_stats, names)
-        per.scatter(success_percentage, wanted_bcrs, label=cat)
 
-    plt.subplots_adjust(wspace=0.2)
+    for model in models:
+        if category:
+            wanted_bcrs = find_bcr(model, cv_stats, names)
+            vol.scatter(success_volume, wanted_bcrs, s=200, label=model, alpha=.6)
+            per.scatter(success_percentage, wanted_bcrs, s=200, label=model, alpha=.6)
+        else:
+            color = style_combinations[model]['color']
+            marker = style_combinations[model]['marker']
+            wanted_bcrs = find_bcr(model, cv_stats, names)
+            vol.scatter(success_volume, wanted_bcrs, s=200, label=model, alpha=.6, color=color, marker=marker)
+            per.scatter(success_percentage, wanted_bcrs, s=200, label=model, alpha=.6, color=color, marker=marker)
+
+    # Mark the 0.5 bcr line
+    vol.axhline(y=.5, linewidth=2, color='tab:red')
+    per.axhline(y=.5, linewidth=2, color='tab:red')
+
+    # Increase the font size of the x/y labels
+    vol.tick_params(axis='both', labelsize=20)
+    per.tick_params(axis='both', labelsize=20)
+
+    plt.subplots_adjust(top=.95, bottom=.25, wspace=0.2)
+
+    handles, labels = vol.get_legend_handles_labels()
+    num_cols = int(len(labels) / 5) if len(labels) > 10 else int(len(labels)/2)
+    fig.legend(handles, labels, loc="lower center", ncol=num_cols, fontsize='x-large')
 
     graph_dst = Path(dst)
 
@@ -330,7 +312,56 @@ def plot_bcr_vs_success_rate(model, models_dict, cv_stats,dst, names, success_vo
 
     if show:
         plt.show()
+
     plt.close()
+
+
+def generate_style_combos(models):
+    """TODO: DOCUMENTATION"""
+    # Have a list of colors and line-styles/markers for different models and categories
+    # I wish there's a better way to do this but it's matplotlib
+    list_of_colors = ['violet', 'orangered', 'darkorange', 'seagreen', 'dodgerblue', 'darkviolet', 'teal', 'violet']
+    list_of_linestyles = ['dotted', 'solid', '-.', 'o', '*']
+    list_of_markers = ['d', 'p', '^', 'o', '*']
+
+    # Set same color for models and line-style for categories
+    style_combinations = defaultdict(dict)
+    for model in models:
+        style_combinations[model] = defaultdict(dict)
+        if 'KNN' in model:
+            style_combinations[model]['color'] = list_of_colors[0]
+        if 'SVM' in model:
+            style_combinations[model]['color'] = list_of_colors[1]
+        if 'Random' in model:
+            style_combinations[model]['color'] = list_of_colors[2]
+        if 'Logistic' in model:
+            style_combinations[model]['color'] = list_of_colors[3]
+        if 'Decision' in model:
+            style_combinations[model]['color'] = list_of_colors[4]
+        if 'Gradient' in model:
+            style_combinations[model]['color'] = list_of_colors[5]
+        if 'MAML' in model:
+            style_combinations[model]['color'] = list_of_colors[6]
+        if 'PLATIPUS' in model:
+            style_combinations[model]['color'] = list_of_colors[7]
+        # TODO: THE FOLLOWING MAY HAVE TO CHANGE ONCE MAML/PLATIPUS IS HERE
+        if 'historical_only' in model:
+            style_combinations[model]['linestyle'] = list_of_linestyles[0]
+            style_combinations[model]['marker'] = list_of_markers[0]
+        if 'historical_amine' in model:
+            style_combinations[model]['linestyle'] = list_of_linestyles[1]
+            style_combinations[model]['marker'] = list_of_markers[1]
+        if 'amine_only' in model:
+            style_combinations[model]['linestyle'] = list_of_linestyles[2]
+            style_combinations[model]['marker'] = list_of_markers[2]
+        if 'historical_amine_AL' in model:
+            style_combinations[model]['linestyle'] = list_of_linestyles[3]
+            style_combinations[model]['marker'] = list_of_markers[3]
+        if 'amine_only_AL' in model:
+            style_combinations[model]['linestyle'] = list_of_linestyles[4]
+            style_combinations[model]['marker'] = list_of_markers[4]
+
+    return style_combinations
 
 
 def plot_all_graphs(cv_stats):
@@ -344,29 +375,6 @@ def plot_all_graphs(cv_stats):
     models_to_plot = list(cv_stats.keys())
     amines = cv_stats[models_to_plot[0]]['amine']
 
-    non_meta_models = ['KNN', 'SVM', 'Random_Forest', 'Linear_Regression', 'Decision_Tree','Gradient_Boosting']
-    # a dictionary with keys with names of the non meta models and the list of categories that needed to be plotted as index
-    models_dict = {}
-    model_cats = list(cv_stats.keys())
-    for model in non_meta_models:
-        models_dict[model] = [cat for cat in model_cats if model in cat]
-
-    graph_folder = './results/success_rate'
-    if not os.path.exists(graph_folder):
-        os.makedirs(graph_folder)
-        print(f'No folder for graphs of success rate vs bcr not found')
-        print('Make folder to store results at')
-    else:
-        print('Found existing folder. Graphs will be stored at')
-    print(graph_folder)
-
-    # print(cats)
-    names, success_volume, success_percentage = find_success_rate()
-    # print(names)
-    for models in list(models_dict.keys()):
-        graph_dst = '{0:s}/bcr_against_{1:s}.png'.format(graph_folder, models)
-        plot_bcr_vs_success_rate(models, models_dict, cv_stats, graph_dst, names, success_volume, success_percentage)
-
     # Parse the models into 3 main categories
     cat_3 = [model for model in models_to_plot if 'historical_only' in model]
     cat_4 = [model for model in models_to_plot if 'amine' in model and not ('AL' in model)]
@@ -378,36 +386,60 @@ def plot_all_graphs(cv_stats):
         'category_5': cat_5,
     }
 
+    # TODO: COMMENT
+    avg_stats = find_avg_metrics(cv_stats)
+    rand_model = list(avg_stats.keys())[0]
+    num_examples = len(avg_stats[rand_model]['accuracies'])
+
+    # Find the success rate of each amine, both volume wise and percentage wise
+    names, success_volume, success_percentage = find_success_rate()
+
+    # Find (and create) folder for bcr vs. success rate plots
+    bcr_graph_folder = './results/success_rate'
+    if not os.path.exists(bcr_graph_folder):
+        os.makedirs(bcr_graph_folder)
+        print(f'No folder for graphs of success rate vs bcr not found')
+        print('Make folder to store results at')
+    else:
+        print('Found existing folder. Graphs will be stored at')
+    print(bcr_graph_folder)
+
+    # Plot graphs by category
     for cat in all_cats:
         # Identify category specific folder
-        graph_folder = './results/{}'.format(cat)
+        avg_graph_folder = './results/{}'.format(cat)
 
         # Check (and create) designated folder
-        if not os.path.exists(graph_folder):
-            os.makedirs(graph_folder)
+        if not os.path.exists(avg_graph_folder):
+            os.makedirs(avg_graph_folder)
             # TODO: Change to logging info
             print(f'No folder for graphs of {cat} models found')
             print('Make folder to store results at')
         else:
             # TODO: Change to logging info
             print('Found existing folder. Graphs will be stored at')
-        print(graph_folder)
+        print(avg_graph_folder)
 
         # Load all models to plot under the category
         models = all_cats[cat]
 
         # Plotting individual graphs for each task-specific model
         for i, amine in enumerate(amines):
-            graph_dst = '{0:s}/cv_metrics_{1:s}.png'.format(graph_folder, amine)
+            graph_dst = '{0:s}/cv_metrics_{1:s}.png'.format(avg_graph_folder, amine)
             plot_categorical_graph(96, cv_stats, graph_dst, amine=amine, amine_index=i, models=models)
 
-        # Plotting avg graphs for all models
-        avg_stats = find_avg_metrics(cv_stats)
-        rand_model = list(avg_stats.keys())[0]
-        num_examples = len(avg_stats[rand_model]['accuracies'])
-        graph_dst = '{0:s}/average_metrics_{1:s}.png'.format(graph_folder, cat)
-        plot_categorical_graph(num_examples, avg_stats, graph_dst, models=models)
+        # Plotting avg graphs for all models in one category
+        avg_graph_dst = '{0:s}/average_metrics_{1:s}.png'.format(avg_graph_folder, cat)
+        plot_categorical_graph(num_examples, avg_stats, avg_graph_dst, models=models)
 
-    # Plot the metrics of all models onto one graph
+        bcr_graph_dst = '{0:s}/bcr_against_success_{1:s}.png'.format(bcr_graph_folder, cat)
+        plot_bcr_vs_success_rate(models, cv_stats, bcr_graph_dst, names, success_volume, success_percentage, category=cat)
+
+    # Plot graphs for all models
+    style_combinations = generate_style_combos(models_to_plot)
+
+    bcr_graph_dst = '{0:s}/bcr_against_all.png'.format(bcr_graph_folder)
+    plot_bcr_vs_success_rate(models_to_plot, cv_stats, bcr_graph_dst, names, success_volume, success_percentage, style_combinations=style_combinations)
+
     avg_stats = find_avg_metrics(cv_stats)
-    plot_all_lines(avg_stats, './results/all_models.png')
+    plot_all_lines(avg_stats, './results/avg_metrics_all_models.png', style_combinations)
