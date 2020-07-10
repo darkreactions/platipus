@@ -9,7 +9,7 @@ common_params = {
     'test_data': True,  # TODO: redundant with full_dataset?
     'meta': False,
     'full_dataset': True,
-    'fine_tuning': False,
+    'fine_tuning': True,
     'with_historical_data': True,   # Train models with historical data of other amines
     'with_k': False,     # Train the model with k additional amine-specific experiments
     'train_size': 10,   # k after pretrain
@@ -20,14 +20,60 @@ common_params = {
     'save_model': False
 }
 
+knn_configs = {
+    'category_3': {
+        'n_neighbors': 3,
+        'leaf_size': 30,
+        'p': 1
+    },
+    'category_4_i': {
+        'n_neighbors': 1,
+        'leaf_size': 1,
+        'p': 1
+    },
+    'category_4_ii': {
+        'n_neighbors': 3,
+        'leaf_size': 30,
+        'p': 1
+    },
+    'category_5_i': {
+        'n_neighbors': 3,
+        'leaf_size': 30,
+        'p': 1
+    },
+    'category_5_ii': {
+        'n_neighbors': 3,
+        'leaf_size': 30,
+        'p': 1
+    },
+}
+
 knn_params = {
     'neighbors': 2,
-    'config': None,
+    'configs': knn_configs,
     'model_name': 'KNN'
 }
 
+svm_configs = {
+    'category_3': {
+
+    },
+    'category_4_i': {
+
+    },
+    'category_4_ii': {
+
+    },
+    'category_5_i': {
+
+    },
+    'category_5_ii': {
+
+    },
+}
+
 svm_params = {
-    'config': None,
+    'configs': svm_configs,
     'model_name': 'SVM'
 }
 
@@ -41,8 +87,26 @@ logisticregression_params = {
     'model_name': 'Logistic_Regression'
 }
 
+dt_configs = {
+    'category_3': {
+
+    },
+    'category_4_i': {
+
+    },
+    'category_4_ii': {
+
+    },
+    'category_5_i': {
+
+    },
+    'category_5_ii': {
+
+    },
+}
+
 decisiontree_params = {
-    'config': None,
+    'configs': dt_configs,
     'model_name': 'Decision_Tree'
 }
 
