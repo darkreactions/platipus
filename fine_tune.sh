@@ -2,7 +2,7 @@
 # Run this to train/test full model
 # All print statements are stored in the designated folder
 
-log_folder="./fine_tuning_logs_$(date +%Y%m%d_%H%M%S)"
+log_folder="./fine_tuning_logs"
 
 mkdir $log_folder
 
