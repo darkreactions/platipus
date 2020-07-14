@@ -18,6 +18,7 @@
 # Launch MPI code... 
 
 #mpirun python3 run_mpi.py         # Use ibrun instead of mpirun or mpiexec
-ibrun --multi-prog
+module load python3
+ibrun -n 4 python3 -m hpc_scripts.run_mpi
 
 

@@ -1,4 +1,5 @@
-#from mpi4py import MPI
+
+from mpi4py import MPI
 from hpc_scripts.hpc_params import common_params, meta_params, meta_train, meta_test
 from pathlib import Path
 
