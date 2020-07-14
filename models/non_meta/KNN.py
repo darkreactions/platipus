@@ -9,18 +9,18 @@ python KNN.py --datasource=drp_chem --train_size=20 --cross_validate --pretrain 
 """
 
 import argparse
-import itertools
 import os
 import pickle
 from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
-from sklearn.metrics import confusion_matrix, roc_auc_score
+from sklearn.metrics import confusion_matrix
 from sklearn.neighbors import KNeighborsClassifier
 
 from modAL.models import ActiveLearner
 
+from utils.utils import grid_search
 from utils.dataset import process_dataset
 
 
@@ -51,11 +51,7 @@ class ActiveKNN:
 
         # Load customized model or use the default fine-tuned setting
         if config:
-            self.model = KNeighborsClassifier(
-                n_neighbors=config['n_neighbors'],
-                leaf_size=config['leaf_size'],
-                p=config['p']
-            )
+            self.model = KNeighborsClassifier(**config)
             self.n_neighbors = config['n_neighbors']
         else:
             self.model = KNeighborsClassifier(n_neighbors=3, p=1)
@@ -89,12 +85,12 @@ class ActiveKNN:
             print(f'The testing data has dimension of {self.x_v.shape}.')
             print(f'The testing labels has dimension of {self.y_v.shape}.')
 
-    def train(self):
+    def train(self, warning=True):
         """Train the KNN model by setting up the ActiveLearner."""
 
         self.learner = ActiveLearner(estimator=self.model, X_training=self.x_t, y_training=self.y_t)
         # Evaluate zero-point performance
-        self.evaluate()
+        self.evaluate(warning=warning)
 
     def active_learning(self, num_iter=None, to_params=True):
         """ The active learning loop
@@ -104,10 +100,10 @@ class ActiveKNN:
 
         Args:
             num_iter:   An integer that is the number of iterations.
-                        Default = None
-            to_params:  A boolean that decide if to store the metrics to the dictionary,
-                        detail see "store_metrics_to_params" function.
-                        Default = True
+                            Default = None
+            to_params:  A boolean that decides if to store the metrics to the dictionary,
+                            detail see "store_metrics_to_params" function.
+                            Default = True
         """
 
         num_iter = num_iter if num_iter else self.x_v.shape[0]
@@ -132,12 +128,14 @@ class ActiveKNN:
         if to_params:
             self.store_metrics_to_params()
 
-    def evaluate(self, store=True):
+    def evaluate(self, warning=True, store=True):
         """Evaluation of the model
 
         Args:
-            store:  A boolean that decides if to store the metrics of the performance of the model.
-                    Default = True
+            warning:    A boolean that decides if to warn about the zero division issue or not.
+                            Default = True
+            store:      A boolean that decides if to store the metrics of the performance of the model.
+                            Default = True
         """
 
         # Calculate and report our model's accuracy.
@@ -145,7 +143,6 @@ class ActiveKNN:
 
         self.y_preds = self.learner.predict(self.all_data)
 
-        # TODO: move the following parts into utils maybe?
         cm = confusion_matrix(self.all_labels, self.y_preds)
 
         # To prevent nan value for precision, we set it to 1 and send out a warning message
@@ -153,7 +150,8 @@ class ActiveKNN:
             precision = cm[1][1] / (cm[1][1] + cm[0][1])
         else:
             precision = 1.0  # TODO: I still think 0.0 is better
-            print('WARNING: zero division during precision calculation')
+            if warning:
+                print('WARNING: zero division during precision calculation')
 
         recall = cm[1][1] / (cm[1][1] + cm[1][0])
         true_negative = cm[0][0] / (cm[0][0] + cm[0][1])
@@ -304,161 +302,6 @@ def parse_args():
     return args
 
 
-def fine_tune(train_size, active_learning_iter, active_learning=True, w_hx=True, w_k=True, info=False):
-    """Fine tune the model based on average bcr performance to find the best model hyper-parameters.
-    Args:
-        train_size:                 An integer representing the number of amine-specific experiments used for training.
-                                        Corresponds to the k in the category description.
-        active_learning_iter:       An integer representing the number of iterations in an active learning loop.
-                                        Corresponds to the x in the category description.
-        active_learning:            A boolean representing if active learning will be involved in testing or not.
-        w_hx:                       A boolean representing if the models are trained with historical data or not.
-        w_k:                        A boolean representing if the modes are trained with amine-specific experiments.
-        info:                       A boolean. Setting it to True will make the function print out additional
-                                        information during the fine-tuning stage.
-                                        Default to False.
-    Returns:
-        best_option:            A dictionary representing the hyper-parameters that yields the best performance on
-                                    average. For KNN, the current keys are: n_neighbors', 'leaf_size', 'p'.
-    """
-
-    # Set all possible combinations
-    params = {
-        'n_neighbors': [i for i in range(1, 31)],
-        'leaf_size': [i for i in range(1, 51)],
-        'p': [i for i in range(1, 4)]
-    }
-
-    combinations = []
-
-    keys, values = zip(*params.items())
-    for bundle in itertools.product(*values):
-        combinations.append(dict(zip(keys, bundle)))
-
-    if info:
-        print(f'There are {len(combinations)} many combinations to try.')
-
-    # Load the full dataset under specific categorical option
-    amine_list, train_data, train_labels, val_data, val_labels, all_data, all_labels = process_dataset(
-        train_size=train_size,
-        active_learning_iter=active_learning_iter,
-        verbose=False,
-        cross_validation=True,
-        full=True,
-        active_learning=active_learning,
-        w_hx=w_hx,
-        w_k=w_k
-    )
-
-    # Set baseline performance
-    base_accuracies = []
-    base_precisions = []
-    base_recalls = []
-    base_bcrs = []
-    base_aucs = []
-
-    for amine in amine_list:
-        # Create model for a specific amine
-        KNN = ActiveKNN(amine=amine, verbose=False)
-
-        # Exact and load the training and validation set into the model
-        x_t, y_t = train_data[amine], train_labels[amine]
-        x_v, y_v = val_data[amine], val_labels[amine]
-        all_task_data, all_task_labels = all_data[amine], all_labels[amine]
-        KNN.load_dataset(x_t, y_t, x_v, y_v, all_task_data, all_task_labels)
-
-        KNN.train()
-
-        # Calculate AUC
-        auc = roc_auc_score(all_task_labels, KNN.y_preds)
-
-        base_accuracies.append(KNN.metrics['accuracies'][-1])
-        base_precisions.append(KNN.metrics['precisions'][-1])
-        base_recalls.append(KNN.metrics['recalls'][-1])
-        base_bcrs.append(KNN.metrics['bcrs'][-1])
-        base_aucs.append(auc)
-
-    # Calculated the average baseline performances
-    base_avg_accuracy = sum(base_accuracies) / len(base_accuracies)
-    base_avg_precision = sum(base_precisions) / len(base_precisions)
-    base_avg_recall = sum(base_recalls) / len(base_recalls)
-    base_avg_bcr = sum(base_bcrs) / len(base_bcrs)
-    base_avg_auc = sum(base_aucs) / len(base_aucs)
-
-    best_metric = base_avg_auc
-
-    if info:
-        print(f'Baseline average accuracy is {base_avg_accuracy}')
-        print(f'Baseline average precision is {base_avg_precision}')
-        print(f'Baseline average recall is {base_avg_recall}')
-        print(f'Baseline average bcr is {base_avg_bcr}')
-        print(f'Baseline average auc is {base_avg_auc}')
-
-    best_option = {}
-
-    option_no = 1  # Debug
-
-    # Try out each possible combinations of hyper-parameters
-    for option in combinations:
-        accuracies = []
-        precisions = []
-        recalls = []
-        bcrs = []
-        aucs = []
-
-        if info:
-            print(f'Trying config {option_no}')
-
-        for amine in amine_list:
-            # Create model for a specific amine
-            KNN = ActiveKNN(amine=amine, config=option, verbose=False)
-
-            # Exact and load the training and validation set into the model
-            x_t, y_t = train_data[amine], train_labels[amine]
-            x_v, y_v = val_data[amine], val_labels[amine]
-            all_task_data, all_task_labels = all_data[amine], all_labels[amine]
-            KNN.load_dataset(x_t, y_t, x_v, y_v, all_task_data, all_task_labels)
-
-            KNN.train()
-
-            # Calculate AUC
-            auc = roc_auc_score(all_task_labels, KNN.y_preds)
-
-            accuracies.append(KNN.metrics['accuracies'][-1])
-            precisions.append(KNN.metrics['precisions'][-1])
-            recalls.append(KNN.metrics['recalls'][-1])
-            bcrs.append(KNN.metrics['bcrs'][-1])
-            aucs.append(auc)
-
-        avg_accuracy = sum(accuracies) / len(accuracies)
-        avg_precision = sum(precisions) / len(precisions)
-        avg_recall = sum(recalls) / len(recalls)
-        avg_bcr = sum(bcrs) / len(bcrs)
-        avg_auc = sum(aucs) / len(aucs)
-
-        if avg_auc > best_metric:
-            best_metric = avg_auc
-            best_option = option
-            if info:
-                print(f'The fine-tuned average accuracy is {avg_accuracy} vs. the base accuracy {base_avg_accuracy}')
-                print(
-                    f'The fine-tuned average precision is {avg_precision} vs. the base precision {base_avg_precision}')
-                print(f'The fine-tuned average recall rate is {avg_recall} vs. the base recall rate {base_avg_recall}')
-                print(f'The fine-tuned average bcr is {avg_bcr} vs. the base bcr {base_avg_bcr}')
-                print(f'The fine-tuned average auc is {avg_auc} vs. the base auc {base_avg_auc}')
-                print(f'The current best setting is {best_option}')
-                print()
-
-        option_no += 1
-
-    if info:
-        print()
-        print(f'The best setting for all amines is {best_option}')
-        print(f'With an average auc of {best_metric}')
-
-    return best_option
-
-
 def run_model(KNN_params, category):
     """Full-scale training, validation and testing using all amines.
 
@@ -491,7 +334,16 @@ def run_model(KNN_params, category):
     to_params = True
 
     if fine_tuning:
-        _ = fine_tune(
+        # Set all possible combinations
+        ft_params = {
+            'n_neighbors': [i for i in range(1, 10)],
+            'leaf_size': [i for i in range(1, 51)],
+            'p': [i for i in range(1, 4)]
+        }
+
+        _ = grid_search(
+            ActiveKNN,
+            ft_params,
             train_size,
             active_learning_iter,
             active_learning=active_learning,
