@@ -13,22 +13,6 @@ import sys
 
 nn_configs = [(200, 100, 100), (400, 300, 200), (200, 100), (400, 300)]
 
-if __name__ == "__main__":
-    comm = MPI.COMM_WORLD
-    rank = comm.Get_rank()
-    #rank = sys.argv[1]
-    print(f'My rank is: {rank}')
-    #print(f'My rank is : {rank}', file=sys.stderr)
-    #rank = 0
-
-    params = {**common_params, **meta_params}
-    params['gpu_id'] = rank
-    new_platipus(params)
-
-    params = {**common_params, **meta_params}
-    params['gpu_id'] = rank
-    old_platipus(params)
-
 
 def new_platipus(params):
     params['stats_path'] = Path(f'./results/platipus_new_{rank}.pkl')
@@ -60,3 +44,20 @@ def old_platipus(params):
     test_params = {**params, **meta_test}
     test_params = platipus.initialize([test_params['model_name']], test_params)
     platipus.main(test_params)
+
+
+if __name__ == "__main__":
+    comm = MPI.COMM_WORLD
+    rank = comm.Get_rank()
+    #rank = sys.argv[1]
+    print(f'My rank is: {rank}')
+    #print(f'My rank is : {rank}', file=sys.stderr)
+    #rank = 0
+
+    params = {**common_params, **meta_params}
+    params['gpu_id'] = rank
+    new_platipus(params)
+
+    params = {**common_params, **meta_params}
+    params['gpu_id'] = rank
+    old_platipus(params)
