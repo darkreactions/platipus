@@ -34,6 +34,7 @@ if __name__ == '__main__':
 
     # Listing the categories of experiments we are running
     categories = ['category_3', 'category_4_i', 'category_4_ii', 'category_5_i', 'category_5_ii']
+    # categories = ['category_4_i', 'category_5_i']
 
     # Meta-models
     # PLATIPUS
@@ -47,7 +48,6 @@ if __name__ == '__main__':
 
     # TODO: MAML
 
-    """
     # Non-meta models
     # KNN
     base_model = KNN
@@ -59,9 +59,7 @@ if __name__ == '__main__':
             model_params,
             category
         )
-    """
 
-    '''
     # SVM
     base_model = SVM
     model_params = svm_params
@@ -75,7 +73,6 @@ if __name__ == '__main__':
                 model_params,
                 category
             )
-    '''
 
     # DecisionTree
     base_model = DecisionTree
@@ -88,8 +85,6 @@ if __name__ == '__main__':
             category
         )
 
-
-    """
     # Random Forest
     base_model = RandomForest
     model_params = randomforest_params
@@ -132,4 +127,3 @@ if __name__ == '__main__':
     # Use cv_stats.pkl to plot all graphs
     cv_stats = read_pickle(common_params['stats_path'])
     plot_all_graphs(cv_stats)
-    """
