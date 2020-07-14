@@ -11,17 +11,17 @@ python RandomForest.py --datasource=drp_chem --train_size=20 --cross_validate --
 import os
 import pickle
 import argparse
-import itertools
 
 import numpy as np
 from pathlib import Path
 from collections import defaultdict
-from sklearn.metrics import confusion_matrix, roc_auc_score
+from sklearn.metrics import confusion_matrix
 from sklearn.ensemble import RandomForestClassifier
 
 from modAL.models import ActiveLearner
 
-from utils.dataset import  process_dataset
+from utils.utils import grid_search
+from utils.dataset import process_dataset
 
 
 class ActiveRandomForest:
@@ -51,14 +51,7 @@ class ActiveRandomForest:
 
         self.amine = amine
         if config:
-            self.model = RandomForestClassifier(n_estimators=config['n_estimators'],
-                                                criterion=config['criterion'],
-                                                max_depth=config['max_depth'],
-                                                min_samples_split=config['min_samples_split'],
-                                                min_samples_leaf=config['min_samples_leaf'],
-                                                max_features=config['max_features'],
-                                                bootstrap=config['bootstrap'],
-                                                ccp_alpha=config['ccp_alpha'])
+            self.model = RandomForestClassifier(**config)
         else:
             self.model = RandomForestClassifier(n_estimators=100, criterion='gini', max_depth=8, min_samples_split=2,
                                                 min_samples_leaf=1, max_features=None, bootstrap=True, ccp_alpha=0.0)
@@ -94,12 +87,12 @@ class ActiveRandomForest:
             print(f'The testing data has dimension of {self.x_v.shape}.')
             print(f'The testing labels has dimension of {self.y_v.shape}.')
 
-    def train(self):
-        """Train the Random Forest model by setting up the ActiveLearner."""
+    def train(self, warning=True):
+        """ Train the random forest model by setting up the ActiveLearner."""
 
         self.learner = ActiveLearner(estimator=self.model, X_training=self.x_t, y_training=self.y_t)
         # Evaluate zero-point performance
-        self.evaluate()
+        self.evaluate(warning=warning)
 
     def active_learning(self, num_iter=None, to_params=True):
         """ The active learning loop
@@ -136,20 +129,21 @@ class ActiveRandomForest:
         if to_params:
             self.store_metrics_to_params()
 
-    def evaluate(self, store=True):
+    def evaluate(self, warning=True, store=True):
         """ Evaluation of the model
 
         Args:
-            store:  A boolean that decides if to store the metrics of the performance of the model.
-                    Default = True
+            warning:    A boolean that decides if to warn about the zero division issue or not.
+                            Default = True
+            store:      A boolean that decides if to store the metrics of the performance of the model.
+                            Default = True
         """
-
         # Calculate and report our model's accuracy.
         accuracy = self.learner.score(self.all_data, self.all_labels)
 
+        # Find model predictions
         self.y_preds = self.learner.predict(self.all_data)
 
-        # TODO: move the following parts into utils maybe?
         # Calculated confusion matrix
         cm = confusion_matrix(self.all_labels, self.y_preds)
 
@@ -158,8 +152,9 @@ class ActiveRandomForest:
             precision = cm[1][1] / (cm[1][1] + cm[0][1])
         else:
             precision = 1.0
-            if self.verbose:
+            if warning:
                 print('WARNING: zero division during precision calculation')
+
         recall = cm[1][1] / (cm[1][1] + cm[1][0])
         true_negative = cm[0][0] / (cm[0][0] + cm[0][1])
         bcr = 0.5 * (recall + true_negative)
@@ -247,160 +242,6 @@ class ActiveRandomForest:
             pickle.dump(self, f)
 
 
-def fine_tune(info=False):
-    """Fine tune the model based on average bcr performance to find the best model hyper-parameters.
-    Args:
-        info:                   A boolean. Setting it to True will make the function print out additional information
-                                    during the fine-tuning stage.
-                                    Default to False.
-    Returns:
-        best_option:            A dictionary representing the hyper-parameters that yields the best performance on
-                                    average. For RandomForest, the current keys are: 'n_estimators', 'criterion',
-                                    'max_depth', 'max_features', 'bootstrap', 'min_samples_leaf', 'min_samples_split',
-                                    'ccp_alpha'.
-    """
-
-    # Set all possible combinations
-
-    params = {
-        'n_estimators': [100, 200, 500, 1000],
-        'criterion': ['gini'],
-        'max_depth': [i for i in range(1, 9)],
-        'max_features': ['auto', 'sqrt', 'log2', None],
-        'bootstrap': [True],
-        'min_samples_leaf': [1, 2, 3],
-        'min_samples_split': [2, 5, 10],
-        'ccp_alpha': [.1 * i for i in range(1)]
-    }
-
-    combinations = []
-
-    keys, values = zip(*params.items())
-    for bundle in itertools.product(*values):
-        combinations.append(dict(zip(keys, bundle)))
-
-    if info:
-        print(f'There are {len(combinations)} many combinations to try.')
-
-    amine_list, train_data, train_labels, val_data, val_labels, all_data, all_labels = process_dataset(
-        train_size=10,
-        active_learning_iter=10,
-        verbose=False,
-        cross_validation=True,
-        full=True,
-        active_learning=False,
-        w_hx=True,
-        w_k=False
-    )
-
-    # Set baseline performance
-    base_accuracies = []
-    base_precisions = []
-    base_recalls = []
-    base_bcrs = []
-    base_aucs = []
-
-    for amine in amine_list:
-        ARF = ActiveRandomForest(amine=amine, verbose=False)
-
-        x_t, y_t = train_data[amine], train_labels[amine]
-        x_v, y_v = val_data[amine], val_labels[amine]
-        all_data, all_labels = all_data[amine], all_labels[amine]
-
-        # Load the training and validation set into the model
-        ARF.load_dataset(x_t, y_t, x_v, y_v, all_data, all_labels)
-
-        ARF.train()
-
-        # Calculate AUC
-        auc = roc_auc_score(all_labels, ARF.y_preds)
-
-        base_accuracies.append(ARF.metrics['accuracies'][-1])
-        base_precisions.append(ARF.metrics['precisions'][-1])
-        base_recalls.append(ARF.metrics['recalls'][-1])
-        base_bcrs.append(ARF.metrics['bcrs'][-1])
-        base_aucs.append(auc)
-
-    # Calculated the average baseline performances
-    base_avg_accuracy = sum(base_accuracies) / len(base_accuracies)
-    base_avg_precision = sum(base_precisions) / len(base_precisions)
-    base_avg_recall = sum(base_recalls) / len(base_recalls)
-    base_avg_bcr = sum(base_bcrs) / len(base_bcrs)
-    base_avg_auc = sum(base_aucs) / len(base_aucs)
-
-    best_metric = base_avg_auc
-
-    if info:
-        print(f'Baseline average accuracy is {base_avg_accuracy}')
-        print(f'Baseline average precision is {base_avg_precision}')
-        print(f'Baseline average recall is {base_avg_recall}')
-        print(f'Baseline average bcr is {base_avg_bcr}')
-        print(f'Baseline average auc is {base_avg_auc}')
-
-    best_option = {}
-
-    option_no = 1  # Debug
-
-    # Try out each possible combinations of hyper-parameters
-    for option in combinations:
-        accuracies = []
-        precisions = []
-        recalls = []
-        bcrs = []
-        aucs = []
-
-        if info:
-            print(f'Trying option {option_no}')
-
-        for amine in amine_list:
-            # print("Training and cross validation on {} amine.".format(amine))
-            ARF = ActiveRandomForest(amine=amine, config=option, verbose=False)
-            x_t, y_t = train_data[amine], train_labels[amine]
-            x_v, y_v = val_data[amine], val_labels[amine]
-            all_data, all_labels = all_data[amine], all_labels[amine]
-
-            # Load the training and validation set into the model
-            ARF.load_dataset(x_t, y_t, x_v, y_v, all_data, all_labels)
-            ARF.train()
-
-            # Calculate AUC
-            auc = roc_auc_score(all_labels, ARF.y_preds)
-
-            accuracies.append(ARF.metrics['accuracies'][-1])
-            precisions.append(ARF.metrics['precisions'][-1])
-            recalls.append(ARF.metrics['recalls'][-1])
-            bcrs.append(ARF.metrics['bcrs'][-1])
-            aucs.append(auc)
-
-        avg_accuracy = sum(accuracies) / len(accuracies)
-        avg_precision = sum(precisions) / len(precisions)
-        avg_recall = sum(recalls) / len(recalls)
-        avg_bcr = sum(bcrs) / len(bcrs)
-        avg_auc = sum(aucs) / len(aucs)
-
-        if avg_auc > best_metric:
-            best_metric = avg_auc
-            best_option = option
-            if info:
-                print(f'The fine-tuned average accuracy is {avg_accuracy} vs. the base accuracy {base_avg_accuracy}')
-                print(
-                    f'The fine-tuned average precision is {avg_precision} vs. the base precision {base_avg_precision}')
-                print(f'The fine-tuned average recall rate is {avg_recall} vs. the base recall rate {base_avg_recall}')
-                print(f'The fine-tuned average bcr is {avg_bcr} vs. the base bcr {base_avg_bcr}')
-                print(f'The fine-tuned average auc is {avg_auc} vs. the base auc {base_avg_auc}')
-                print(f'The current best setting is {best_option}')
-                print()
-
-        option_no += 1
-
-    if info:
-        print()
-        print(f'The best setting for all amines is {best_option}')
-        print(f'With an average auc of {best_metric}')
-
-    return best_option
-
-
 def parse_args():
     """Set up the initial variables for running SVM.
 
@@ -453,35 +294,63 @@ def parse_args():
     return args
 
 
-def run_model(RandomForest_params):
+def run_model(RandomForest_params, category):
     """Full-scale training, validation and testing using all amines.
     Args:
         RandomForest_params:         A dictionary of the parameters for the random forest model.
                                         See initialize() for more information.
+        category:                    A string representing the category the model is classified under.
     """
 
-    # Unload parameters
-    config = RandomForest_params['config']
+    # Unload common parameters
+    config = RandomForest_params['config'][category]
+    verbose = RandomForest_params['verbose']
+    stats_path = RandomForest_params['stats_path']
+
+    model_name = RandomForest_params['model_name']
+    if verbose:
+        print(model_name)
+
+    # Unload the training data specific parameters
+    train_size = RandomForest_params['train_size']
     cross_validation = RandomForest_params['cross_validate']
     active_learning = RandomForest_params['active_learning']
-    verbose = RandomForest_params['verbose']
-
     w_hx = RandomForest_params['with_historical_data']
     w_k = RandomForest_params['with_k']
     active_learning_iter = RandomForest_params['active_learning_iter']
     full = RandomForest_params['full_dataset']
-    stats_path = RandomForest_params['stats_path']
-    model_name = RandomForest_params['model_name']
-    print(model_name)
 
-    # Set up the number of samples used for training under option 2
-    train_size = RandomForest_params['train_size']
     # Specify the desired operation
     fine_tuning = RandomForest_params['fine_tuning']
     save_model = RandomForest_params['save_model']
 
     if fine_tuning:
-        best_config = fine_tune(info=True)
+        class_weights = [{0: i, 1: 1.0 - i} for i in np.linspace(.05, .95, num=50)]
+        class_weights.append('balanced')
+        class_weights.append(None)
+
+        ft_params = {
+            'n_estimators': [100, 200, 500, 1000],
+            'criterion': ['gini'],
+            'max_depth': [i for i in range(1, 9)],
+            'max_features': ['auto', 'sqrt', 'log2', None],
+            'bootstrap': [True],
+            'min_samples_leaf': [1, 2, 3],
+            'min_samples_split': [2, 5, 10],
+            'ccp_alpha': [.1 * i for i in range(1)],
+            'class_weight': class_weights
+        }
+
+        _ = grid_search(
+            ActiveRandomForest,
+            ft_params,
+            train_size,
+            active_learning_iter,
+            active_learning=active_learning,
+            w_hx=w_hx,
+            w_k=w_k,
+            info=True
+        )
     else:
         amine_list, x_t, y_t, x_v, y_v, all_data, all_labels = process_dataset(
             train_size=train_size,

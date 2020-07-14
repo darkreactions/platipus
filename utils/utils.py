@@ -1,11 +1,13 @@
-import os
-
+import itertools
 from pathlib import Path
 import pickle
 import torch
 
-from utils.dataset import (import_chemdata, cross_validation_data, hold_out_data,
-                           import_test_dataset, import_full_dataset)
+import pandas as pd
+import numpy as np
+from sklearn.metrics import roc_auc_score
+
+from utils.dataset import process_dataset, import_test_dataset, import_full_dataset
 
 
 def write_pickle(path, data):
@@ -408,7 +410,7 @@ def find_bcr(category, cv_stats, amine_names):
     for amine in amine_names:
         i = 0
         found = False
-        while i < len(cv_stats[category]['amine']) and found == False:
+        while i < len(cv_stats[category]['amine']) and not found:
             if cv_stats[category]['amine'][i] == amine:
                 wanted_index.append(i)
                 found = True
@@ -506,11 +508,157 @@ def run_non_meta_model(base_model, common_params, model_params, category):
         base_model_params['with_k'])
 
     # Run the non-meta models
-    base_model.run_model(base_model_params)
+    base_model.run_model(base_model_params, category)
+
+
+def grid_search(clf, params, train_size, active_learning_iter, active_learning=True, w_hx=True, w_k=True, info=False):
+    """Fine tune the model based on average bcr performance to find the best model hyper-parameters.
+
+    Similar to GridSearchCV in scikit-learn package, we try out all the combinations and evaluate performance
+        across all amine-specific models under different categories.
+
+    Args:
+        clf:                        A class object representing the classifier being fine tuned.
+        params:                     A dictionary representing the possible hyper-parameter values to try out.
+        train_size:                 An integer representing the number of amine-specific experiments used for training.
+                                        Corresponds to the k in the category description.
+        active_learning_iter:       An integer representing the number of iterations in an active learning loop.
+                                        Corresponds to the x in the category description.
+        active_learning:            A boolean representing if active learning will be involved in testing or not.
+        w_hx:                       A boolean representing if the models are trained with historical data or not.
+        w_k:                        A boolean representing if the modes are trained with amine-specific experiments.
+        info:                       A boolean. Setting it to True will make the function print out additional
+                                        information during the fine-tuning stage.
+                                        Default to False.
+    Returns:
+        best_option:                A dictionary representing the hyper-parameters that yields the best performance on
+                                        average. The keys may vary for models.
+    """
+
+    # Set all possible combinations
+    combinations = []
+
+    keys, values = zip(*params.items())
+    for bundle in itertools.product(*values):
+        combinations.append(dict(zip(keys, bundle)))
+
+    # Load the full dataset under specific categorical option
+    amine_list, train_data, train_labels, val_data, val_labels, all_data, all_labels = process_dataset(
+        train_size=train_size,
+        active_learning_iter=active_learning_iter,
+        verbose=False,
+        cross_validation=True,
+        full=True,
+        active_learning=active_learning,
+        w_hx=w_hx,
+        w_k=w_k
+    )
+
+    # Set baseline performance
+    base_accuracies = []
+    base_precisions = []
+    base_recalls = []
+    base_bcrs = []
+    base_aucs = []
+
+    for amine in amine_list:
+        ACLF = clf(amine=amine, verbose=False)
+
+        # Exact and load the training and validation set into the model
+        x_t, y_t = train_data[amine], train_labels[amine]
+        x_v, y_v = val_data[amine], val_labels[amine]
+        all_task_data, all_task_labels = all_data[amine], all_labels[amine]
+        ACLF.load_dataset(x_t, y_t, x_v, y_v, all_task_data, all_task_labels)
+
+        ACLF.train(warning=False)
+
+        # Calculate AUC
+        auc = roc_auc_score(ACLF.all_labels, ACLF.y_preds)
+
+        base_accuracies.append(ACLF.metrics['accuracies'][-1])
+        base_precisions.append(ACLF.metrics['precisions'][-1])
+        base_recalls.append(ACLF.metrics['recalls'][-1])
+        base_bcrs.append(ACLF.metrics['bcrs'][-1])
+        base_aucs.append(auc)
+
+    # Calculated the average baseline performances
+    base_avg_accuracy = sum(base_accuracies) / len(base_accuracies)
+    base_avg_precision = sum(base_precisions) / len(base_precisions)
+    base_avg_recall = sum(base_recalls) / len(base_recalls)
+    base_avg_bcr = sum(base_bcrs) / len(base_bcrs)
+    base_avg_auc = sum(base_aucs) / len(base_aucs)
+
+    best_metric = base_avg_auc
+
+    if info:
+        print(f'Baseline average accuracy is {base_avg_accuracy}')
+        print(f'Baseline average precision is {base_avg_precision}')
+        print(f'Baseline average recall is {base_avg_recall}')
+        print(f'Baseline average bcr is {base_avg_bcr}')
+        print(f'Baseline average auc is {base_avg_auc}')
+
+    best_option = {}
+
+    # Try out each possible combinations of hyper-parameters
+    print(f'There are {len(combinations)} many combinations to try.')
+    for option in combinations:
+        accuracies = []
+        precisions = []
+        recalls = []
+        bcrs = []
+        aucs = []
+
+        for amine in amine_list:
+            # print("Training and cross validation on {} amine.".format(amine))
+            ACLF = clf(amine=amine, config=option, verbose=False)
+
+            # Exact and load the training and validation set into the model
+            x_t, y_t = train_data[amine], train_labels[amine]
+            x_v, y_v = val_data[amine], val_labels[amine]
+            all_task_data, all_task_labels = all_data[amine], all_labels[amine]
+
+            ACLF.load_dataset(x_t, y_t, x_v, y_v, all_task_data, all_task_labels)
+            ACLF.train(warning=False)
+
+            # Calculate AUC
+            auc = roc_auc_score(ACLF.all_labels, ACLF.y_preds)
+
+            accuracies.append(ACLF.metrics['accuracies'][-1])
+            precisions.append(ACLF.metrics['precisions'][-1])
+            recalls.append(ACLF.metrics['recalls'][-1])
+            bcrs.append(ACLF.metrics['bcrs'][-1])
+            aucs.append(auc)
+
+        avg_accuracy = sum(accuracies) / len(accuracies)
+        avg_precision = sum(precisions) / len(precisions)
+        avg_recall = sum(recalls) / len(recalls)
+        avg_bcr = sum(bcrs) / len(bcrs)
+        avg_auc = sum(aucs) / len(aucs)
+
+        if avg_auc > best_metric:
+            if info:
+                print(f'The previous best option is {best_option}')
+                print(f'The current best setting is {option}')
+                print(f'The fine-tuned average accuracy is {avg_accuracy} vs. the base accuracy {base_avg_accuracy}')
+                print(
+                    f'The fine-tuned average precision is {avg_precision} vs. the base precision {base_avg_precision}')
+                print(f'The fine-tuned average recall rate is {avg_recall} vs. the base recall rate {base_avg_recall}')
+                print(f'The fine-tuned average bcr is {avg_bcr} vs. the base bcr {base_avg_bcr}')
+                print(f'The fine-tuned average auc is {avg_auc} vs. the base auc {base_avg_auc}')
+                print()
+
+            best_metric = avg_auc
+            best_option = option
+
+    if info:
+        print()
+        print(f'The best setting for all amines is {best_option}')
+        print(f'With an average auc of {best_metric}')
+
+    return best_option
 
 
 if __name__ == "__main__":
-    params = {}
-    params["cross_validate"] = True
+    params = {"cross_validate": True}
     load_chem_dataset(5, params, meta_batch_size=32,
                       num_batches=100, verbose=True)
