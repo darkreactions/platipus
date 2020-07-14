@@ -374,7 +374,7 @@ class Platipus:
         # Create the stats dictionary to store performance metrics
         cv_stats_dict = {self.model_name: defaultdict(list)}
 
-        val_batch = self.validation_batches[amine]
+        val_batch = self.validation_batches[self.amine]
 
         # Initialize the training and the active learning pool for model
         x_t, y_t, x_v, y_v = torch.from_numpy(val_batch[0]).float().to(self.device),\
