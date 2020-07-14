@@ -5,9 +5,9 @@ common_params = {
     'verbose': False,
     'train_flag': True,
     'gpu_id': 1,
-    'test_data': True,  # TODO: redundant with full_dataset?
+    'test_data': False,  # TODO: redundant with full_dataset?
     'meta': False,  # TODO: redundant with pretrain?
-    'full_dataset': False,
+    'full_dataset': True,
     'fine_tuning': False,
     'pretrain': True,
     'train_size': 10,   # k after pretrain
@@ -67,7 +67,7 @@ local_meta_params = {
 }
 
 local_meta_train = {
-    'num_epochs': 4,
+    'num_epochs': 3000,
     'resume_epoch': 0,
     'train_flag': True
 }

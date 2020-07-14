@@ -322,8 +322,8 @@ class Platipus:
         #logging.debug(f'after calling torch mean: {y_pred}')
 
         prob_pred, labels_pred = torch.max(input=y_pred, dim=1)
-        logging.debug(f'Labels predicted: {labels_pred}')
-        logging.debug(f'True labels: {y_v}')
+        #logging.debug(f'Labels predicted: {labels_pred}')
+        #logging.debug(f'True labels: {y_v}')
         logging.debug(f'probability of prediction: {prob_pred}')
         correct = (labels_pred == y_v)
         corrects.extend(correct.detach().cpu().numpy())
@@ -335,7 +335,7 @@ class Platipus:
         probability_pred.extend(prob_pred.detach().cpu().numpy())
 
         #print('accuracy for model is', accuracies)
-        logging.debug(f'Prediction prob: {probability_pred}')
+        #logging.debug(f'Prediction prob: {probability_pred}')
         #print('probabilities for predictions are', probability_pred)
         self.test_model_actively()
 
@@ -458,6 +458,7 @@ class Platipus:
                                                  precision, recall, bcr,
                                                  prob_pred=prob_pred,
                                                  verbose=self.verbose)
+        logging.info(f'BCR values: {bcr}')
         self.cv_statistics = cv_stats_dict
 
     def zero_point_prediction(self, preds, sm_loss, all_labels):
