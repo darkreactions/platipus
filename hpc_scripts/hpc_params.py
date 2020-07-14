@@ -18,13 +18,14 @@ common_params = {
 }
 
 meta_params = {
+    'num_hidden_units': (200, 100, 100),
     'k_shot': 10,
     'n_way': 2,
     'inner_lr': 1e-3,
     'meta_lr': 1e-3,
     'pred_lr': 1e-1,
     'meta_batch_size': 10,
-    'Lt': 1,
+    'Lt': 2,
     'Lv': 100,
     'num_inner_updates': 10,
     'kl_reweight': 0.0001,
@@ -48,6 +49,7 @@ meta_test = {
 
 
 local_meta_params = {
+    'num_hidden_units': (200, 100, 100),
     'k_shot': 10,
     'n_way': 2,
     'inner_lr': 1e-3,

@@ -6,6 +6,7 @@ from models.meta import main as platipus
 #import models.meta.main as platipus
 import sys
 
+nn_configs = [(200, 100, 100), (400, 300, 200), (200, 100), (400, 300)]
 
 if __name__ == "__main__":
     comm = MPI.COMM_WORLD
@@ -18,8 +19,8 @@ if __name__ == "__main__":
     params = {**common_params, **meta_params}
     params['gpu_id'] = rank
     params['stats_path'] = Path(f'./results/platipus_{rank}.pkl')
-    params['k_shot'] = (rank+1)*4
     params['model_name'] = f'Platipus_{rank}'
+    params['num_hidden_units'] = nn_configs[rank]
 
     train_params = {**params, **meta_train}
     train_params = platipus.initialize(

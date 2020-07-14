@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 from collections import defaultdict
 from sklearn.preprocessing import StandardScaler
+from pathlib import Path
 
 # Set up various strings corresponding to headers
 distribution_header = '_raw_modelname'
@@ -462,9 +463,11 @@ def process_dataset(train_size=10, active_learning_iter=10, verbose=True, cross_
                 for k_op in k_options:
                     data_dict[size][al][hx_op][k_op] = defaultdict(dict)
                     for x_op in x_options:
-                        data_dict[size][al][hx_op][k_op][x_op] = defaultdict(dict)
+                        data_dict[size][al][hx_op][k_op][x_op] = defaultdict(
+                            dict)
                         for dt in data_types:
-                            data_dict[size][al][hx_op][k_op][x_op][dt] = defaultdict(dict)
+                            data_dict[size][al][hx_op][k_op][x_op][dt] = defaultdict(
+                                dict)
 
     # Indicate path of the pkl file
     # If running the file inside this folder
@@ -536,7 +539,8 @@ def process_dataset(train_size=10, active_learning_iter=10, verbose=True, cross_
             # Select x many more for training
             # qry_k = np.random.choice(x_v.shape[0], size=train_size, replace=False)
             # qry_x = np.random.choice(x_v.shape[0], size=active_learning_iter, replace=False)
-            qry_k = np.random.choice(x_v.shape[0], size=train_size, replace=False)
+            qry_k = np.random.choice(
+                x_v.shape[0], size=train_size, replace=False)
 
             # TODO: Rename this variable
             # This is the selected k
@@ -553,7 +557,8 @@ def process_dataset(train_size=10, active_learning_iter=10, verbose=True, cross_
             x_v = np.delete(x_v, qry_k, axis=0)
             y_v = np.delete(y_v, qry_k)
 
-            qry_x = np.random.choice(x_v.shape[0], size=active_learning_iter, replace=False)
+            qry_x = np.random.choice(
+                x_v.shape[0], size=active_learning_iter, replace=False)
 
             # TODO: Rename this variable
             # This is the selected x
@@ -676,7 +681,8 @@ def process_dataset(train_size=10, active_learning_iter=10, verbose=True, cross_
             # Select x many more for training
             # qry_k = np.random.choice(x_v.shape[0], size=train_size, replace=False)
             # qry_x = np.random.choice(x_v.shape[0], size=active_learning_iter, replace=False)
-            qry_k = np.random.choice(x_v.shape[0], size=train_size, replace=False)
+            qry_k = np.random.choice(
+                x_v.shape[0], size=train_size, replace=False)
 
             # TODO: Rename this variable
             # This is the selected k
@@ -693,7 +699,8 @@ def process_dataset(train_size=10, active_learning_iter=10, verbose=True, cross_
             x_v = np.delete(x_v, qry_k, axis=0)
             y_v = np.delete(y_v, qry_k)
 
-            qry_x = np.random.choice(x_v.shape[0], size=active_learning_iter, replace=False)
+            qry_x = np.random.choice(
+                x_v.shape[0], size=active_learning_iter, replace=False)
 
             # TODO: Rename this variable
             # This is the selected x
@@ -808,148 +815,148 @@ def process_dataset(train_size=10, active_learning_iter=10, verbose=True, cross_
                 if not w_k:
                     print('Training category 3 models.')
                     x_t, y_t, x_v, y_v, all_data, all_labels = data_dict['full']['w/o_AL']['w/_hx']['w/o_k']['w/o_x'][
-                                                                   'x_t'], \
-                                                               data_dict['full']['w/o_AL']['w/_hx']['w/o_k']['w/o_x'][
-                                                                   'y_t'], \
-                                                               data_dict['full']['w/o_AL']['w/_hx']['w/o_k']['w/o_x'][
-                                                                   'x_v'], \
-                                                               data_dict['full']['w/o_AL']['w/_hx']['w/o_k']['w/o_x'][
-                                                                   'y_v'], \
-                                                               data_dict['full']['w/o_AL']['w/_hx']['w/o_k']['w/o_x'][
-                                                                   'all_data'], \
-                                                               data_dict['full']['w/o_AL']['w/_hx']['w/o_k']['w/o_x'][
-                                                                   'all_labels']
+                        'x_t'], \
+                        data_dict['full']['w/o_AL']['w/_hx']['w/o_k']['w/o_x'][
+                        'y_t'], \
+                        data_dict['full']['w/o_AL']['w/_hx']['w/o_k']['w/o_x'][
+                        'x_v'], \
+                        data_dict['full']['w/o_AL']['w/_hx']['w/o_k']['w/o_x'][
+                        'y_v'], \
+                        data_dict['full']['w/o_AL']['w/_hx']['w/o_k']['w/o_x'][
+                        'all_data'], \
+                        data_dict['full']['w/o_AL']['w/_hx']['w/o_k']['w/o_x'][
+                        'all_labels']
                 else:
                     print('Training category 4(i) models.')
                     x_t, y_t, x_v, y_v, all_data, all_labels = data_dict['full']['w/o_AL']['w/_hx']['w/_k']['w/_x'][
-                                                                   'x_t'], \
-                                                               data_dict['full']['w/o_AL']['w/_hx']['w/_k']['w/_x'][
-                                                                   'y_t'], \
-                                                               data_dict['full']['w/o_AL']['w/_hx']['w/_k']['w/_x'][
-                                                                   'x_v'], \
-                                                               data_dict['full']['w/o_AL']['w/_hx']['w/_k']['w/_x'][
-                                                                   'y_v'], \
-                                                               data_dict['full']['w/o_AL']['w/_hx']['w/_k']['w/_x'][
-                                                                   'all_data'], \
-                                                               data_dict['full']['w/o_AL']['w/_hx']['w/_k']['w/_x'][
-                                                                   'all_labels']
+                        'x_t'], \
+                        data_dict['full']['w/o_AL']['w/_hx']['w/_k']['w/_x'][
+                        'y_t'], \
+                        data_dict['full']['w/o_AL']['w/_hx']['w/_k']['w/_x'][
+                        'x_v'], \
+                        data_dict['full']['w/o_AL']['w/_hx']['w/_k']['w/_x'][
+                        'y_v'], \
+                        data_dict['full']['w/o_AL']['w/_hx']['w/_k']['w/_x'][
+                        'all_data'], \
+                        data_dict['full']['w/o_AL']['w/_hx']['w/_k']['w/_x'][
+                        'all_labels']
             else:
                 print('Training category 4(ii) models.')
                 x_t, y_t, x_v, y_v, all_data, all_labels = data_dict['full']['w/o_AL']['w/o_hx']['w/_k']['w/_x'][
-                                                               'x_t'], \
-                                                           data_dict['full']['w/o_AL']['w/o_hx']['w/_k']['w/_x'][
-                                                               'y_t'], \
-                                                           data_dict['full']['w/o_AL']['w/o_hx']['w/_k']['w/_x'][
-                                                               'x_v'], \
-                                                           data_dict['full']['w/o_AL']['w/o_hx']['w/_k']['w/_x'][
-                                                               'y_v'], \
-                                                           data_dict['full']['w/o_AL']['w/o_hx']['w/_k']['w/_x'][
-                                                               'all_data'], \
-                                                           data_dict['full']['w/o_AL']['w/o_hx']['w/_k']['w/_x'][
-                                                               'all_labels']
+                    'x_t'], \
+                    data_dict['full']['w/o_AL']['w/o_hx']['w/_k']['w/_x'][
+                    'y_t'], \
+                    data_dict['full']['w/o_AL']['w/o_hx']['w/_k']['w/_x'][
+                    'x_v'], \
+                    data_dict['full']['w/o_AL']['w/o_hx']['w/_k']['w/_x'][
+                    'y_v'], \
+                    data_dict['full']['w/o_AL']['w/o_hx']['w/_k']['w/_x'][
+                    'all_data'], \
+                    data_dict['full']['w/o_AL']['w/o_hx']['w/_k']['w/_x'][
+                    'all_labels']
         else:
             if w_hx:
                 print('Training category 5(i) models.')
                 x_t, y_t, x_v, y_v, all_data, all_labels = data_dict['full']['w/_AL']['w/_hx']['w/_k']['w/o_x'][
-                                                               'x_t'], \
-                                                           data_dict['full']['w/_AL']['w/_hx']['w/_k']['w/o_x'][
-                                                               'y_t'], \
-                                                           data_dict['full']['w/_AL']['w/_hx']['w/_k']['w/o_x'][
-                                                               'x_v'], \
-                                                           data_dict['full']['w/_AL']['w/_hx']['w/_k']['w/o_x'][
-                                                               'y_v'], \
-                                                           data_dict['full']['w/_AL']['w/_hx']['w/_k']['w/o_x'][
-                                                               'all_data'], \
-                                                           data_dict['full']['w/_AL']['w/_hx']['w/_k']['w/o_x'][
-                                                               'all_labels']
+                    'x_t'], \
+                    data_dict['full']['w/_AL']['w/_hx']['w/_k']['w/o_x'][
+                    'y_t'], \
+                    data_dict['full']['w/_AL']['w/_hx']['w/_k']['w/o_x'][
+                    'x_v'], \
+                    data_dict['full']['w/_AL']['w/_hx']['w/_k']['w/o_x'][
+                    'y_v'], \
+                    data_dict['full']['w/_AL']['w/_hx']['w/_k']['w/o_x'][
+                    'all_data'], \
+                    data_dict['full']['w/_AL']['w/_hx']['w/_k']['w/o_x'][
+                    'all_labels']
             else:
                 print('Training category 5(ii) models.')
                 x_t, y_t, x_v, y_v, all_data, all_labels = data_dict['full']['w/_AL']['w/o_hx']['w/_k']['w/o_x'][
-                                                               'x_t'], \
-                                                           data_dict['full']['w/_AL']['w/o_hx']['w/_k']['w/o_x'][
-                                                               'y_t'], \
-                                                           data_dict['full']['w/_AL']['w/o_hx']['w/_k']['w/o_x'][
-                                                               'x_v'], \
-                                                           data_dict['full']['w/_AL']['w/o_hx']['w/_k']['w/o_x'][
-                                                               'y_v'], \
-                                                           data_dict['full']['w/_AL']['w/o_hx']['w/_k']['w/o_x'][
-                                                               'all_data'], \
-                                                           data_dict['full']['w/_AL']['w/o_hx']['w/_k']['w/o_x'][
-                                                               'all_labels']
+                    'x_t'], \
+                    data_dict['full']['w/_AL']['w/o_hx']['w/_k']['w/o_x'][
+                    'y_t'], \
+                    data_dict['full']['w/_AL']['w/o_hx']['w/_k']['w/o_x'][
+                    'x_v'], \
+                    data_dict['full']['w/_AL']['w/o_hx']['w/_k']['w/o_x'][
+                    'y_v'], \
+                    data_dict['full']['w/_AL']['w/o_hx']['w/_k']['w/o_x'][
+                    'all_data'], \
+                    data_dict['full']['w/_AL']['w/o_hx']['w/_k']['w/o_x'][
+                    'all_labels']
     else:
         if not active_learning:
             if w_hx:
                 if not w_k:
                     print('Training category 3 models.')
                     x_t, y_t, x_v, y_v, all_data, all_labels = data_dict['test']['w/o_AL']['w/_hx']['w/o_k']['w/o_x'][
-                                                                   'x_t'], \
-                                                               data_dict['test']['w/o_AL']['w/_hx']['w/o_k']['w/o_x'][
-                                                                   'y_t'], \
-                                                               data_dict['test']['w/o_AL']['w/_hx']['w/o_k']['w/o_x'][
-                                                                   'x_v'], \
-                                                               data_dict['test']['w/o_AL']['w/_hx']['w/o_k']['w/o_x'][
-                                                                   'y_v'], \
-                                                               data_dict['test']['w/o_AL']['w/_hx']['w/o_k']['w/o_x'][
-                                                                   'all_data'], \
-                                                               data_dict['test']['w/o_AL']['w/_hx']['w/o_k']['w/o_x'][
-                                                                   'all_labels']
+                        'x_t'], \
+                        data_dict['test']['w/o_AL']['w/_hx']['w/o_k']['w/o_x'][
+                        'y_t'], \
+                        data_dict['test']['w/o_AL']['w/_hx']['w/o_k']['w/o_x'][
+                        'x_v'], \
+                        data_dict['test']['w/o_AL']['w/_hx']['w/o_k']['w/o_x'][
+                        'y_v'], \
+                        data_dict['test']['w/o_AL']['w/_hx']['w/o_k']['w/o_x'][
+                        'all_data'], \
+                        data_dict['test']['w/o_AL']['w/_hx']['w/o_k']['w/o_x'][
+                        'all_labels']
                 else:
                     print('Training category 4(i) models.')
                     x_t, y_t, x_v, y_v, all_data, all_labels = data_dict['test']['w/o_AL']['w/_hx']['w/_k']['w/_x'][
-                                                                   'x_t'], \
-                                                               data_dict['test']['w/o_AL']['w/_hx']['w/_k']['w/_x'][
-                                                                   'y_t'], \
-                                                               data_dict['test']['w/o_AL']['w/_hx']['w/_k']['w/_x'][
-                                                                   'x_v'], \
-                                                               data_dict['test']['w/o_AL']['w/_hx']['w/_k']['w/_x'][
-                                                                   'y_v'], \
-                                                               data_dict['test']['w/o_AL']['w/_hx']['w/_k']['w/_x'][
-                                                                   'all_data'], \
-                                                               data_dict['test']['w/o_AL']['w/_hx']['w/_k']['w/_x'][
-                                                                   'all_labels']
+                        'x_t'], \
+                        data_dict['test']['w/o_AL']['w/_hx']['w/_k']['w/_x'][
+                        'y_t'], \
+                        data_dict['test']['w/o_AL']['w/_hx']['w/_k']['w/_x'][
+                        'x_v'], \
+                        data_dict['test']['w/o_AL']['w/_hx']['w/_k']['w/_x'][
+                        'y_v'], \
+                        data_dict['test']['w/o_AL']['w/_hx']['w/_k']['w/_x'][
+                        'all_data'], \
+                        data_dict['test']['w/o_AL']['w/_hx']['w/_k']['w/_x'][
+                        'all_labels']
             else:
                 print('Training category 4(ii) models.')
                 x_t, y_t, x_v, y_v, all_data, all_labels = data_dict['test']['w/o_AL']['w/o_hx']['w/_k']['w/_x'][
-                                                               'x_t'], \
-                                                           data_dict['test']['w/o_AL']['w/o_hx']['w/_k']['w/_x'][
-                                                               'y_t'], \
-                                                           data_dict['test']['w/o_AL']['w/o_hx']['w/_k']['w/_x'][
-                                                               'x_v'], \
-                                                           data_dict['test']['w/o_AL']['w/o_hx']['w/_k']['w/_x'][
-                                                               'y_v'], \
-                                                           data_dict['test']['w/o_AL']['w/o_hx']['w/_k']['w/_x'][
-                                                               'all_data'], \
-                                                           data_dict['test']['w/o_AL']['w/o_hx']['w/_k']['w/_x'][
-                                                               'all_labels']
+                    'x_t'], \
+                    data_dict['test']['w/o_AL']['w/o_hx']['w/_k']['w/_x'][
+                    'y_t'], \
+                    data_dict['test']['w/o_AL']['w/o_hx']['w/_k']['w/_x'][
+                    'x_v'], \
+                    data_dict['test']['w/o_AL']['w/o_hx']['w/_k']['w/_x'][
+                    'y_v'], \
+                    data_dict['test']['w/o_AL']['w/o_hx']['w/_k']['w/_x'][
+                    'all_data'], \
+                    data_dict['test']['w/o_AL']['w/o_hx']['w/_k']['w/_x'][
+                    'all_labels']
         else:
             if w_hx:
                 print('Training category 5(i) models.')
                 x_t, y_t, x_v, y_v, all_data, all_labels = data_dict['test']['w/_AL']['w/_hx']['w/_k']['w/o_x'][
-                                                               'x_t'], \
-                                                           data_dict['test']['w/_AL']['w/_hx']['w/_k']['w/o_x'][
-                                                               'y_t'], \
-                                                           data_dict['test']['w/_AL']['w/_hx']['w/_k']['w/o_x'][
-                                                               'x_v'], \
-                                                           data_dict['test']['w/_AL']['w/_hx']['w/_k']['w/o_x'][
-                                                               'y_v'], \
-                                                           data_dict['test']['w/_AL']['w/_hx']['w/_k']['w/o_x'][
-                                                               'all_data'], \
-                                                           data_dict['test']['w/_AL']['w/_hx']['w/_k']['w/o_x'][
-                                                               'all_labels']
+                    'x_t'], \
+                    data_dict['test']['w/_AL']['w/_hx']['w/_k']['w/o_x'][
+                    'y_t'], \
+                    data_dict['test']['w/_AL']['w/_hx']['w/_k']['w/o_x'][
+                    'x_v'], \
+                    data_dict['test']['w/_AL']['w/_hx']['w/_k']['w/o_x'][
+                    'y_v'], \
+                    data_dict['test']['w/_AL']['w/_hx']['w/_k']['w/o_x'][
+                    'all_data'], \
+                    data_dict['test']['w/_AL']['w/_hx']['w/_k']['w/o_x'][
+                    'all_labels']
             else:
                 print('Training category 5(ii) models.')
                 x_t, y_t, x_v, y_v, all_data, all_labels = data_dict['test']['w/_AL']['w/o_hx']['w/_k']['w/o_x'][
-                                                               'x_t'], \
-                                                           data_dict['test']['w/_AL']['w/o_hx']['w/_k']['w/o_x'][
-                                                               'y_t'], \
-                                                           data_dict['test']['w/_AL']['w/o_hx']['w/_k']['w/o_x'][
-                                                               'x_v'], \
-                                                           data_dict['test']['w/_AL']['w/o_hx']['w/_k']['w/o_x'][
-                                                               'y_v'], \
-                                                           data_dict['test']['w/_AL']['w/o_hx']['w/_k']['w/o_x'][
-                                                               'all_data'], \
-                                                           data_dict['test']['w/_AL']['w/o_hx']['w/_k']['w/o_x'][
-                                                               'all_labels']
+                    'x_t'], \
+                    data_dict['test']['w/_AL']['w/o_hx']['w/_k']['w/o_x'][
+                    'y_t'], \
+                    data_dict['test']['w/_AL']['w/o_hx']['w/_k']['w/o_x'][
+                    'x_v'], \
+                    data_dict['test']['w/_AL']['w/o_hx']['w/_k']['w/o_x'][
+                    'y_v'], \
+                    data_dict['test']['w/_AL']['w/o_hx']['w/_k']['w/o_x'][
+                    'all_data'], \
+                    data_dict['test']['w/_AL']['w/o_hx']['w/_k']['w/o_x'][
+                    'all_labels']
 
     amine_list = list(x_t.keys())
 
