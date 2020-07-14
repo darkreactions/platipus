@@ -65,48 +65,35 @@ def init_params(args):
     params['num_total_samples_per_class'] = 40
     #params['num_training_samples_per_class'] = 20
 
-    if params['train_flag']:
-        if params['cross_validate']:
-            training_batches, validation_batches, testing_batches, counts \
-                = load_chem_dataset(k_shot=args['k_shot'],
-                                    cross_validation=params['cross_validate'],
-                                    meta_batch_size=args['meta_batch_size'],
-                                    num_batches=250,
-                                    verbose=args['verbose'],
-                                    test=params.get('test_data', False))
-            params['validation_batches'] = validation_batches
-            write_pickle(params['dst_folder'] /
-                         Path("val_dump.pkl"), validation_batches)
-        else:
-            training_batches, testing_batches, counts = \
-                load_chem_dataset(k_shot=args['k_shot'],
-                                  cross_validation=params['cross_validate'],
-                                  meta_batch_size=args['meta_batch_size'],
-                                  num_batches=250,
-                                  verbose=args['verbose'],
-                                  test=params.get('test_data', False))
-        params['training_batches'] = training_batches
-        params['testing_batches'] = testing_batches
-        params['counts'] = counts
-        # Save for reproducibility
+    if params['cross_validate']:
+        training_batches, validation_batches, testing_batches, counts \
+            = load_chem_dataset(k_shot=args['k_shot'],
+                                cross_validation=params['cross_validate'],
+                                meta_batch_size=args['meta_batch_size'],
+                                num_batches=250,
+                                verbose=args['verbose'],
+                                test=params.get('test_data', False))
+        params['validation_batches'] = validation_batches
         write_pickle(params['dst_folder'] /
-                     Path("train_dump.pkl"), training_batches)
-        write_pickle(params['dst_folder'] /
-                     Path("test_dump.pkl"), testing_batches)
-        write_pickle(params['dst_folder'] /
-                     Path("counts_dump.pkl"), counts)
-
-    # Make sure we don't overwrite our batches if we are validating and testing
+                     Path("val_dump.pkl"), validation_batches)
     else:
-        if params['cross_validate']:
-            params['validation_batches'] = read_pickle(
-                params['dst_folder'] / Path("val_dump.pkl"))
-        params['training_batches'] = read_pickle(
-            params['dst_folder'] / Path("train_dump.pkl"))
-        params['testing_batches'] = read_pickle(
-            params['dst_folder'] / Path("test_dump.pkl"))
-        params['counts'] = read_pickle(
-            params['dst_folder'] / Path("counts_dump.pkl"))
+        training_batches, testing_batches, counts = \
+            load_chem_dataset(k_shot=args['k_shot'],
+                              cross_validation=params['cross_validate'],
+                              meta_batch_size=args['meta_batch_size'],
+                              num_batches=250,
+                              verbose=args['verbose'],
+                              test=params.get('test_data', False))
+    params['training_batches'] = training_batches
+    params['testing_batches'] = testing_batches
+    params['counts'] = counts
+    # Save for reproducibility
+    write_pickle(params['dst_folder'] /
+                 Path("train_dump.pkl"), training_batches)
+    write_pickle(params['dst_folder'] /
+                 Path("test_dump.pkl"), testing_batches)
+    write_pickle(params['dst_folder'] /
+                 Path("counts_dump.pkl"), counts)
 
     net = FCNet(dim_input=51, dim_output=params['n_way'],
                 num_hidden_units=params['num_hidden_units'],

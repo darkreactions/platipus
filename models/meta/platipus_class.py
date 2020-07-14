@@ -26,6 +26,8 @@ class Platipus:
         for key in self.params:
             setattr(self, key, self.params[key])
 
+        # self.set_optim()
+
         if amine:
             self.training_batches = params['training_batches'][amine]
             self.dst_folder = save_model(self.model_name, params, amine)
@@ -212,8 +214,7 @@ class Platipus:
                 logging.info(checkpoint_filename)
                 torch.save(checkpoint, self.dst_folder / checkpoint_filename)
 
-        self.Theta = self.initialize_Theta()
-        self.op_Theta = self.set_optim()
+        #self.Theta = self.initialize_Theta()
 
     def get_loss_gradients(self, x, y, w, lr, logSigma=None):
         """
@@ -536,8 +537,13 @@ if __name__ == '__main__':
     logging.basicConfig(filename=Path(save_model(params['model_name'], params))/Path('logfile.log'),
                         level=logging.DEBUG)
     train_params = init_params(train_params)
+
     for amine in train_params['training_batches']:
         platipus = Platipus(train_params, amine=amine,
                             model_name=train_params['model_name'])
         platipus.meta_train()
-        # platipus.validate()
+        platipus.validate()
+
+    #test_params = {**params, **local_meta_test}
+
+    # platipus.validate()
