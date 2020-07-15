@@ -398,9 +398,8 @@ class Platipus:
         # Randomly pick a point to start active learning with
         rand_index = np.random.choice(len(x_t) + len(x_v) - 1)
 
-        data_dict = read_pickle('./results/non_meta_data.pkl')
-
         """
+        data_dict = read_pickle('./results/non_meta_data.pkl')
         pretrain_data_x = data_dict['test']['k_x'][amine]
         k_x = torch.from_numpy(pretrain_data_x).float().to(device)
 
