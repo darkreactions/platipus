@@ -230,7 +230,7 @@ class ActiveLogisticRegression:
             pickle.dump(self, f)
 
 
-def fine_tune(training_batches, cross_validation_batches, info=False):
+def fine_tune(info=False):
     """Fine tune the model based on average bcr performance to find the best model hyper-parameters.
     Args:
         training_batches:       A dictionary representing the training batches used to train.
@@ -251,7 +251,7 @@ def fine_tune(training_batches, cross_validation_batches, info=False):
     params = {
         'penalty': ['l2','none'],
         'dual': [False],
-        'tol': [1e-4, 1e-5],
+        'tol': [1e-4, 1e-5, 1e-6],
         'C': [.1 * i for i in range(1,3)],
         'solver': ['lbfgs','liblinear','sag','saga'],
         'max_iter': [4000, 5000, 6000, 7000, 9000]
@@ -284,19 +284,20 @@ def fine_tune(training_batches, cross_validation_batches, info=False):
     base_bcrs = []
     base_aucs = []
 
-    for amine in training_batches:
+    for amine in amine_list:
         ALR = ActiveLogisticRegression(amine=amine, verbose=False)
 
         x_t, y_t = train_data[amine], train_labels[amine]
         x_v, y_v = val_data[amine], val_labels[amine]
-        all_data, all_labels = all_data[amine], all_labels[amine]
+        all_task_data, all_task_labels = all_data[amine], all_labels[amine]
 
-        ALR.load_dataset(x_t, y_t, x_v, y_v, all_data, all_labels)
+        # Load the training and validation set into the model
+        ALR.load_dataset(x_t, y_t, x_v, y_v, all_task_data, all_task_labels)
 
         ALR.train()
 
         # Calculate AUC
-        auc = roc_auc_score(ALR.all_labels, ALR.y_preds)
+        auc = roc_auc_score(all_task_labels, ALR.y_preds)
 
         base_accuracies.append(ALR.metrics['accuracies'][-1])
         base_precisions.append(ALR.metrics['precisions'][-1])
@@ -325,9 +326,8 @@ def fine_tune(training_batches, cross_validation_batches, info=False):
     option_no = 1  # Debug
 
     # Try out each possible combinations of hyper-parameters
-    print(f'There are {len(combinations)} many combinations to try.')
     for option in combinations:
-        if option['solver'] == 'liblinear' and option['penalty'] =='none':
+        if option['solver'] == 'liblinear' and option['penalty'] == 'none':
             pass
         else:
             accuracies = []
@@ -339,19 +339,19 @@ def fine_tune(training_batches, cross_validation_batches, info=False):
             if info:
                 print(f'Trying option {option_no}')
 
-            for amine in training_batches:
+            for amine in amine_list:
                 # print("Training and cross validation on {} amine.".format(amine))
                 ALR = ActiveLogisticRegression(amine=amine, config=option, verbose=False)
                 x_t, y_t = train_data[amine], train_labels[amine]
                 x_v, y_v = val_data[amine], val_labels[amine]
-                all_data, all_labels = all_data[amine], all_labels[amine]
+                all_task_data, all_task_labels = all_data[amine], all_labels[amine]
 
                 # Load the training and validation set into the model
-                ALR.load_dataset(x_t, y_t, x_v, y_v, all_data, all_labels)
+                ALR.load_dataset(x_t, y_t, x_v, y_v, all_task_data, all_task_labels)
                 ALR.train()
 
                 # Calculate AUC
-                auc = roc_auc_score(ALR.all_labels, ALR.y_preds)
+                auc = roc_auc_score(all_task_labels, ALR.y_preds)
 
                 accuracies.append(ALR.metrics['accuracies'][-1])
                 precisions.append(ALR.metrics['precisions'][-1])
@@ -380,10 +380,10 @@ def fine_tune(training_batches, cross_validation_batches, info=False):
 
             option_no += 1
 
-        if info:
-            print()
-            print(f'The best setting for all amines is {best_option}')
-            print(f'With an average auc of {best_metric}')
+    if info:
+        print()
+        print(f'The best setting for all amines is {best_option}')
+        print(f'With an average auc of {best_metric}')
 
     return best_option
 

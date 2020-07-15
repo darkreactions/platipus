@@ -9,7 +9,7 @@ common_params = {
     'test_data': True,  # TODO: redundant with full_dataset?
     'meta': False,
     'full_dataset': True,
-    'fine_tuning': False,
+    'fine_tuning': True,
     'with_historical_data': True,   # Train models with historical data of other amines
     'with_k': False,     # Train the model with k additional amine-specific experiments
     'train_size': 10,   # k after pretrain

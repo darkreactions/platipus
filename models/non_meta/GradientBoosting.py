@@ -271,7 +271,7 @@ def fine_tune(info=False):
         'max_features': ['auto', 'sqrt', 'log2', None],
         'min_samples_leaf': [1, 2, 3],
         'min_samples_split': [2, 5, 10],
-        'ccp_alpha': [.1 * i for i in range(1)]
+        'ccp_alpha': [0.0]
     }
 
     combinations = []
@@ -306,15 +306,15 @@ def fine_tune(info=False):
 
         x_t, y_t = train_data[amine], train_labels[amine]
         x_v, y_v = val_data[amine], val_labels[amine]
-        all_data, all_labels = all_data[amine], all_labels[amine]
+        all_task_data, all_task_labels = all_data[amine], all_labels[amine]
 
         # Load the training and validation set into the model
-        AGB.load_dataset(x_t, y_t, x_v, y_v, all_data, all_labels)
+        AGB.load_dataset(x_t, y_t, x_v, y_v, all_task_data, all_task_labels)
 
         AGB.train()
 
         # Calculate AUC
-        auc = roc_auc_score(all_labels, AGB.y_preds)
+        auc = roc_auc_score(all_task_labels, AGB.y_preds)
 
         base_accuracies.append(AGB.metrics['accuracies'][-1])
         base_precisions.append(AGB.metrics['precisions'][-1])
@@ -358,14 +358,14 @@ def fine_tune(info=False):
             AGB = ActiveGradientBoosting(amine=amine, config=option, verbose=False)
             x_t, y_t = train_data[amine], train_labels[amine]
             x_v, y_v = val_data[amine], val_labels[amine]
-            all_data, all_labels = all_data[amine], all_labels[amine]
+            all_task_data, all_task_labels = all_data[amine], all_labels[amine]
 
             # Load the training and validation set into the model
-            AGB.load_dataset(x_t, y_t, x_v, y_v, all_data, all_labels)
+            AGB.load_dataset(x_t, y_t, x_v, y_v, all_task_data, all_task_labels)
             AGB.train()
 
             # Calculate AUC
-            auc = roc_auc_score(all_labels, AGB.y_preds)
+            auc = roc_auc_score(all_task_labels, AGB.y_preds)
 
             accuracies.append(AGB.metrics['accuracies'][-1])
             precisions.append(AGB.metrics['precisions'][-1])

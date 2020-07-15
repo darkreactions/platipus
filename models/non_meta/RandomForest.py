@@ -60,8 +60,8 @@ class ActiveRandomForest:
                                                 bootstrap=config['bootstrap'],
                                                 ccp_alpha=config['ccp_alpha'])
         else:
-            self.model = RandomForestClassifier(n_estimators=100, criterion='gini', max_depth=8, min_samples_split=2,
-                                                min_samples_leaf=1, max_features=None, bootstrap=True, ccp_alpha=0.0)
+            self.model = RandomForestClassifier(n_estimators=200, criterion='gini', max_depth=8, min_samples_split=2,
+                                                min_samples_leaf=5, max_features=None, bootstrap=True, ccp_alpha=0.0)
         self.metrics = defaultdict(list)
         self.verbose = verbose
         self.stats_path = stats_path
@@ -305,15 +305,15 @@ def fine_tune(info=False):
 
         x_t, y_t = train_data[amine], train_labels[amine]
         x_v, y_v = val_data[amine], val_labels[amine]
-        all_data, all_labels = all_data[amine], all_labels[amine]
+        all_task_data, all_task_labels = all_data[amine], all_labels[amine]
 
         # Load the training and validation set into the model
-        ARF.load_dataset(x_t, y_t, x_v, y_v, all_data, all_labels)
+        ARF.load_dataset(x_t, y_t, x_v, y_v, all_task_data, all_task_labels)
 
         ARF.train()
 
         # Calculate AUC
-        auc = roc_auc_score(all_labels, ARF.y_preds)
+        auc = roc_auc_score(all_task_labels, ARF.y_preds)
 
         base_accuracies.append(ARF.metrics['accuracies'][-1])
         base_precisions.append(ARF.metrics['precisions'][-1])
@@ -357,14 +357,14 @@ def fine_tune(info=False):
             ARF = ActiveRandomForest(amine=amine, config=option, verbose=False)
             x_t, y_t = train_data[amine], train_labels[amine]
             x_v, y_v = val_data[amine], val_labels[amine]
-            all_data, all_labels = all_data[amine], all_labels[amine]
+            all_task_data, all_task_labels = all_data[amine], all_labels[amine]
 
             # Load the training and validation set into the model
-            ARF.load_dataset(x_t, y_t, x_v, y_v, all_data, all_labels)
+            ARF.load_dataset(x_t, y_t, x_v, y_v, all_task_data, all_task_labels)
             ARF.train()
 
             # Calculate AUC
-            auc = roc_auc_score(all_labels, ARF.y_preds)
+            auc = roc_auc_score(all_task_labels, ARF.y_preds)
 
             accuracies.append(ARF.metrics['accuracies'][-1])
             precisions.append(ARF.metrics['precisions'][-1])

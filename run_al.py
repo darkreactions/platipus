@@ -28,7 +28,7 @@ if __name__ == '__main__':
         os.remove(cv_stats_dst)
 
     # Listing the categories of experiments we are running
-    categories = ['category_3', 'category_4_i', 'category_4_ii', 'category_5_i', 'category_5_ii']
+    categories = [ 'category_4_i', 'category_4_ii', 'category_5_i', 'category_5_ii']
 
     # Meta-models
     # PLATIPUS
@@ -44,7 +44,7 @@ if __name__ == '__main__':
 
     # Non-meta models
     # KNN
-    base_model = KNN
+    '''base_model = KNN
     model_params = knn_params
     for category in categories:
         run_non_meta_model(
@@ -67,9 +67,20 @@ if __name__ == '__main__':
                 model_params,
                 category
             )
+    
+    # DecisionTree
+    base_model = DecisionTree
+    model_params = decisiontree_params
+    for category in categories:
+        run_non_meta_model(
+            base_model,
+            common_params,
+            model_params,
+            category
+        )'''
 
     # Random Forest
-    base_model = RandomForest
+    '''base_model = RandomForest
     model_params = randomforest_params
     for category in categories:
         run_non_meta_model(
@@ -77,10 +88,10 @@ if __name__ == '__main__':
             common_params,
             model_params,
             category
-        )
+        )'''
 
     # logistic Regression
-    base_model = LogisticRegression
+    '''base_model = LogisticRegression
     model_params = logisticregression_params
     for category in categories:
         if '4_ii' not in category and '5_ii' not in category:
@@ -91,18 +102,7 @@ if __name__ == '__main__':
                 common_params,
                 model_params,
                 category
-            )
-
-    # DecisionTree
-    base_model = DecisionTree
-    model_params = decisiontree_params
-    for category in categories:
-        run_non_meta_model(
-            base_model,
-            common_params,
-            model_params,
-            category
-        )
+            )'''
 
     # Gradient Boosting
     base_model = GradientBoosting
