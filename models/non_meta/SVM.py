@@ -55,7 +55,7 @@ class ActiveSVM:
 
         # Load customized model or use the default fine-tuned setting
         if config:
-            self.model = CalibratedClassifierCV(SVC(**config))
+            self.model = CalibratedClassifierCV(SVC(**config, cache_size=7000))
         else:
             # Fine tuned model
             self.model = CalibratedClassifierCV(SVC(
@@ -344,18 +344,18 @@ def run_model(SVM_params, category):
     to_params = True
 
     if fine_tuning:
-        class_weights = [{0: i, 1: 1.0-i} for i in np.linspace(.05, .95, num=50)]
+        class_weights = [{0: i, 1: 1.0-i} for i in np.linspace(.05, .95, num=10)]
         class_weights.append('balanced')
         class_weights.append(None)
 
         ft_params = {
-            'C': [.001, .01, .1, 1, 10, 100],
             'kernel': ['poly', 'sigmoid', 'rbf'],
+            'C': [.001, .01, .1, 1, 10, 100],
             'degree': [0, 1, 2, 3],
-            'gammas': ['auto', 'scale'],
+            'gamma': ['auto', 'scale'],
             'tol': [.0001, .001, .01, .1, 1],
-            'decision_function_shape': ['ovo', 'ovr'],
-            'break_ties': [True, False],
+            'decision_function_shape': ['ovo'],
+            'break_ties': [True],
             'class_weight': class_weights
         }
 
@@ -385,7 +385,7 @@ def run_model(SVM_params, category):
         # print(amine_list)
         for amine in amine_list:
             if cross_validation:
-                print("Training and cross validation on {} amine.".format(amine))
+                # print("Training and cross validation on {} amine.".format(amine))
 
                 # Create the SVM model instance for the specific amine
                 ASVM = ActiveSVM(amine=amine, config=config, verbose=verbose, stats_path=stats_path, model_name=model_name)
