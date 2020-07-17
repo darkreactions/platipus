@@ -9,6 +9,12 @@ from sklearn.metrics import roc_auc_score
 
 from utils.dataset import process_dataset, import_test_dataset, import_full_dataset
 
+# TODO DELETE
+import warnings
+from sklearn.exceptions import ConvergenceWarning
+
+warnings.filterwarnings(action='ignore', category=ConvergenceWarning)
+
 
 def write_pickle(path, data):
     """Write pickle file
@@ -82,10 +88,12 @@ def load_chem_dataset(k_shot, cross_validation=True, meta_batch_size=32,
     """
     if test:
         print('Getting Test dataset')
-        return import_test_dataset(k_shot, meta_batch_size, num_batches, verbose=verbose, cross_validation=cross_validation)
+        return import_test_dataset(k_shot, meta_batch_size, num_batches, verbose=verbose,
+                                   cross_validation=cross_validation)
     else:
         print('Getting FULL dataset')
-        return import_full_dataset(k_shot, meta_batch_size, num_batches, verbose=verbose, cross_validation=cross_validation)
+        return import_full_dataset(k_shot, meta_batch_size, num_batches, verbose=verbose,
+                                   cross_validation=cross_validation)
 
 
 def find_avg_metrics(stats_dict, min_length=None):
@@ -267,7 +275,8 @@ def create_cv_stats_dict(models):
     return cv_stats_dict
 
 
-def update_cv_stats_dict(cv_stats_dict, model, correct, cm, accuracy, precision, recall, bcr, prob_pred=None, verbose=True):
+def update_cv_stats_dict(cv_stats_dict, model, correct, cm, accuracy, precision, recall, bcr, prob_pred=None,
+                         verbose=True):
     """Update the stats dictionary that stores the performance metrics during the cross-validation stage of a specific
             amine
     Args:
@@ -542,6 +551,15 @@ def grid_search(clf, params, train_size, active_learning_iter, active_learning=T
     for bundle in itertools.product(*values):
         combinations.append(dict(zip(keys, bundle)))
 
+    # TODO DELETE Temp for LinearSVM
+    temp = []
+    for option in combinations:
+        if not (option['penalty'] == 'l1' and option['loss'] == 'hinge') :
+            if not (option['penalty'] == 'l1' and option['loss'] == 'squared_hinge' and option['dual'] == True):
+                if not (option['penalty'] == 'l2' and option['loss'] == 'hinge' and option['dual'] == False):
+                    temp.append(option)
+    combinations = temp
+
     # Load the full dataset under specific categorical option
     amine_list, train_data, train_labels, val_data, val_labels, all_data, all_labels = process_dataset(
         train_size=train_size,
@@ -599,6 +617,8 @@ def grid_search(clf, params, train_size, active_learning_iter, active_learning=T
 
     best_option = {}
 
+    option_no = 1
+
     # Try out each possible combinations of hyper-parameters
     print(f'There are {len(combinations)} many combinations to try.')
     for option in combinations:
@@ -608,6 +628,8 @@ def grid_search(clf, params, train_size, active_learning_iter, active_learning=T
         bcrs = []
         aucs = []
 
+        print(f'Trying option {option_no}')
+        option_no += 1
         for amine in amine_list:
             # print("Training and cross validation on {} amine.".format(amine))
             ACLF = clf(amine=amine, config=option, verbose=False)

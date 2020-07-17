@@ -2,11 +2,11 @@ import models.meta.main as platipus
 from pathlib import Path
 import os
 
-from models.non_meta import RandomForest, KNN, SVM, DecisionTree, LogisticRegression, GradientBoosting
+from models.non_meta import RandomForest, KNN, SVM, LinearSVM, DecisionTree, LogisticRegression, GradientBoosting
 from utils.plot import plot_all_graphs
 from utils import read_pickle, write_pickle, define_non_meta_model_name, run_non_meta_model, find_avg_metrics
 from model_params import common_params, knn_params, svm_params, randomforest_params, logisticregression_params, \
-    decisiontree_params, gradientboosting_params, meta_train, meta_test
+    decisiontree_params, gradientboosting_params, meta_train, meta_test, linearsvm_params
 
 if __name__ == '__main__':
     # Just in case you want to plot graphs
@@ -33,9 +33,12 @@ if __name__ == '__main__':
         os.remove(cv_stats_dst)
 
     # Listing the categories of experiments we are running
-    categories = ['category_3', 'category_4_i', 'category_4_ii', 'category_5_i', 'category_5_ii']
+    # categories = ['category_3', 'category_4_i', 'category_4_ii', 'category_5_i', 'category_5_ii']
+    categories = ['category_3']
+    # categories = ['category_4_i']
+    # categories = ['category_5_i']
 
-    # Meta-models
+    '''# Meta-models
     # PLATIPUS
     # platipus_train_params = {**common_params, **meta_params, **meta_train}
     # params = platipus.initialize(["PLATIPUS"], platipus_train_params)
@@ -47,7 +50,7 @@ if __name__ == '__main__':
 
     # TODO: MAML
 
-    '''# Non-meta models
+    # Non-meta models
     # KNN
     base_model = KNN
     model_params = knn_params
@@ -57,8 +60,9 @@ if __name__ == '__main__':
             common_params,
             model_params,
             category
-        )'''
+        )
 
+    
     # SVM
     base_model = SVM
     model_params = svm_params
@@ -71,10 +75,24 @@ if __name__ == '__main__':
                 common_params,
                 model_params,
                 category
+            )'''
+
+    # SVM
+    base_model = LinearSVM
+    model_params = linearsvm_params
+    for category in categories:
+        if '4_ii' not in category and '5_ii' not in category:
+            # Excluding categories that have too few
+            # successful experiments for training
+            run_non_meta_model(
+                base_model,
+                common_params,
+                model_params,
+                category
             )
 
-    '''
-    # DecisionTree
+    
+'''    # DecisionTree
     base_model = DecisionTree
     model_params = decisiontree_params
     for category in categories:
@@ -85,6 +103,7 @@ if __name__ == '__main__':
             category
         )
 
+    
     # Random Forest
     base_model = RandomForest
     model_params = randomforest_params
