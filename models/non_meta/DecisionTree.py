@@ -329,19 +329,22 @@ def run_model(DecisionTree_params, category):
     # Specify the desired operation
     fine_tuning = DecisionTree_params['fine_tuning']
     save_model = DecisionTree_params['save_model']
-    visualize = False
+    visualize = DecisionTree_params['visualize']
 
     if fine_tuning:
         class_weights = [{0: i, 1: 1.0 - i} for i in np.linspace(.05, .95, num=50)]
         class_weights.append('balanced')
         class_weights.append(None)
 
+        max_depths = [i for i in range(9, 26)]
+        max_depths.append(None)
+
         ft_params = {
             'criterion': ['gini', 'entropy'],
             'splitter': ['best', 'random'],
-            'max_depth': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 25, 30, None],
+            'max_depth': max_depths,
             'min_samples_split': [i for i in range(2, 11)],
-            'min_samples_leaf': [i for i in range(1, 6)],
+            'min_samples_leaf': [i for i in range(1, 4)],
             'class_weight': class_weights
         }
 
@@ -370,9 +373,8 @@ def run_model(DecisionTree_params, category):
 
         # print(amine_list)
         for amine in amine_list:
-            print(f'Training and active learning on amine {amine}')
 
-            # Create the KNN model instance for the specific amine
+            # Create the decision tree model instance for the specific amine
             ADT = ActiveDecisionTree(amine=amine, config=config, verbose=verbose, stats_path=stats_path,
                                      model_name=model_name)
 
@@ -391,7 +393,7 @@ def run_model(DecisionTree_params, category):
             if visualize:
                 # Plot the decision tree
                 # To compile the graph, use the following command in terminal
-                # dot -Tpng "{amine_name}_dt_{op1 or op2}.dot" -o "{desired file name}.png"
+                # dot -Tpng "{dt_file_name}.dot" -o "{desired file name}.png"
                 # If using Jupyter Notebook, add ! in front to run command lines
                 file_name = './results/{0:s}_dt_{1:s}.dot'.format(model_name, amine)
                 export_graphviz(ADT.model,
