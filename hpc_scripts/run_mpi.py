@@ -3,15 +3,21 @@ from mpi4py import MPI
 from hpc_scripts.hpc_params import common_params, meta_params, meta_train, meta_test
 from pathlib import Path
 
-from models.meta import main as platipus
 from models.meta.platipus_class import Platipus
 from models.meta.init_params import init_params
+from hpc_scripts.param_generator import get_all_params
 from utils import save_model
 import logging
-#import models.meta.main as platipus
+# import models.meta.main as platipus
 import sys
+import time
+
 
 nn_configs = [(200, 100, 100), (400, 300, 200), (200, 100), (400, 300)]
+# TAGS
+SEND_NEXT_PARAM = 0
+PARAM = 1
+TERMINATE = 2
 
 
 def new_platipus(params):
@@ -32,32 +38,39 @@ def new_platipus(params):
         platipus.validate()
 
 
-def old_platipus(params):
-    params['stats_path'] = Path(f'./results/platipus_old_{rank}.pkl')
-    params['model_name'] = f'Platipus_old_{rank}'
-    params['num_hidden_units'] = nn_configs[rank]
-    train_params = {**params, **meta_train}
-    train_params = platipus.initialize(
-        [train_params['model_name']], train_params)
-    platipus.main(train_params)
-
-    test_params = {**params, **meta_test}
-    test_params = platipus.initialize([test_params['model_name']], test_params)
-    platipus.main(test_params)
-
-
 if __name__ == "__main__":
+    node_num = sys.argv[1]
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
-    #rank = sys.argv[1]
+    status = MPI.Status()
+
     print(f'My rank is: {rank}')
-    #print(f'My rank is : {rank}', file=sys.stderr)
-    #rank = 0
+    if rank == 0:
+        all_params = get_all_params()
+        current_param = 0
 
-    params = {**common_params, **meta_params}
-    params['gpu_id'] = rank
-    new_platipus(params)
+        while current_param < len(all_params):
+            msg = comm.recv(source=MPI.ANY_SOURCE, tag=SEND_NEXT_PARAM,
+                            status=status)
+            dest = status.Get_source()
+            param = all_params[current_param]
+            comm.send(param, dest=dest, tag=PARAM)
+            current_param += 1
+        process = 0
+        while process < 4:
+            msg = comm.recv(source=MPI.ANY_SOURCE, tag=SEND_NEXT_PARAM,
+                            status=status)
+            dest = status.Get_source()
+            comm.send(1, dest=dest, tag=TERMINATE)
+            process += 1
 
-    params = {**common_params, **meta_params}
-    params['gpu_id'] = rank
-    old_platipus(params)
+    else:
+        comm.send(1, dest=0, tag=SEND_NEXT_PARAM)
+        msg = comm.recv(source=0, tag=MPI.ANY_TAG, status=status)
+        tag = status.Get_tag()
+        while tag != TERMINATE:
+            print(f'Param on rank {rank}: {msg}')
+            time.sleep(1)
+            comm.send(1, dest=0, tag=SEND_NEXT_PARAM)
+            msg = comm.recv(source=0, tag=MPI.ANY_TAG, status=status)
+            tag = status.Get_tag()

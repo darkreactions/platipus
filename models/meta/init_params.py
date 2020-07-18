@@ -1,8 +1,8 @@
 import torch
 import logging
 from pathlib import Path
-from utils import create_stats_dict, load_chem_dataset, save_model, read_pickle, write_pickle
-from models.meta.FC_net import FCNet
+from utils import create_stats_dict, load_chem_dataset, save_model, write_pickle
+
 from models.meta.main import initialzie_theta_platipus, set_optim_platipus
 
 
@@ -95,17 +95,6 @@ def init_params(args):
     write_pickle(params['dst_folder'] /
                  Path("counts_dump.pkl"), counts)
 
-    net = FCNet(dim_input=51, dim_output=params['n_way'],
-                num_hidden_units=params['num_hidden_units'],
-                device=device)
-    params['net'] = net
-    params['w_shape'] = net.get_weight_shape()
-
-    # Inefficient to call this twice, but I was getting an annoying linting error
-    logging.info(
-        f'Number of parameters of base model = {net.get_num_weights()}')
-    params['num_weights'] = net.get_num_weights()
-
     params['sm_loss'] = torch.nn.Softmax(dim=2)
 
     # Weight on the KL loss
@@ -118,11 +107,13 @@ def init_params(args):
         # 'mean' is the mean model parameters
         # 'logSigma' and 'logSigma_q' are the variance of the base and variational distributions
         # the two 'gamma' vectors are the learning rate vectors
-        Theta = initialzie_theta_platipus(params)
+        #
+        pass
     else:
         # Cross validation will load a bunch of models elsewhere when testing
         # A little confusing, but if we are training we want to initialize the first model
         if not params['cross_validate'] or params['train_flag']:
+            Theta = initialzie_theta_platipus(params)
             # Here we are loading a previously trained model
             print('Restore previous Theta...')
             print('Resume epoch {0:d}'.format(params['resume_epoch']))
@@ -151,18 +142,16 @@ def init_params(args):
             Theta = saved_checkpoint['Theta']
 
     if not params['cross_validate'] or params['train_flag']:
-        params['Theta'] = Theta
-
-    if not params['cross_validate'] or params['train_flag']:
         # Now we need to set up the optimizer for Theta, PyTorch makes this very easy for us, phew.
-        op_Theta = set_optim_platipus(Theta, params["meta_lr"])
+        #
 
         if params['resume_epoch'] > 0:
+            op_Theta = set_optim_platipus(Theta, params["meta_lr"])
             op_Theta.load_state_dict(saved_checkpoint['op_Theta'])
             # Set the meta learning rates appropriately
             op_Theta.param_groups[0]['lr'] = params['meta_lr']
             op_Theta.param_groups[1]['lr'] = params['meta_lr']
 
-        params['op_Theta'] = op_Theta
+            params['op_Theta'] = op_Theta
 
     return params

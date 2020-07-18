@@ -67,7 +67,7 @@ local_meta_params = {
 }
 
 local_meta_train = {
-    'num_epochs': 3000,
+    'num_epochs': 3,
     'resume_epoch': 0,
     'train_flag': True
 }

@@ -15,12 +15,14 @@ class FCNet(torch.nn.Module):
     """
     Establishing a fully connected neural network
     """
+
     def __init__(self,
-                dim_input=1,
-                dim_output=1,
-                num_hidden_units=(100, 100, 100),
-                device=torch.device('cpu')
-    ):
+                 dim_input=1,
+                 dim_output=1,
+                 num_hidden_units=(100, 100, 100),
+                 device=torch.device('cpu'),
+                 activation_fn=torch.nn.functional.relu
+                 ):
         """Initializes the FCNet
 
         Args:
@@ -36,6 +38,7 @@ class FCNet(torch.nn.Module):
         self.dim_input = dim_input
         self.num_hidden_units = num_hidden_units
         self.device = device
+        self.activation_fn = activation_fn
 
     def get_weight_shape(self):
         """Get the shape of the weight we use in each layer
@@ -55,11 +58,15 @@ class FCNet(torch.nn.Module):
         weight_shape['b1'] = weight_shape['w1'][0]
 
         for i in range(len(self.num_hidden_units) - 1):
-            weight_shape['w{0:d}'.format(i + 2)] = (self.num_hidden_units[i + 1], self.num_hidden_units[i])
-            weight_shape['b{0:d}'.format(i + 2)] = weight_shape['w{0:d}'.format(i + 2)][0]
+            weight_shape['w{0:d}'.format(
+                i + 2)] = (self.num_hidden_units[i + 1], self.num_hidden_units[i])
+            weight_shape['b{0:d}'.format(
+                i + 2)] = weight_shape['w{0:d}'.format(i + 2)][0]
 
-        weight_shape['w{0:d}'.format(len(self.num_hidden_units) + 1)] = (self.dim_output, self.num_hidden_units[len(self.num_hidden_units) - 1])
-        weight_shape['b{0:d}'.format(len(self.num_hidden_units) + 1)] = self.dim_output
+        weight_shape['w{0:d}'.format(len(self.num_hidden_units) + 1)] = (
+            self.dim_output, self.num_hidden_units[len(self.num_hidden_units) - 1])
+        weight_shape['b{0:d}'.format(
+            len(self.num_hidden_units) + 1)] = self.dim_output
 
         return weight_shape
 
@@ -82,14 +89,16 @@ class FCNet(torch.nn.Module):
         weight_shape = self.get_weight_shape()
         for key in weight_shape.keys():
             if 'b' in key:
-                w[key] = torch.zeros(weight_shape[key], device=self.device, requires_grad=True)
+                w[key] = torch.zeros(
+                    weight_shape[key], device=self.device, requires_grad=True)
             else:
                 w[key] = torch.empty(weight_shape[key], device=self.device)
                 # Need to select our initialization for the weights here
                 # Here is a resource I found: https://towardsdatascience.com/understand-kaiming-initialization-and-implementation-detail-in-pytorch-f7aa967e9138
 
                 # torch.nn.init.xavier_normal_(tensor=w[key], gain=1.)
-                torch.nn.init.kaiming_normal_(tensor=w[key], mode='fan_out', nonlinearity='relu')
+                torch.nn.init.kaiming_normal_(
+                    tensor=w[key], mode='fan_out', nonlinearity='relu')
                 # torch.nn.init.normal_(tensor=w[key], mean=0., std=1.)
                 w[key].requires_grad_()
         return w
@@ -121,9 +130,10 @@ class FCNet(torch.nn.Module):
             )
 
             if (i < len(self.num_hidden_units)):
-                # We could change the activation function here if we wanted to! 
+                # We could change the activation function here if we wanted to!
                 # out = torch.tanh(out)
-                out = torch.nn.functional.relu(out)
+                out = self.activation_fn(out)
+
                 if p_dropout > 0:
                     out = torch.nn.functional.dropout(out, p_dropout)
         return out
