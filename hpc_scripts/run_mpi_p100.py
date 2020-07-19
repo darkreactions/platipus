@@ -34,7 +34,7 @@ def run_platipus(params):
 
 
 if __name__ == "__main__":
-    node_num = 1
+    node_num = 2
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
     status = MPI.Status()
@@ -60,7 +60,7 @@ if __name__ == "__main__":
             comm.Send([data, MPI.INT], dest=dest, tag=PARAM)
             current_param += 1
         process = 0
-        while process < 4:
+        while process < 2:
             data = np.empty(1, dtype='i')
             comm.Recv(data, source=MPI.ANY_SOURCE,
                       tag=MPI.ANY_TAG, status=status)

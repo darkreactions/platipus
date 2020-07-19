@@ -9,3 +9,5 @@ MAML_*/
 .vscode/
 *.ipynb
 results/
+*.e*
+*.o*
