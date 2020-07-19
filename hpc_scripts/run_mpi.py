@@ -54,11 +54,16 @@ if __name__ == "__main__":
             comm.Recv(data, source=MPI.ANY_SOURCE,
                       tag=MPI.ANY_TAG, status=status)
             dest = status.Get_source()
+            tag = status.Get_tag()
+            print(f'Rank {rank} got {data} with tag {tag}')
             param_block_num = param_block[current_param]
+            print(
+                f'Rank {rank} : Current pointer {current_param} -> {param_block_num}')
             # Sending next job to worker
             data = np.array([param_block_num], dtype='i')
             comm.Send([data, MPI.INT], dest=dest, tag=PARAM)
             current_param += 1
+            print(f'Rank {rank} : Incremented Current pointer {current_param}')
         process = 0
         while process < 4:
             data = np.empty(1, dtype='i')

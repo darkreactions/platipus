@@ -112,7 +112,7 @@ class Platipus:
     def meta_train(self):
         # for epoch in range(resume_epoch, resume_epoch + num_epochs):
         for epoch in range(self.num_epochs):
-            logging.debug(f"Starting epoch {epoch}")
+            #logging.debug(f"Starting epoch {epoch}")
 
             b_num = np.random.choice(len(self.training_batches))
             batch = self.training_batches[b_num]
@@ -189,11 +189,11 @@ class Platipus:
                             meta_loss_avg_print / num_meta_updates_count)
                         kl_loss_avg_save.append(
                             kl_loss_avg_print / num_meta_updates_count)
-                        logging.debug('{0:d}, {1:2.4f}, {2:2.4f}'.format(
-                            task_count,
-                            meta_loss_avg_save[-1],
-                            kl_loss_avg_save[-1]
-                        ))
+                        # logging.debug('{0:d}, {1:2.4f}, {2:2.4f}'.format(
+                        #    task_count,
+                        #    meta_loss_avg_save[-1],
+                        #    kl_loss_avg_save[-1]
+                        # ))
 
                         num_meta_updates_count = 0
                         meta_loss_avg_print = 0

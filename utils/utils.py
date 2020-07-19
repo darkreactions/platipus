@@ -189,7 +189,7 @@ def save_model(model, params, amine=None):
         dst_folder = Path(f'{dst_folder_root}/{model}_{k_shot}_shot/{amine}')
         # return dst_folder
     else:
-        dst_folder = Path(f'{dst_folder_root}/{model}_{k_shot}_shot/testing')
+        dst_folder = Path(f'{dst_folder_root}/{model}_{k_shot}_shot')
 
     dst_folder.mkdir(parents=True, exist_ok=True)
     return dst_folder
@@ -373,11 +373,13 @@ def find_success_rate():
     percent_volume['Full Name'].str.lower()
     inventory['Chemical Name'].str.lower()
 
-    total = percent_volume.set_index('Full Name').join(inventory.set_index('Chemical Name'))
+    total = percent_volume.set_index('Full Name').join(
+        inventory.set_index('Chemical Name'))
 
     # percent_vol = []
 
-    filtered = percent_volume[percent_volume['Inchi'].isin(amines)].sort_values(['Success'], axis=0, ascending=False)
+    filtered = percent_volume[percent_volume['Inchi'].isin(
+        amines)].sort_values(['Success'], axis=0, ascending=False)
     amines_new = filtered['Inchi'].values
 
     success_rate = filtered['Success'].to_numpy()
@@ -389,7 +391,8 @@ def find_success_rate():
     percent_success = []
     for amine in amines_new:
         results = df[df[amine_header] == amine][score_header].value_counts()
-        name = inventory[inventory['InChI Key (ID)'] == amine]['InChI Key (ID)'].values
+        name = inventory[inventory['InChI Key (ID)']
+                         == amine]['InChI Key (ID)'].values
         names.append(name[0])
         counts0.append(results[0])
         counts1.append(results[1])

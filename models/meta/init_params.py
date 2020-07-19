@@ -74,8 +74,8 @@ def init_params(args):
                                 verbose=args['verbose'],
                                 test=params.get('test_data', False))
         params['validation_batches'] = validation_batches
-        write_pickle(params['dst_folder'] /
-                     Path("val_dump.pkl"), validation_batches)
+        # write_pickle(params['dst_folder'] /
+        #             Path("val_dump.pkl"), validation_batches)
     else:
         training_batches, testing_batches, counts = \
             load_chem_dataset(k_shot=args['k_shot'],
@@ -88,12 +88,12 @@ def init_params(args):
     params['testing_batches'] = testing_batches
     params['counts'] = counts
     # Save for reproducibility
-    write_pickle(params['dst_folder'] /
-                 Path("train_dump.pkl"), training_batches)
-    write_pickle(params['dst_folder'] /
-                 Path("test_dump.pkl"), testing_batches)
-    write_pickle(params['dst_folder'] /
-                 Path("counts_dump.pkl"), counts)
+    # write_pickle(params['dst_folder'] /
+    #             Path("train_dump.pkl"), training_batches)
+    # write_pickle(params['dst_folder'] /
+    #             Path("test_dump.pkl"), testing_batches)
+    # write_pickle(params['dst_folder'] /
+    #             Path("counts_dump.pkl"), counts)
 
     params['sm_loss'] = torch.nn.Softmax(dim=2)
 
