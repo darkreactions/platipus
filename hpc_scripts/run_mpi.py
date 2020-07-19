@@ -75,26 +75,23 @@ if __name__ == "__main__":
             process += 1
 
     else:
-
-        data = np.array([1], dtype='i')
-
-        comm.Send([data, MPI.INT], dest=0, tag=SEND_NEXT_PARAM)
-        data = np.empty(1, dtype='i')
-        comm.Recv(data, source=0, tag=MPI.ANY_TAG, status=status)
-        tag = status.Get_tag()
+        tag = SEND_NEXT_PARAM
         print(f'Rank {rank} got {data} with tag {tag}')
         while tag != TERMINATE:
-            print(f'Param on rank {rank}: {data} : {all_params[data[0]]} ')
-            params = all_params[data[0]]
-            params['gpu_id'] = rank-1
-            try:
-                run_platipus(params)
-            except Exception as e:
-                logging.error(
-                    f"In rank {rank} with params: {params} : Exception {e}")
-                continue
-
+            data = np.array([1], dtype='i')
             comm.Send([data, MPI.INT], dest=0, tag=SEND_NEXT_PARAM)
             data = np.empty(1, dtype='i')
             comm.Recv(data, source=0, tag=MPI.ANY_TAG, status=status)
             tag = status.Get_tag()
+
+            if tag == PARAM:
+                print(f'Param on rank {rank}: {data} : {all_params[data[0]]} ')
+                params = all_params[data[0]]
+                params['gpu_id'] = rank-1
+
+                try:
+                    run_platipus(params)
+                except Exception as e:
+                    logging.error(
+                        f"In rank {rank} with params: {params} : Exception {e}")
+                    continue

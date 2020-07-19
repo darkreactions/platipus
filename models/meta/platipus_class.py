@@ -444,7 +444,7 @@ class Platipus:
         logging.info(f'Y = {y_t.shape}, {y_v.shape}')
         # Hard coded to 40 or length of training+validation set whichever is
         # lower
-        iters = min([40, len(x_t) + len(x_v) - 1])
+        iters = min([40, len(x_v) - 1])
 
         for i in range(iters):
             logging.debug(
