@@ -10,8 +10,7 @@ def init_params(args):
     params = {**args}
     gpu_id = params.get('gpu_id', 0)
     # Set up training using either GPU or CPU
-    device = torch.device(
-        f'cuda:{gpu_id}' if torch.cuda.is_available() else "cpu")
+
     params['device'] = device
 
     if device.type == 'cuda' and args.get('verbose', False):
@@ -94,8 +93,6 @@ def init_params(args):
     #             Path("test_dump.pkl"), testing_batches)
     # write_pickle(params['dst_folder'] /
     #             Path("counts_dump.pkl"), counts)
-
-    params['sm_loss'] = torch.nn.Softmax(dim=2)
 
     # Weight on the KL loss
     logging.info(f'KL reweight = {params["kl_reweight"]}')

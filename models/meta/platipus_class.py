@@ -20,22 +20,32 @@ class Platipus:
     def __init__(self, params, amine=None,
                  model_name='Platipus',
                  model_folder='./results',
+                 training=True,
                  ):
+        # For SHAP
+        self.predict_proba_calls = 0
+        self.optimizer_fn = None
+        self.activation_fn = torch.nn.functional.relu
         self.params = params
         self.amine = amine
         for key in self.params:
             setattr(self, key, self.params[key])
 
-        if amine:
+        if amine and training:
             self.training_batches = params['training_batches'][amine]
             self.dst_folder = save_model(self.model_name, params, amine)
+            self.initialize_loss_function()
+
+        self.device = torch.device(
+            f'cuda:{self.gpu_id}' if (torch.cuda.is_available() and self.gpu_id is not None) else "cpu")
 
         self.net = FCNet(dim_input=51, dim_output=self.n_way,
                          num_hidden_units=self.num_hidden_units,
                          device=self.device, activation_fn=self.activation_fn)
         self.w_shape = self.net.get_weight_shape()
         self.num_weights = self.net.get_num_weights()
-        self.initialize_loss_function()
+        self.sm_loss = torch.nn.Softmax(dim=2)
+
         self.Theta = self.initialize_Theta()
         self.set_optim()
 
@@ -340,12 +350,13 @@ class Platipus:
         return phi
 
     def predict(self, x_v, phi=None, proba=False):
+        if isinstance(x_v, np.ndarray):
+            x_v = torch.from_numpy(x_v).float().to(self.device)
         y_pred_v = []
         if phi is None:
             phi = []
             for _ in range(self.Lv):
-                w = self.generate_weights(self.Theta)
-                phi.append(w)
+                phi.append(self.generate_weights(self.Theta))
 
         for phi_i in phi:
             # Now get the model predictions on the validation/test data x_v
@@ -358,13 +369,24 @@ class Platipus:
 
         prob_pred, labels_pred = torch.max(input=y_pred, dim=1)
 
+        del y_pred_v
+        del y_pred
+        del phi
+        del x_v
+
         if proba:
             return prob_pred, labels_pred
         else:
+            del prob_pred
             return labels_pred
 
     def predict_proba(self, x_v):
-        return self.predict(x_v, proba=True)[0]
+        self.predict_proba_calls += 1
+        # print(
+        #    f'Calling predict_proba {self.predict_proba_calls} with x_v = {x_v.shape}')
+        prob_pred, labels_pred = self.predict(x_v, proba=True)
+        del labels_pred
+        return prob_pred.detach().cpu().numpy()
 
     # Active learning function <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
     def active_learning(self, all_data, all_labels, x_t, y_t, x_v, y_v):
@@ -478,7 +500,7 @@ class Platipus:
 
     # Utils <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
     def load_model(self, checkpoint_path):
-        if torch.cuda.is_available():
+        if torch.cuda.is_available() and self.gpu_id is not None:
             saved_checkpoint = torch.load(
                 checkpoint_path,
                 map_location=lambda storage,
