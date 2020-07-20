@@ -6,6 +6,8 @@ import torch
 import pandas as pd
 import numpy as np
 from sklearn.metrics import roc_auc_score
+from scipy.spatial.distance import pdist, cdist
+from scipy.spatial.distance import squareform
 
 from utils.dataset import process_dataset, import_test_dataset, import_full_dataset
 
@@ -520,7 +522,8 @@ def run_non_meta_model(base_model, common_params, model_params, category):
     base_model.run_model(base_model_params, category)
 
 
-def grid_search(clf, params, train_size, active_learning_iter, active_learning=True, w_hx=True, w_k=True, info=False):
+def grid_search(clf, params, train_size, active_learning_iter, active_learning=True, w_hx=True, w_k=True, random=False,
+                random_size=10, info=False):
     """Fine tune the model based on average bcr performance to find the best model hyper-parameters.
 
     Similar to GridSearchCV in scikit-learn package, we try out all the combinations and evaluate performance
@@ -536,6 +539,8 @@ def grid_search(clf, params, train_size, active_learning_iter, active_learning=T
         active_learning:            A boolean representing if active learning will be involved in testing or not.
         w_hx:                       A boolean representing if the models are trained with historical data or not.
         w_k:                        A boolean representing if the modes are trained with amine-specific experiments.
+        random:                     A boolean representing if we want to do random search or not.
+        random_size:                An integer representing the number of random combinations to try and compare.
         info:                       A boolean. Setting it to True will make the function print out additional
                                         information during the fine-tuning stage.
                                         Default to False.
@@ -551,14 +556,10 @@ def grid_search(clf, params, train_size, active_learning_iter, active_learning=T
     for bundle in itertools.product(*values):
         combinations.append(dict(zip(keys, bundle)))
 
-    # TODO DELETE Temp for LinearSVM
-    temp = []
-    for option in combinations:
-        if not (option['penalty'] == 'l1' and option['loss'] == 'hinge') :
-            if not (option['penalty'] == 'l1' and option['loss'] == 'squared_hinge' and option['dual'] == True):
-                if not (option['penalty'] == 'l2' and option['loss'] == 'hinge' and option['dual'] == False):
-                    temp.append(option)
-    combinations = temp
+    # In case we want to decrease the run time
+    # by doing random search
+    if random:
+        combinations = list(np.random.choice(combinations, size=random_size))
 
     # Load the full dataset under specific categorical option
     amine_list, train_data, train_labels, val_data, val_labels, all_data, all_labels = process_dataset(
@@ -678,6 +679,22 @@ def grid_search(clf, params, train_size, active_learning_iter, active_learning=T
         print(f'With an average auc of {best_metric}')
 
     return best_option
+
+
+# Credit: https://github.com/rlphilli/sklearn-PUK-kernel
+def PUK_kernel(X1, X2, sigma=1.0, omega=1.0):
+    # Compute the kernel matrix between two arrays using the Pearson VII function-based universal kernel.
+
+    # Compute squared euclidean distance between each row element pair of the two matrices
+    if X1 is X2 :
+        kernel = squareform(pdist(X1, 'sqeuclidean'))
+    else:
+        kernel = cdist(X1, X2, 'sqeuclidean')
+
+    kernel = (1 + (kernel * 4 * np.sqrt(2**(1.0/omega)-1)) / sigma**2) ** omega
+    kernel = 1/kernel
+
+    return kernel
 
 
 if __name__ == "__main__":
