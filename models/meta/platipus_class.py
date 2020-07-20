@@ -31,13 +31,22 @@ class Platipus:
         for key in self.params:
             setattr(self, key, self.params[key])
 
+        self.device = torch.device(
+            f'cuda:{self.gpu_id}' if (torch.cuda.is_available() and self.gpu_id is not None) else "cpu")
+
+        if self.device.type == 'cuda':
+            logging.info(
+                f'Using device: {torch.cuda.get_device_name(self.device)}')
+            logging.info('Memory Usage:')
+            logging.info(
+                f'Allocated:{round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)} GB ')
+            logging.info(
+                f'Cached: {round(torch.cuda.memory_cached(0) / 1024 ** 3, 1)} GB')
+
         if amine and training:
             self.training_batches = params['training_batches'][amine]
             self.dst_folder = save_model(self.model_name, params, amine)
             self.initialize_loss_function()
-
-        self.device = torch.device(
-            f'cuda:{self.gpu_id}' if (torch.cuda.is_available() and self.gpu_id is not None) else "cpu")
 
         self.net = FCNet(dim_input=51, dim_output=self.n_way,
                          num_hidden_units=self.num_hidden_units,
@@ -382,8 +391,8 @@ class Platipus:
 
     def predict_proba(self, x_v):
         self.predict_proba_calls += 1
-        # print(
-        #    f'Calling predict_proba {self.predict_proba_calls} with x_v = {x_v.shape}')
+        print(
+            f'Calling predict_proba {self.predict_proba_calls} with x_v = {x_v.shape}')
         prob_pred, labels_pred = self.predict(x_v, proba=True)
         del labels_pred
         return prob_pred.detach().cpu().numpy()
@@ -535,6 +544,8 @@ if __name__ == '__main__':
 
         logging.info(f'Begin training with amine: {amine}')
         platipus.meta_train()
+        # run shap for 1st time
         logging.info(f'Begin active learning with amine: {amine}')
         platipus.test_model_actively()
+        # run shap for 2st time
         logging.info(f'Completed active learning with amine: {amine}')

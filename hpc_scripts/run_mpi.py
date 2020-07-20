@@ -18,23 +18,25 @@ TERMINATE = 102
 
 
 def run_platipus(params):
-    logging.basicConfig(filename=Path(save_model(params['model_name'], params))/Path('logfile.log'),
-                        level=logging.DEBUG)
-    train_params = init_params(params)
-    for amine in train_params['training_batches']:
-        logging.info(f'Starting process with amine: {amine}')
-        platipus = Platipus(train_params, amine=amine,
-                            model_name=train_params['model_name'])
+    base_folder = Path(save_model(params['model_name'], params))
+    if not base_folder.exists():
+        logging.basicConfig(filename=Path(save_model(params['model_name'], params))/Path('logfile.log'),
+                            level=logging.DEBUG)
+        train_params = init_params(params)
+        for amine in train_params['training_batches']:
+            logging.info(f'Starting process with amine: {amine}')
+            platipus = Platipus(train_params, amine=amine,
+                                model_name=train_params['model_name'])
 
-        logging.info(f'Begin training with amine: {amine}')
-        platipus.meta_train()
-        logging.info(f'Begin active learning with amine: {amine}')
-        platipus.test_model_actively()
-        logging.info(f'Completed active learning with amine: {amine}')
+            logging.info(f'Begin training with amine: {amine}')
+            platipus.meta_train()
+            logging.info(f'Begin active learning with amine: {amine}')
+            platipus.test_model_actively()
+            logging.info(f'Completed active learning with amine: {amine}')
 
 
 if __name__ == "__main__":
-    node_num = 1
+    node_num = 0
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
     status = MPI.Status()

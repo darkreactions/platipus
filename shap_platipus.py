@@ -14,7 +14,7 @@ class_name = ["failure", "success"]
 
 params = {**common_params, **local_meta_params}
 train_params = {**params, **local_meta_train}
-train_params['gpu_id'] = 1
+train_params['gpu_id'] = 0
 amine = 'ZEVRFFCPALTVDN-UHFFFAOYSA-N'
 
 platipus = Platipus(train_params, amine=amine, training=False,
@@ -26,7 +26,7 @@ val_data = pickle.load(
     open('./results/Platipus_local_10_shot/testing/val_dump.pkl', 'rb'))
 x_t, y_t = val_data[amine][2], val_data[amine][3]
 
-print(platipus.predict_proba(x_t))
+# print(platipus.predict_proba(x_t))
 
 explainer = shap.KernelExplainer(platipus.predict_proba, x_t)
 shap_values = explainer.shap_values(x_t, nsamples=100)

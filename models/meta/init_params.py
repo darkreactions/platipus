@@ -11,17 +11,6 @@ def init_params(args):
     gpu_id = params.get('gpu_id', 0)
     # Set up training using either GPU or CPU
 
-    params['device'] = device
-
-    if device.type == 'cuda' and args.get('verbose', False):
-        logging.info(
-            f'Using device: {torch.cuda.get_device_name(device)}')
-        logging.info('Memory Usage:')
-        logging.info(
-            f'Allocated:{round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1)} GB ')
-        logging.info(
-            f'Cached: {round(torch.cuda.memory_cached(0) / 1024 ** 3, 1)} GB')
-
     logging.info(f'{args["k_shot"]}-shot')
 
     # Total number of samples per class, need some extra for the outer loop update as well
@@ -87,12 +76,12 @@ def init_params(args):
     params['testing_batches'] = testing_batches
     params['counts'] = counts
     # Save for reproducibility
-    # write_pickle(params['dst_folder'] /
-    #             Path("train_dump.pkl"), training_batches)
-    # write_pickle(params['dst_folder'] /
-    #             Path("test_dump.pkl"), testing_batches)
-    # write_pickle(params['dst_folder'] /
-    #             Path("counts_dump.pkl"), counts)
+    write_pickle(params['dst_folder'] /
+                 Path("train_dump.pkl"), training_batches)
+    write_pickle(params['dst_folder'] /
+                 Path("test_dump.pkl"), testing_batches)
+    write_pickle(params['dst_folder'] /
+                 Path("counts_dump.pkl"), counts)
 
     # Weight on the KL loss
     logging.info(f'KL reweight = {params["kl_reweight"]}')
