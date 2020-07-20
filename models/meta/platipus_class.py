@@ -39,6 +39,8 @@ class Platipus:
         self.Theta = self.initialize_Theta()
         self.set_optim()
 
+    # Initialization functions <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
     def initialize_loss_function(self):
         success = self.counts[self.amine][1]
         failures = self.counts[self.amine][0]
@@ -109,10 +111,11 @@ class Platipus:
         else:
             self.op_Theta = self.optimizer_fn(parameters, lr=self.meta_lr)
 
+    # Training Functions <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
     def meta_train(self):
         # for epoch in range(resume_epoch, resume_epoch + num_epochs):
         for epoch in range(self.num_epochs):
-            #logging.debug(f"Starting epoch {epoch}")
+            # logging.debug(f"Starting epoch {epoch}")
 
             b_num = np.random.choice(len(self.training_batches))
             batch = self.training_batches[b_num]
@@ -228,36 +231,6 @@ class Platipus:
 
         # self.Theta = self.initialize_Theta()
 
-    def get_loss_gradients(self, x, y, w, lr, logSigma=None):
-        """
-            Calculates gradient loss. If logSigma is given then variational
-            distribution is updated
-        """
-        if logSigma is not None:
-            q = initialise_dict_of_dict(key_list=w.keys())
-            y_pred = self.net.forward(x=x, w=w,
-                                      p_dropout=self.p_dropout_base)
-            loss = self.loss_fn(y_pred, y)
-            loss_grads = torch.autograd.grad(outputs=loss,
-                                             inputs=w.values(),
-                                             create_graph=True)
-            loss_gradients = dict(zip(w.keys(), loss_grads))
-            # Assume w is self.Theta
-            for key in w.keys():
-                q['mean'][key] = w[key] - lr[key] * loss_gradients[key]
-                q['logSigma'][key] = logSigma[key]
-        else:
-            y_pred = self.net.forward(x=x, w=w)
-            loss = self.loss_fn(y_pred, y)
-            loss_grads = torch.autograd.grad(outputs=loss,
-                                             inputs=w.values())
-            loss_gradients = dict(zip(w.keys(), loss_grads))
-            q = {}
-            for key in w.keys():
-                q[key] = w[key] - lr * loss_gradients[key]
-
-        return q
-
     def get_training_loss(self, x_t, y_t, x_v, y_v):
         # step 6 - Compute loss on query set
         # step 7 - Update parameters of the variational distribution
@@ -302,6 +275,37 @@ class Platipus:
         KL_q_p = (KL_q_p - self.num_weights) / 2
         return loss_query, KL_q_p
 
+    # General model related functions <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+    def get_loss_gradients(self, x, y, w, lr, logSigma=None):
+        """
+            Calculates gradient loss. If logSigma is given then variational
+            distribution is updated
+        """
+        if logSigma is not None:
+            q = initialise_dict_of_dict(key_list=w.keys())
+            y_pred = self.net.forward(x=x, w=w,
+                                      p_dropout=self.p_dropout_base)
+            loss = self.loss_fn(y_pred, y)
+            loss_grads = torch.autograd.grad(outputs=loss,
+                                             inputs=w.values(),
+                                             create_graph=True)
+            loss_gradients = dict(zip(w.keys(), loss_grads))
+            # Assume w is self.Theta
+            for key in w.keys():
+                q['mean'][key] = w[key] - lr[key] * loss_gradients[key]
+                q['logSigma'][key] = logSigma[key]
+        else:
+            y_pred = self.net.forward(x=x, w=w)
+            loss = self.loss_fn(y_pred, y)
+            loss_grads = torch.autograd.grad(outputs=loss,
+                                             inputs=w.values())
+            loss_gradients = dict(zip(w.keys(), loss_grads))
+            q = {}
+            for key in w.keys():
+                q[key] = w[key] - lr * loss_gradients[key]
+
+        return q
+
     def generate_weights(self, meta_params):
         w = {}
         for key in meta_params['mean'].keys():
@@ -335,8 +339,14 @@ class Platipus:
             phi.append(phi_i)
         return phi
 
-    def predict(self, phi, x_v):
+    def predict(self, x_v, phi=None, proba=False):
         y_pred_v = []
+        if phi is None:
+            phi = []
+            for _ in range(self.Lv):
+                w = self.generate_weights(self.Theta)
+                phi.append(w)
+
         for phi_i in phi:
             # Now get the model predictions on the validation/test data x_v
             #  by calling the forward method
@@ -348,15 +358,21 @@ class Platipus:
 
         prob_pred, labels_pred = torch.max(input=y_pred, dim=1)
 
-        # return y_pred_v
-        return prob_pred, labels_pred
+        if proba:
+            return prob_pred, labels_pred
+        else:
+            return labels_pred
 
+    def predict_proba(self, x_v):
+        return self.predict(x_v, proba=True)[0]
+
+    # Active learning function <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
     def active_learning(self, all_data, all_labels, x_t, y_t, x_v, y_v):
         """
             Performs single step of the active learning process
         """
         phi = self.setup_weight_dist(x_t, y_t)
-        prob_pred, labels_pred = self.predict(phi, all_data)
+        prob_pred, labels_pred = self.predict(all_data, phi=phi, proba=True)
         correct = (labels_pred == all_labels)
 
         y_true = all_labels.detach().cpu().numpy()
@@ -368,7 +384,8 @@ class Platipus:
         bcr = balanced_accuracy_score(y_true, y_pred)
 
         # Now add the most uncertain point to the training data
-        prob_pred_update, labels_pred_update = self.predict(phi, x_v)
+        prob_pred_update, labels_pred_update = self.predict(
+            x_v, phi=phi, proba=True)
 
         logging.debug(y_v)
         logging.debug(labels_pred_update)
@@ -459,6 +476,23 @@ class Platipus:
         write_pickle(self.dst_folder / Path('cv_statistics.pkl'),
                      self.cv_statistics)
 
+    # Utils <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+    def load_model(self, checkpoint_path):
+        if torch.cuda.is_available():
+            saved_checkpoint = torch.load(
+                checkpoint_path,
+                map_location=lambda storage,
+                loc: storage.cuda(self.gpu_id)
+            )
+        else:
+            saved_checkpoint = torch.load(
+                checkpoint_path,
+                map_location=lambda storage,
+                loc: storage
+            )
+        self.Theta = saved_checkpoint['Theta']
+        self.op_Theta.load_state_dict(saved_checkpoint['op_Theta'])
+
 
 if __name__ == '__main__':
     params = {**common_params, **local_meta_params}
@@ -482,34 +516,3 @@ if __name__ == '__main__':
         logging.info(f'Begin active learning with amine: {amine}')
         platipus.test_model_actively()
         logging.info(f'Completed active learning with amine: {amine}')
-
-""" The following code is deleted from self.validate
-        val_batch = self.validation_batches[self.amine]
-        x_t, y_t, x_v, y_v = torch.from_numpy(val_batch[0]).float().to(self.device),\
-            torch.from_numpy(val_batch[1]).long().to(self.device),\
-            torch.from_numpy(val_batch[2]).float().to(self.device),\
-            torch.from_numpy(val_batch[3]).long().to(self.device)
-
-        accuracies = []
-        corrects = []
-        probability_pred = []
-        preds = self.predict(x_t, y_t, x_v)
-        #logging.debug(f'Raw task predictions: {preds}')
-        y_pred_v = self.sm_loss(torch.stack(preds))
-        #logging.debug(f'after applying softmax: {y_pred_v}')
-        y_pred = torch.mean(input=y_pred_v, dim=0, keepdim=False)
-        #logging.debug(f'after calling torch mean: {y_pred}')
-
-        prob_pred, labels_pred = torch.max(input=y_pred, dim=1)
-        #logging.debug(f'Labels predicted: {labels_pred}')
-        #logging.debug(f'True labels: {y_v}')
-        logging.debug(f'probability of prediction: {prob_pred}')
-        correct = (labels_pred == y_v)
-        corrects.extend(correct.detach().cpu().numpy())
-
-        # print('length of validation set', len(y_v))
-        accuracy = torch.sum(correct, dim=0).item() / len(y_v)
-        accuracies.append(accuracy)
-
-        probability_pred.extend(prob_pred.detach().cpu().numpy())
-        """

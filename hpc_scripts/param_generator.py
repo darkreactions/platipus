@@ -7,8 +7,8 @@ optim_algos = [torch.optim.Adam, torch.optim.RMSprop, torch.optim.SGD]
 lrs = [0.01, 0.001, 0.0001]
 activation_fns = [torch.nn.functional.relu,
                   torch.nn.functional.sigmoid, torch.nn.functional.tanh]
-# dropout_regs = [0.1, 0.4, 0.7]
 hidden_layers = [(200, 100, 100), (400, 300, 200), (500, 300, 100)]
+# dropout_regs = [0.1, 0.4, 0.7]
 
 
 def get_all_params():

@@ -76,7 +76,7 @@ if __name__ == "__main__":
 
     else:
         tag = SEND_NEXT_PARAM
-        print(f'Rank {rank} got {data} with tag {tag}')
+        # print(f'Rank {rank} got {data} with tag {tag}')
         while tag != TERMINATE:
             data = np.array([1], dtype='i')
             comm.Send([data, MPI.INT], dest=0, tag=SEND_NEXT_PARAM)
