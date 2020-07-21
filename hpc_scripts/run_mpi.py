@@ -18,8 +18,10 @@ TERMINATE = 102
 
 
 def run_platipus(params):
-    base_folder = Path(save_model(params['model_name'], params))
+    base_folder = Path(f"./results/{params['model_name']}_{params['k_shot']}_shot")
+    print(f'Running platipus in base folder {base_folder}')
     if not base_folder.exists():
+        print(f"Did not find folder running {params['model_name']}")
         logging.basicConfig(filename=Path(save_model(params['model_name'], params))/Path('logfile.log'),
                             level=logging.DEBUG)
         train_params = init_params(params)
@@ -36,7 +38,7 @@ def run_platipus(params):
 
 
 if __name__ == "__main__":
-    node_num = 0
+    node_num = 2 
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
     status = MPI.Status()
@@ -78,13 +80,13 @@ if __name__ == "__main__":
 
     else:
         tag = SEND_NEXT_PARAM
-        print(f'Rank {rank} got {data} with tag {tag}')
         while tag != TERMINATE:
             data = np.array([1], dtype='i')
             comm.Send([data, MPI.INT], dest=0, tag=SEND_NEXT_PARAM)
             data = np.empty(1, dtype='i')
             comm.Recv(data, source=0, tag=MPI.ANY_TAG, status=status)
             tag = status.Get_tag()
+            print(f'Rank {rank} got {data} with tag {tag}')
 
             if tag == PARAM:
                 print(f'Param on rank {rank}: {data} : {all_params[data[0]]} ')
