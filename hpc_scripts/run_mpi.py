@@ -19,19 +19,20 @@ TERMINATE = 102
 
 def run_platipus(params):
     base_folder = Path(save_model(params['model_name'], params))
-    if not base_folder.exists():
+    if not base_folder.exists() and params['num_epochs'] == 5000:
         logging.basicConfig(filename=Path(save_model(params['model_name'], params))/Path('logfile.log'),
                             level=logging.DEBUG)
         train_params = init_params(params)
         for amine in train_params['training_batches']:
             logging.info(f'Starting process with amine: {amine}')
             platipus = Platipus(train_params, amine=amine,
-                                model_name=train_params['model_name'])
+                                model_name=train_params['model_name'],
+                                epoch_al=True)
 
             logging.info(f'Begin training with amine: {amine}')
             platipus.meta_train()
-            logging.info(f'Begin active learning with amine: {amine}')
-            platipus.test_model_actively()
+            #logging.info(f'Begin active learning with amine: {amine}')
+            # platipus.test_model_actively()
             logging.info(f'Completed active learning with amine: {amine}')
 
 
@@ -78,14 +79,14 @@ if __name__ == "__main__":
 
     else:
         tag = SEND_NEXT_PARAM
-        print(f'Rank {rank} got {data} with tag {tag}')
+
         while tag != TERMINATE:
             data = np.array([1], dtype='i')
             comm.Send([data, MPI.INT], dest=0, tag=SEND_NEXT_PARAM)
             data = np.empty(1, dtype='i')
             comm.Recv(data, source=0, tag=MPI.ANY_TAG, status=status)
             tag = status.Get_tag()
-
+            print(f'Rank {rank} got {data} with tag {tag}')
             if tag == PARAM:
                 print(f'Param on rank {rank}: {data} : {all_params[data[0]]} ')
                 params = all_params[data[0]]

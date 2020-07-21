@@ -21,13 +21,17 @@ class Platipus:
                  model_name='Platipus',
                  model_folder='./results',
                  training=True,
+                 epoch_al=False,
                  ):
+        self.epoch_al = epoch_al
         # For SHAP
         self.predict_proba_calls = 0
         self.optimizer_fn = None
+        self.rand_index = None
         self.activation_fn = torch.nn.functional.relu
         self.params = params
         self.amine = amine
+        self.cv_statistics = {}
         for key in self.params:
             setattr(self, key, self.params[key])
 
@@ -57,6 +61,7 @@ class Platipus:
 
         self.Theta = self.initialize_Theta()
         self.set_optim()
+        self.model_name_temp = self.model_name
 
     # Initialization functions <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
@@ -246,7 +251,11 @@ class Platipus:
                 checkpoint_filename = Path(
                     f"{self.datasource}_{self.k_shot}shot_{epoch+1}.pt")
                 logging.info(checkpoint_filename)
-                torch.save(checkpoint, self.dst_folder / checkpoint_filename)
+                if self.epoch_al:
+                    torch.save(checkpoint, self.dst_folder /
+                               checkpoint_filename)
+                    self.model_name_temp = f"{self.model_name}_{epoch+1}"
+                    self.test_model_actively()
 
         # self.Theta = self.initialize_Theta()
 
@@ -437,7 +446,7 @@ class Platipus:
         logging.debug(f'length of x_v is now {len(x_v)}')
 
         self.cv_statistics = update_cv_stats_dict(self.cv_statistics,
-                                                  self.model_name,
+                                                  self.model_name_temp,
                                                   correct, cm, accuracy,
                                                   precision, recall, bcr,
                                                   prob_pred=prob_pred,
@@ -445,18 +454,12 @@ class Platipus:
 
         return x_t, y_t, x_v, y_v
 
-    def test_model_actively(self):
-        """
-            Starts the active learning process
-        """
-        logging.info(f'Starting validation for {self.amine}')
-        # Run forward pass on the validation data
-        logging.debug(f'Weights for loss function: {self.weights}')
+    def setup_active_learning(self):
         class_weights = torch.tensor(self.weights, device=self.device)
         self.loss_fn = torch.nn.CrossEntropyLoss(class_weights)
 
         # Create the stats dictionary to store performance metrics
-        self.cv_statistics = {self.model_name: defaultdict(list)}
+        self.cv_statistics.update({self.model_name_temp: defaultdict(list)})
 
         val_batch = self.validation_batches[self.amine]
 
@@ -476,10 +479,15 @@ class Platipus:
         #self.zero_point_prediction(all_data, all_labels)
 
         # Randomly pick a k-points to start active learning with
-        rand_index = np.random.choice(
-            len(x_t) + len(x_v) - 1, 10, replace=False)
-        val_loc = [0 if i in rand_index else 1 for i in range(len(all_labels))]
-        loc = [1 if i in rand_index else 0 for i in range(len(all_labels))]
+        k_points = 10
+        if self.rand_index is None:
+            # Creating self.rand_index to save the random k points
+            self.rand_index = np.random.choice(
+                len(x_t) + len(x_v) - 1, k_points, replace=False)
+        val_loc = [
+            0 if i in self.rand_index else 1 for i in range(len(all_labels))]
+        loc = [1 if i in self.rand_index else 0 for i in range(
+            len(all_labels))]
 
         x_t = all_data[torch.BoolTensor(loc)]
         x_v = all_data[torch.BoolTensor(val_loc)]
@@ -493,6 +501,18 @@ class Platipus:
         # Hard coded to 40 or length of training+validation set whichever is
         # lower
         iters = min([40, len(x_v) - 1])
+
+        return iters, all_data, all_labels, x_t, y_t, x_v, y_v
+
+    def test_model_actively(self):
+        """
+            Starts the active learning process
+        """
+        logging.info(f'Starting validation for {self.amine}')
+        # Run forward pass on the validation data
+        logging.debug(f'Weights for loss function: {self.weights}')
+
+        iters, all_data, all_labels, x_t, y_t, x_v, y_v = self.setup_active_learning()
 
         for i in range(iters):
             logging.debug(
@@ -540,7 +560,7 @@ if __name__ == '__main__':
     for amine in train_params['training_batches']:
         logging.info(f'Starting process with amine: {amine}')
         platipus = Platipus(train_params, amine=amine,
-                            model_name=train_params['model_name'])
+                            model_name=train_params['model_name'], epoch_al=True)
 
         logging.info(f'Begin training with amine: {amine}')
         platipus.meta_train()
