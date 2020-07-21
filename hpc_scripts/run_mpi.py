@@ -35,7 +35,7 @@ def run_platipus(params):
 
             logging.info(f'Begin training with amine: {amine}')
             platipus.meta_train()
-            #logging.info(f'Begin active learning with amine: {amine}')
+            # logging.info(f'Begin active learning with amine: {amine}')
             # platipus.test_model_actively()
             logging.info(f'Completed active learning with amine: {amine}')
 
@@ -83,29 +83,23 @@ if __name__ == "__main__":
 
     else:
         tag = SEND_NEXT_PARAM
-<< << << < HEAD
 
-== == == =
->>>>>> > 3f87e120577b8d02d5c653ad9da47b9aa057b95d
-while tag != TERMINATE:
-    data = np.array([1], dtype='i')
-     comm.Send([data, MPI.INT], dest=0, tag=SEND_NEXT_PARAM)
-      data = np.empty(1, dtype='i')
-       comm.Recv(data, source=0, tag=MPI.ANY_TAG, status=status)
-        tag = status.Get_tag()
-        print(f'Rank {rank} got {data} with tag {tag}')
-<< << << < HEAD
-== == == =
+        while tag != TERMINATE:
+            data = np.array([1], dtype='i')
+            comm.Send([data, MPI.INT], dest=0, tag=SEND_NEXT_PARAM)
+            data = np.empty(1, dtype='i')
+            comm.Recv(data, source=0, tag=MPI.ANY_TAG, status=status)
+            tag = status.Get_tag()
+            print(f'Rank {rank} got {data} with tag {tag}')
 
->>>>>> > 3f87e120577b8d02d5c653ad9da47b9aa057b95d
-if tag == PARAM:
-    print(f'Param on rank {rank}: {data} : {all_params[data[0]]} ')
-     params = all_params[data[0]]
-      params['gpu_id'] = rank-1
+            if tag == PARAM:
+                print(f'Param on rank {rank}: {data} : {all_params[data[0]]} ')
+                params = all_params[data[0]]
+                params['gpu_id'] = rank-1
 
-       try:
-            run_platipus(params)
-        except Exception as e:
-            logging.error(
-                f"In rank {rank} with params: {params} : Exception {e}")
-            continue
+                try:
+                    run_platipus(params)
+                except Exception as e:
+                    logging.error(
+                        f"In rank {rank} with params: {params} : Exception {e}")
+                    continue
