@@ -7,9 +7,10 @@ import os
 import sys
 import logging
 from pathlib import Path
+from collections import defaultdict
 
 from utils import (load_chem_dataset, create_cv_stats_dict,
-                   update_cv_stats_dict)
+                   update_cv_stats_dict, read_pickle)
 #from utils.plot import plot_metrics_graph
 
 from models.meta.FC_net import FCNet
@@ -48,7 +49,7 @@ def main(params):
                     logging.info(f'Starting training for {amine}')
                     # Change the path to save models
                     params['dst_folder'] = save_model(
-                        "PLATIPUS", params, amine)
+                        params['model_name'], params, amine)
 
                     # Adjust the loss function for each amine
                     amine_counts = params['counts'][amine]
@@ -84,7 +85,8 @@ def main(params):
                 #print("Starting validation for amine", amine)
                 logging.info(f'Starting validation for {amine}')
                 # Change the path to save models
-                params['dst_folder'] = save_model("PLATIPUS", params, amine)
+                params['dst_folder'] = save_model(
+                    params['model_name'], params, amine)
 
                 # Here we are loading a previously trained model
                 saved_checkpoint = load_previous_model_platipus(params)
@@ -174,7 +176,7 @@ def main(params):
 
             # Find the minimum number of points for performance evaluation
             min_length = len(
-                min(stats_dict["PLATIPUS"]['accuracies'], key=len))
+                min(stats_dict[params['model_name']]['accuracies'], key=len))
             # print(
             #    f'Minimum number of points we have to work with is {min_length}')
             logging.info(
@@ -248,17 +250,16 @@ def test_model_actively(params, amine=None):
     """
 
     # Assume root directory is current directory
-    dst_folder_root = '.'
+    dst_folder_root = params['dst_folder']
+    device = params['device']
 
     # Running cross validation for a specific amine
     if params['cross_validate']:
         # List out the models we want to conduct active learning
-        #models = ['PLATIPUS', 'MAML']
-        #models = ['PLATIPUS']
-        models = [params['model_name']]
+        model = params['model_name']
 
         # Create the stats dictionary to store performance metrics
-        cv_stats_dict = create_cv_stats_dict(models)
+        cv_stats_dict = {model: defaultdict(list)}
 
         # Set up softmax loss function for PLATIPUS and MAML
         sm_loss_platipus = params['sm_loss']
@@ -268,139 +269,158 @@ def test_model_actively(params, amine=None):
         validation_batches = params['validation_batches']
         val_batch = validation_batches[amine]
 
-        for model in models:
-            # print(model)
-            # Initialize the training and the active learning pool for model
-            x_t, y_t, x_v, y_v = torch.from_numpy(val_batch[0]).float().to(params['device']), torch.from_numpy(
-                val_batch[1]).long().to(params['device']), \
-                torch.from_numpy(val_batch[2]).float().to(params['device']), torch.from_numpy(
-                val_batch[3]).long().to(params['device'])
+        # Initialize the training and the active learning pool for model
+        x_t, y_t, x_v, y_v = torch.from_numpy(val_batch[0]).float().to(device),\
+            torch.from_numpy(val_batch[1]).long().to(device),\
+            torch.from_numpy(val_batch[2]).float().to(device),\
+            torch.from_numpy(val_batch[3]).long().to(device)
 
-            all_labels = torch.cat((y_t, y_v))
-            all_data = torch.cat((x_t, x_v))
+        all_labels = torch.cat((y_t, y_v))
+        all_data = torch.cat((x_t, x_v))
 
-            # Pre-fill num_examples for zero-point evaluation
-            num_examples = [0]
+        # Pre-fill num_examples for zero-point evaluation
+        num_examples = [0]
 
-            # Set up the number of active learning iterations
-            # Starting from 1 so that we can compare PLATIPUS/MAML with other models such as SVM and KNN that
-            # have valid results from the first validation point.
-            # For testing, overwrite with iters = 1
-            iters = len(x_t) + len(x_v) - 1
+        # Set up the number of active learning iterations
+        # Starting from 1 so that we can compare PLATIPUS/MAML with other models such as SVM and KNN that
+        # have valid results from the first validation point.
+        # For testing, overwrite with iters = 1
 
-            # Randomly pick a point to start active learning with
-            rand_index = np.random.choice(iters + 1)
+        # Hard coded to 40 or length of training+validation set whichever is lower
+        iters = min([40, len(x_t) + len(x_v) - 1])
 
-            if 'platipus' in model.lower():
+        # Randomly pick a point to start active learning with
+        rand_index = np.random.choice(len(x_t) + len(x_v) - 1)
 
-                # Zero point prediction for PLATIPUS model
-                logging.info(
-                    'Getting the PLATIPUS model baseline before training on zero points')
-                preds = get_naive_prediction_platipus(all_data, params)
+        #data_dict = read_pickle('./results/non_meta_data.pkl')
 
-                # Evaluate zero point performance for PLATIPUS
-                prob_pred, correct, cm, accuracy,\
-                    precision, recall, bcr = \
-                    zero_point_platipus(preds, sm_loss_platipus, all_labels)
+        if 'platipus' in model.lower():
+            """
+            pretrain_data_x = data_dict['test']['k_x'][amine]
+            k_x = torch.from_numpy(pretrain_data_x).float().to(device)
+
+            pretrain_data_y = data_dict['test']['k_y'][amine]
+            k_y = torch.from_numpy(pretrain_data_y).long().to(device)
+
+            logging.info(
+                f'Pretraining model with {len(pretrain_data_x)} points')
+
+            preds = get_task_prediction_platipus(k_x, k_y, all_data, params)
+            """
+
+            # Zero point prediction for PLATIPUS model
+            logging.info(
+                'Getting the PLATIPUS model baseline before training on zero points')
+            preds = get_naive_prediction_platipus(all_data, params)
+
+            # Evaluate zero point performance for PLATIPUS
+            prob_pred, correct, cm, accuracy,\
+                precision, recall, bcr = \
+                zero_point_platipus(preds, sm_loss_platipus, all_labels)
+
+            # Display and update individual performance metric
+            cv_stats_dict = update_cv_stats_dict(cv_stats_dict, model,
+                                                 correct, cm, accuracy,
+                                                 precision, recall,
+                                                 bcr, prob_pred=prob_pred,
+                                                 verbose=params['verbose'])
+
+            # Reset the training set and validation set
+            x_t, x_v = all_data[rand_index].view(-1, 51), torch.cat(
+                [all_data[0:rand_index], all_data[rand_index + 1:]])
+            y_t, y_v = all_labels[rand_index].view(1), torch.cat(
+                [all_labels[0:rand_index], all_labels[rand_index + 1:]])
+
+            for _ in range(iters):
+                #print(f'Doing active learning with {len(x_t)} examples')
+                logging.debug(
+                    f'Doing active learning with {len(x_t)} examples')
+                num_examples.append(len(x_t))
+                preds = get_task_prediction_platipus(
+                    x_t, y_t, all_data, params)
+
+                # Update available datapoints in the pool and evaluate current model performance
+                x_t, y_t, x_v, y_v, prob_pred, \
+                    correct, cm, accuracy, precision, \
+                    recall, bcr = active_learning_platipus(preds,
+                                                           sm_loss_platipus,
+                                                           all_labels,
+                                                           params,
+                                                           x_t, y_t, x_v, y_v)
+
+                # Display and update individual performance metric
+                cv_stats_dict = update_cv_stats_dict(cv_stats_dict, model, correct, cm, accuracy, precision,
+                                                     recall, bcr, prob_pred=prob_pred, verbose=params['verbose'])
+
+        elif 'maml' in model.lower():
+            # Load pre-trained MAML model
+            maml_checkpoint = load_previous_model_maml(
+                dst_folder_root, params, amine=None)
+            Theta_maml = maml_checkpoint['theta']
+
+            # Zero point prediction for MAML model
+            logging.info(
+                'Getting the MAML model baseline before training on zero points')
+            preds = get_naive_task_prediction_maml(
+                all_data, Theta_maml, params)
+
+            # Evaluate zero point performance for MAML
+            correct, cm, accuracy, precision, recall, bcr = zero_point_maml(
+                preds, sm_loss_maml, all_labels)
+
+            # Display and update individual performance metric
+            cv_stats_dict = update_cv_stats_dict(cv_stats_dict, model, correct, cm, accuracy, precision,
+                                                 recall, bcr, verbose=params['verbose'])
+
+            # Reset the training and validation data for MAML
+            x_t, x_v = all_data[rand_index].view(1, 51), torch.cat(
+                [all_data[0:rand_index], all_data[rand_index + 1:]])
+            y_t, y_v = all_labels[rand_index].view(1), torch.cat(
+                [all_labels[0:rand_index], all_labels[rand_index + 1:]])
+
+            for i in range(iters):
+                # print(
+                logging.debug(
+                    f'Doing MAML learning with {len(x_t)} examples')
+                num_examples.append(len(x_t))
+                preds = get_task_prediction_maml(x_t=x_t, y_t=y_t,
+                                                 x_v=all_data,
+                                                 meta_params=Theta_maml,
+                                                 params=params)
+
+                # Update available datapoints in the pool and evaluate current model performance
+                x_t, y_t, x_v, y_v, correct, \
+                    cm, accuracy, precision, \
+                    recall, bcr = \
+                    active_learning_maml(preds, sm_loss_maml,
+                                         all_labels, x_t, y_t,
+                                         x_v, y_v
+                                         )
 
                 # Display and update individual performance metric
                 cv_stats_dict = update_cv_stats_dict(cv_stats_dict, model,
                                                      correct, cm, accuracy,
                                                      precision, recall,
-                                                     bcr, prob_pred=prob_pred,
-                                                     verbose=params['verbose'])
+                                                     bcr, verbose=params['verbose'])
 
-                # Reset the training set and validation set
-                x_t, x_v = all_data[rand_index].view(-1, 51), torch.cat(
-                    [all_data[0:rand_index], all_data[rand_index + 1:]])
-                y_t, y_v = all_labels[rand_index].view(1), torch.cat(
-                    [all_labels[0:rand_index], all_labels[rand_index + 1:]])
+        else:
+            sys.exit('Unidentified model')
 
-                for _ in range(iters):
-                    #print(f'Doing active learning with {len(x_t)} examples')
-                    logging.debug(
-                        f'Doing active learning with {len(x_t)} examples')
-                    num_examples.append(len(x_t))
-                    preds = get_task_prediction_platipus(
-                        x_t, y_t, all_data, params)
+        # TODO: Check format
+        # Update the main stats dictionary stored in params
+        # This is bulky but it's good for future debugging
+        params['cv_statistics'][model]['accuracies'].append(
+            cv_stats_dict[model]['accuracies'])
+        params['cv_statistics'][model]['confusion_matrices'].append(
+            cv_stats_dict[model]['confusion_matrices'])
+        params['cv_statistics'][model]['precisions'].append(
+            cv_stats_dict[model]['precisions'])
+        params['cv_statistics'][model]['recalls'].append(
+            cv_stats_dict[model]['recalls'])
+        params['cv_statistics'][model]['bcrs'].append(
+            cv_stats_dict[model]['bcrs'])
 
-                    # Update available datapoints in the pool and evaluate current model performance
-                    x_t, y_t, x_v, y_v, prob_pred, correct, cm, accuracy, precision, recall, bcr = active_learning_platipus(
-                        preds, sm_loss_platipus, all_labels, params, x_t, y_t, x_v, y_v)
-
-                    # Display and update individual performance metric
-                    cv_stats_dict = update_cv_stats_dict(cv_stats_dict, model, correct, cm, accuracy, precision,
-                                                         recall, bcr, prob_pred=prob_pred, verbose=params['verbose'])
-
-            elif 'maml' in model.lower():
-                # Load pre-trained MAML model
-                maml_checkpoint = load_previous_model_maml(
-                    dst_folder_root, params, amine=None)
-                Theta_maml = maml_checkpoint['theta']
-
-                # Zero point prediction for MAML model
-                logging.info(
-                    'Getting the MAML model baseline before training on zero points')
-                preds = get_naive_task_prediction_maml(
-                    all_data, Theta_maml, params)
-
-                # Evaluate zero point performance for MAML
-                correct, cm, accuracy, precision, recall, bcr = zero_point_maml(
-                    preds, sm_loss_maml, all_labels)
-
-                # Display and update individual performance metric
-                cv_stats_dict = update_cv_stats_dict(cv_stats_dict, model, correct, cm, accuracy, precision,
-                                                     recall, bcr, verbose=params['verbose'])
-
-                # Reset the training and validation data for MAML
-                x_t, x_v = all_data[rand_index].view(1, 51), torch.cat(
-                    [all_data[0:rand_index], all_data[rand_index + 1:]])
-                y_t, y_v = all_labels[rand_index].view(1), torch.cat(
-                    [all_labels[0:rand_index], all_labels[rand_index + 1:]])
-
-                for i in range(iters):
-                    # print(
-                    logging.debug(
-                        f'Doing MAML learning with {len(x_t)} examples')
-                    num_examples.append(len(x_t))
-                    preds = get_task_prediction_maml(x_t=x_t, y_t=y_t,
-                                                     x_v=all_data,
-                                                     meta_params=Theta_maml,
-                                                     params=params)
-
-                    # Update available datapoints in the pool and evaluate current model performance
-                    x_t, y_t, x_v, y_v, correct, \
-                        cm, accuracy, precision, \
-                        recall, bcr = \
-                        active_learning_maml(preds, sm_loss_maml,
-                                             all_labels, x_t, y_t,
-                                             x_v, y_v
-                                             )
-
-                    # Display and update individual performance metric
-                    cv_stats_dict = update_cv_stats_dict(cv_stats_dict, model,
-                                                         correct, cm, accuracy,
-                                                         precision, recall,
-                                                         bcr, verbose=params['verbose'])
-
-            else:
-                sys.exit('Unidentified model')
-
-            # TODO: Check format
-            # Update the main stats dictionary stored in params
-            # This is bulky but it's good for future debugging
-            params['cv_statistics'][model]['accuracies'].append(
-                cv_stats_dict[model]['accuracies'])
-            params['cv_statistics'][model]['confusion_matrices'].append(
-                cv_stats_dict[model]['confusion_matrices'])
-            params['cv_statistics'][model]['precisions'].append(
-                cv_stats_dict[model]['precisions'])
-            params['cv_statistics'][model]['recalls'].append(
-                cv_stats_dict[model]['recalls'])
-            params['cv_statistics'][model]['bcrs'].append(
-                cv_stats_dict[model]['bcrs'])
-
-        # Plot the metric graphs and save it in the designated folder
+    # Plot the metric graphs and save it in the designated folder
         # plot_metrics_graph(num_examples, cv_stats_dict,
         #                   params['active_learning_graph_folder'], amine=amine)
 

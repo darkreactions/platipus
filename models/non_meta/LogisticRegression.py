@@ -1,16 +1,16 @@
 import os
 import pickle
 import argparse
-import itertools
 
 import numpy as np
 from pathlib import Path
 from collections import defaultdict
-from sklearn.metrics import confusion_matrix, roc_auc_score
+from sklearn.metrics import confusion_matrix
 from sklearn.linear_model import LogisticRegression
 
 from modAL.models import ActiveLearner
 
+from utils.utils import grid_search
 from utils.dataset import process_dataset
 
 
@@ -23,29 +23,19 @@ class ActiveLogisticRegression:
                  model_name='Logistic Regression'):
         """initialization of the class
 
-        Args:
-            penalty:        A string. The norm used in the penalization for logistic regression model.
-                            Can be 'l1', 'l2', 'elasticnet', 'none'.
-                            Default = 'l2'
-            dual:           A boolean.
-                            Default = False.
-            tol:            A float. Tolerance for stopping criteria.
-                            Default = 1e-4
+        Args:   TODO: documentation
             verbose:        A boolean. Output additional information to the
                             terminal for functions with verbose feature.
                             Default = True
 
         """
         self.amine = amine
+
         if config:
-            self.model = LogisticRegression(penalty=config['penalty'],
-                                            dual=config['dual'],
-                                            tol=config['tol'],
-                                            C=config['C'],
-                                            solver=config['solver'],
-                                            max_iter=config['max_iter'])
+            self.model = LogisticRegression(**config)
         else:
             self.model = LogisticRegression(penalty='l2', dual=False, tol=1e-4, C=1.0, solver='lbfgs', max_iter=6000)
+
         self.metrics = defaultdict(list)
         self.verbose = verbose
         self.stats_path = stats_path
@@ -77,12 +67,12 @@ class ActiveLogisticRegression:
             print(f'The testing data has dimension of {self.x_v.shape}.')
             print(f'The testing labels has dimension of {self.y_v.shape}.')
 
-    def train(self):
+    def train(self, warning=True):
         """Train the Logistic Regression model by setting up the ActiveLearner."""
 
         self.learner = ActiveLearner(estimator=self.model, X_training=self.x_t, y_training=self.y_t)
         # Evaluate zero-point performance
-        self.evaluate()
+        self.evaluate(warning=warning)
 
     def active_learning(self, num_iter=None, to_params=True):
         """ The active learning loop
@@ -119,12 +109,14 @@ class ActiveLogisticRegression:
         if to_params:
             self.store_metrics_to_params()
 
-    def evaluate(self, store=True):
-        """ Evaluation of the model
+    def evaluate(self, warning=True, store=True):
+        """Evaluation of the model
 
         Args:
-            store:  A boolean that decides if to store the metrics of the performance of the model.
-                    Default = True
+            warning:    A boolean that decides if to warn about the zero division issue or not.
+                            Default = True
+            store:      A boolean that decides if to store the metrics of the performance of the model.
+                            Default = True
         """
 
         # Calculate and report our model's accuracy.
@@ -132,7 +124,6 @@ class ActiveLogisticRegression:
 
         self.y_preds = self.learner.predict(self.all_data)
 
-        # TODO: move the following parts into utils maybe?
         # Calculated confusion matrix
         cm = confusion_matrix(self.all_labels, self.y_preds)
 
@@ -141,8 +132,9 @@ class ActiveLogisticRegression:
             precision = cm[1][1] / (cm[1][1] + cm[0][1])
         else:
             precision = 1.0
-            if self.verbose:
+            if warning:
                 print('WARNING: zero division during precision calculation')
+
         recall = cm[1][1] / (cm[1][1] + cm[1][0])
         true_negative = cm[0][0] / (cm[0][0] + cm[0][1])
         bcr = 0.5 * (recall + true_negative)
@@ -230,164 +222,6 @@ class ActiveLogisticRegression:
             pickle.dump(self, f)
 
 
-def fine_tune(info=False):
-    """Fine tune the model based on average bcr performance to find the best model hyper-parameters.
-    Args:
-        training_batches:       A dictionary representing the training batches used to train.
-                                    See dataset.py for specific structure.
-        cross_validation_batches:     A dictionary representing the training batches used to train.
-                                    See dataset.py for specific structure.
-        info:                A boolean. Setting it to True will make the function print out additional information
-                                    during the fine-tuning stage.
-                                    Default to False.
-    Returns:
-        best_option:            A dictionary representing the hyper-parameters that yields the best performance on
-                                    average. For LogisticRegression, the current keys are: 'penalty', 'dual',
-                                    'tol', 'C', 'solver', 'max_iter'
-    """
-
-    # Set all possible combinations
-
-    params = {
-        'penalty': ['l2','none'],
-        'dual': [False],
-        'tol': [1e-4, 1e-5, 1e-6],
-        'C': [.1 * i for i in range(1,3)],
-        'solver': ['lbfgs','liblinear','sag','saga'],
-        'max_iter': [4000, 5000, 6000, 7000, 9000]
-    }
-
-    combinations = []
-
-    keys, values = zip(*params.items())
-    for bundle in itertools.product(*values):
-        combinations.append(dict(zip(keys, bundle)))
-
-    if info:
-        print(f'There are {len(combinations)} many combinations to try.')
-
-    amine_list, train_data, train_labels, val_data, val_labels, all_data, all_labels = process_dataset(
-        train_size=10,
-        active_learning_iter=10,
-        verbose=False,
-        cross_validation=True,
-        full=True,
-        active_learning=False,
-        w_hx=True,
-        w_k=False
-    )
-
-    # Set baseline performance
-    base_accuracies = []
-    base_precisions = []
-    base_recalls = []
-    base_bcrs = []
-    base_aucs = []
-
-    for amine in amine_list:
-        ALR = ActiveLogisticRegression(amine=amine, verbose=False)
-
-        x_t, y_t = train_data[amine], train_labels[amine]
-        x_v, y_v = val_data[amine], val_labels[amine]
-        all_task_data, all_task_labels = all_data[amine], all_labels[amine]
-
-        # Load the training and validation set into the model
-        ALR.load_dataset(x_t, y_t, x_v, y_v, all_task_data, all_task_labels)
-
-        ALR.train()
-
-        # Calculate AUC
-        auc = roc_auc_score(all_task_labels, ALR.y_preds)
-
-        base_accuracies.append(ALR.metrics['accuracies'][-1])
-        base_precisions.append(ALR.metrics['precisions'][-1])
-        base_recalls.append(ALR.metrics['recalls'][-1])
-        base_bcrs.append(ALR.metrics['bcrs'][-1])
-        base_aucs.append(auc)
-
-    # Calculated the average baseline performances
-    base_avg_accuracy = sum(base_accuracies) / len(base_accuracies)
-    base_avg_precision = sum(base_precisions) / len(base_precisions)
-    base_avg_recall = sum(base_recalls) / len(base_recalls)
-    base_avg_bcr = sum(base_bcrs) / len(base_bcrs)
-    base_avg_auc = sum(base_aucs) / len(base_aucs)
-
-    best_metric = base_avg_auc
-
-    if info:
-        print(f'Baseline average accuracy is {base_avg_accuracy}')
-        print(f'Baseline average precision is {base_avg_precision}')
-        print(f'Baseline average recall is {base_avg_recall}')
-        print(f'Baseline average bcr is {base_avg_bcr}')
-        print(f'Baseline average auc is {base_avg_auc}')
-
-    best_option = {}
-
-    option_no = 1  # Debug
-
-    # Try out each possible combinations of hyper-parameters
-    for option in combinations:
-        if option['solver'] == 'liblinear' and option['penalty'] == 'none':
-            pass
-        else:
-            accuracies = []
-            precisions = []
-            recalls = []
-            bcrs = []
-            aucs = []
-
-            if info:
-                print(f'Trying option {option_no}')
-
-            for amine in amine_list:
-                # print("Training and cross validation on {} amine.".format(amine))
-                ALR = ActiveLogisticRegression(amine=amine, config=option, verbose=False)
-                x_t, y_t = train_data[amine], train_labels[amine]
-                x_v, y_v = val_data[amine], val_labels[amine]
-                all_task_data, all_task_labels = all_data[amine], all_labels[amine]
-
-                # Load the training and validation set into the model
-                ALR.load_dataset(x_t, y_t, x_v, y_v, all_task_data, all_task_labels)
-                ALR.train()
-
-                # Calculate AUC
-                auc = roc_auc_score(all_task_labels, ALR.y_preds)
-
-                accuracies.append(ALR.metrics['accuracies'][-1])
-                precisions.append(ALR.metrics['precisions'][-1])
-                recalls.append(ALR.metrics['recalls'][-1])
-                bcrs.append(ALR.metrics['bcrs'][-1])
-                aucs.append(auc)
-
-            avg_accuracy = sum(accuracies) / len(accuracies)
-            avg_precision = sum(precisions) / len(precisions)
-            avg_recall = sum(recalls) / len(recalls)
-            avg_bcr = sum(bcrs) / len(bcrs)
-            avg_auc = sum(aucs) / len(aucs)
-
-            if avg_auc > best_metric:
-                best_metric = avg_auc
-                best_option = option
-                if info:
-                    print(f'The fine-tuned average accuracy is {avg_accuracy} vs. the base accuracy {base_avg_accuracy}')
-                    print(
-                        f'The fine-tuned average precision is {avg_precision} vs. the base precision {base_avg_precision}')
-                    print(f'The fine-tuned average recall rate is {avg_recall} vs. the base recall rate {base_avg_recall}')
-                    print(f'The fine-tuned average bcr is {avg_bcr} vs. the base bcr {base_avg_bcr}')
-                    print(f'The fine-tuned average auc is {avg_auc} vs. the base auc {base_avg_auc}')
-                    print(f'The current best setting is {best_option}')
-                    print()
-
-            option_no += 1
-
-    if info:
-        print()
-        print(f'The best setting for all amines is {best_option}')
-        print(f'With an average auc of {best_metric}')
-
-    return best_option
-
-
 def parse_args():
     """Set up the initial variables for running KNN.
 
@@ -443,36 +277,61 @@ def parse_args():
     return args
 
 
-def run_model(LogisticRegression_params):
+def run_model(LogisticRegression_params, category):
     """Full-scale training, validation and testing using all amines.
     Args:
-        LogisticRegression_params:         A dictionary of the parameters for the LogisticRegression model.
-                                    See initialize() for more information.
-    Returns:
-        N/A
+        LogisticRegression_params:          A dictionary of the parameters for the LogisticRegression model.
+                                                See initialize() for more information.
+        category:                           A string representing the category the model is classified under.
     """
-    # Unload parameters
-    config = LogisticRegression_params['config']
+
+    # Unload common parameters
+    config = LogisticRegression_params['config'][category]
+    verbose = LogisticRegression_params['verbose']
+    stats_path = LogisticRegression_params['stats_path']
+
+    model_name = LogisticRegression_params['model_name']
+    if verbose:
+        print(model_name)
+
+    # Unload the training data specific parameters
+    train_size = LogisticRegression_params['train_size']
     cross_validation = LogisticRegression_params['cross_validate']
     active_learning = LogisticRegression_params['active_learning']
-    verbose = LogisticRegression_params['verbose']
-
     w_hx = LogisticRegression_params['with_historical_data']
     w_k = LogisticRegression_params['with_k']
     active_learning_iter = LogisticRegression_params['active_learning_iter']
     full = LogisticRegression_params['full_dataset']
-    stats_path = LogisticRegression_params['stats_path']
-    model_name = LogisticRegression_params['model_name']
-    print(model_name)
 
-    # Set up the number of samples used for training under option 2
-    train_size = LogisticRegression_params['train_size']
     # Specify the desired operation
     fine_tuning = LogisticRegression_params['fine_tuning']
     save_model = LogisticRegression_params['save_model']
 
     if fine_tuning:
-        best_config = fine_tune(info=True)
+        class_weights = [{0: i, 1: 1.0 - i} for i in np.linspace(.05, .95, num=50)]
+        class_weights.append('balanced')
+        class_weights.append(None)
+
+        ft_params = {
+            'penalty': ['l2', 'none'],
+            'dual': [False],
+            'tol': [1e-4, 1e-5],
+            'C': [.1 * i for i in range(1, 3)],
+            'solver': ['lbfgs', 'liblinear', 'sag', 'saga'],
+            'max_iter': [4000, 5000, 6000, 7000, 9000],
+            'class_weight': class_weights
+        }
+
+        _ = grid_search(
+            ActiveLogisticRegression,
+            ft_params,
+            train_size,
+            active_learning_iter,
+            active_learning=active_learning,
+            w_hx=w_hx,
+            w_k=w_k,
+            info=True
+        )
     else:
         amine_list, x_t, y_t, x_v, y_v, all_data, all_labels = process_dataset(
             train_size=train_size,

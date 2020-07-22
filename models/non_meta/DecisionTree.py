@@ -1,16 +1,16 @@
 import os
 import pickle
 import argparse
-import itertools
 
 import numpy as np
 from pathlib import Path
 from collections import defaultdict
-from sklearn.metrics import confusion_matrix, roc_auc_score
+from sklearn.metrics import confusion_matrix
 from sklearn.tree import DecisionTreeClassifier, export_graphviz
 
 from modAL.models import ActiveLearner
 
+from utils.utils import grid_search
 from utils.dataset import process_dataset
 
 
@@ -42,10 +42,7 @@ class ActiveDecisionTree:
         self.amine = amine
 
         if config:
-            self.model = DecisionTreeClassifier(max_depth=config['max_depth'],
-                                                min_samples_split=config['min_samples_split'],
-                                                min_samples_leaf=config['min_samples_leaf'],
-                                                max_leaf_nodes=config['max_leaf_nodes'])
+            self.model = DecisionTreeClassifier(**config)
         else:
             self.model = DecisionTreeClassifier()
 
@@ -77,12 +74,12 @@ class ActiveDecisionTree:
             print(f'The testing data has dimension of {self.x_v.shape}.')
             print(f'The testing labels has dimension of {self.y_v.shape}.')
 
-    def train(self):
+    def train(self, warning=True):
         """Train the decision tree model by setting up the ActiveLearner."""
 
         self.learner = ActiveLearner(estimator=self.model, X_training=self.x_t, y_training=self.y_t)
         # Evaluate zero-point performance
-        self.evaluate()
+        self.evaluate(warning=warning)
 
     def active_learning(self, num_iter=None, to_params=True):
         """The active learning loop
@@ -119,12 +116,14 @@ class ActiveDecisionTree:
         if to_params:
             self.store_metrics_to_params()
 
-    def evaluate(self, store=True):
-        """ Evaluation of the model
+    def evaluate(self, warning=True, store=True):
+        """Evaluation of the model
 
         Args:
-            store:  A boolean that decides if to store the metrics of the performance of the model.
-                    Default = True
+            warning:    A boolean that decides if to warn about the zero division issue or not.
+                            Default = True
+            store:      A boolean that decides if to store the metrics of the performance of the model.
+                            Default = True
         """
 
         # Calculate and report our model's accuracy.
@@ -132,7 +131,6 @@ class ActiveDecisionTree:
 
         self.y_preds = self.learner.predict(self.all_data)
 
-        # TODO: move the following parts into utils maybe?
         # Calculated confusion matrix
         cm = confusion_matrix(self.all_labels, self.y_preds)
 
@@ -141,7 +139,7 @@ class ActiveDecisionTree:
             precision = cm[1][1] / (cm[1][1] + cm[0][1])
         else:
             precision = 1.0
-            if self.verbose:
+            if warning:
                 print('WARNING: zero division during precision calculation')
 
         recall = cm[1][1] / (cm[1][1] + cm[1][0])
@@ -287,159 +285,12 @@ def parse_args():
     return args
 
 
-def fine_tune(info=False):
-    """Fine tune the model based on average bcr performance to find the best model hyper-parameters.
-    Args:
-        info:                   A boolean. Setting it to True will make the function print out additional information
-                                    during the fine-tuning stage.
-                                    Default to False.
-    Returns:
-        best_option:            A dictionary representing the hyper-parameters that yields the best performance on
-                                    average. For DecisionTree, the current keys are: 'criterion', 'splitter',
-                                    'max_depth', 'min_samples_split', 'min_samples_leaf', 'max_features',
-                                    'max_leaf_nodes', 'class_weight', 'ccp_alpha'.
-    """
-
-    # Set all possible combinations
-    params = {
-        'max_depth': [i for i in range(1, 11)],
-        'min_samples_split': [i for i in range(2, 11)],
-        'min_samples_leaf': [i for i in range(1, 6)],
-        'max_leaf_nodes': []
-    }
-
-    combinations = []
-
-    keys, values = zip(*params.items())
-    for bundle in itertools.product(*values):
-        combinations.append(dict(zip(keys, bundle)))
-
-    # Load the full dataset under option 1
-    amine_list, train_data, train_labels, val_data, val_labels, all_data, all_labels = process_dataset(
-        train_size=10,
-        active_learning_iter=10,
-        verbose=False,
-        cross_validation=True,
-        full=True,
-        active_learning=False,
-        w_hx=True,
-        w_k=False
-    )
-
-    # Set baseline performance
-    base_accuracies = []
-    base_precisions = []
-    base_recalls = []
-    base_bcrs = []
-    base_aucs = []
-
-    for amine in amine_list:
-        ADT = ActiveDecisionTree(amine=amine, verbose=False)
-
-        # Exact and load the training and validation set into the model
-        x_t, y_t = train_data[amine], train_labels[amine]
-        x_v, y_v = val_data[amine], val_labels[amine]
-        all_task_data, all_task_labels = all_data[amine], all_labels[amine]
-        ADT.load_dataset(x_t, x_v, y_t, y_v, all_task_data, all_task_labels)
-
-        ADT.train()
-
-        # Calculate AUC
-        auc = roc_auc_score(ADT.all_labels, ADT.y_preds)
-
-        base_accuracies.append(ADT.metrics['accuracies'][-1])
-        base_precisions.append(ADT.metrics['precisions'][-1])
-        base_recalls.append(ADT.metrics['recalls'][-1])
-        base_bcrs.append(ADT.metrics['bcrs'][-1])
-        base_aucs.append(auc)
-
-    # Calculated the average baseline performances
-    base_avg_accuracy = sum(base_accuracies) / len(base_accuracies)
-    base_avg_precision = sum(base_precisions) / len(base_precisions)
-    base_avg_recall = sum(base_recalls) / len(base_recalls)
-    base_avg_bcr = sum(base_bcrs) / len(base_bcrs)
-    base_avg_auc = sum(base_aucs) / len(base_aucs)
-
-    best_metric = base_avg_auc
-
-    if info:
-        print(f'Baseline average accuracy is {base_avg_accuracy}')
-        print(f'Baseline average precision is {base_avg_precision}')
-        print(f'Baseline average recall is {base_avg_recall}')
-        print(f'Baseline average bcr is {base_avg_bcr}')
-        print(f'Baseline average auc is {base_avg_auc}')
-
-    best_option = {}
-
-    option_no = 1  # Debug
-
-    # Try out each possible combinations of hyper-parameters
-    print(f'There are {len(combinations)} many combinations to try.')
-    for option in combinations:
-        accuracies = []
-        precisions = []
-        recalls = []
-        bcrs = []
-        aucs = []
-
-        if info:
-            print(f'Trying option {option_no}')
-
-        for amine in amine_list:
-            # print("Training and cross validation on {} amine.".format(amine))
-            ADT = ActiveDecisionTree(amine=amine, config=option, verbose=False)
-
-            # Exact and load the training and validation set into the model
-            x_t, y_t = train_data[amine], train_labels[amine]
-            x_v, y_v = val_data[amine], val_labels[amine]
-            all_task_data, all_task_labels = all_data[amine], all_labels[amine]
-
-            ADT.load_dataset(x_t, x_v, y_t, y_v, all_task_data, all_task_labels)
-            ADT.train()
-
-            # Calculate AUC
-            auc = roc_auc_score(ADT.all_labels, ADT.y_preds)
-
-            accuracies.append(ADT.metrics['accuracies'][-1])
-            precisions.append(ADT.metrics['precisions'][-1])
-            recalls.append(ADT.metrics['recalls'][-1])
-            bcrs.append(ADT.metrics['bcrs'][-1])
-            aucs.append(auc)
-
-        avg_accuracy = sum(accuracies) / len(accuracies)
-        avg_precision = sum(precisions) / len(precisions)
-        avg_recall = sum(recalls) / len(recalls)
-        avg_bcr = sum(bcrs) / len(bcrs)
-        avg_auc = sum(aucs) / len(aucs)
-
-        if avg_auc > best_metric:
-            best_metric = avg_auc
-            best_option = option
-            if info:
-                print(f'The fine-tuned average accuracy is {avg_accuracy} vs. the base accuracy {base_avg_accuracy}')
-                print(
-                    f'The fine-tuned average precision is {avg_precision} vs. the base precision {base_avg_precision}')
-                print(f'The fine-tuned average recall rate is {avg_recall} vs. the base recall rate {base_avg_recall}')
-                print(f'The fine-tuned average bcr is {avg_bcr} vs. the base bcr {base_avg_bcr}')
-                print(f'The fine-tuned average auc is {avg_auc} vs. the base auc {base_avg_auc}')
-                print(f'The current best setting is {best_option}')
-                print()
-
-        option_no += 1
-
-    if info:
-        print()
-        print(f'The best setting for all amines is {best_option}')
-        print(f'With an average auc of {best_metric}')
-
-    return best_option
-
-
-def run_model(DecisionTree_params):
+def run_model(DecisionTree_params, category):
     """Full-scale training, validation and testing using all amines.
     Args:
         DecisionTree_params:         A dictionary of the parameters for the decision tree model.
                                         See initialize() for more information.
+        category:                    A string representing the category the model is classified under.
     """
 
     # For visualization, may need deletion
@@ -458,12 +309,13 @@ def run_model(DecisionTree_params):
                 '_raw_RelativeHumidity']
 
     # Unload common parameters
-    config = DecisionTree_params['config']
+    config = DecisionTree_params['configs'][category]
     verbose = DecisionTree_params['verbose']
     stats_path = DecisionTree_params['stats_path']
 
     model_name = DecisionTree_params['model_name']
-    print(model_name)
+    if verbose:
+        print(model_name)
 
     # Unload the training data specific parameters
     train_size = DecisionTree_params['train_size']
@@ -480,7 +332,29 @@ def run_model(DecisionTree_params):
     visualize = False
 
     if fine_tuning:
-        best_config = fine_tune(info=True)
+        class_weights = [{0: i, 1: 1.0 - i} for i in np.linspace(.05, .95, num=50)]
+        class_weights.append('balanced')
+        class_weights.append(None)
+
+        ft_params = {
+            'criterion': ['gini', 'entropy'],
+            'splitter': ['best', 'random'],
+            'max_depth': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 25, 30, None],
+            'min_samples_split': [i for i in range(2, 11)],
+            'min_samples_leaf': [i for i in range(1, 6)],
+            'class_weight': class_weights
+        }
+
+        _ = grid_search(
+            ActiveDecisionTree,
+            ft_params,
+            train_size,
+            active_learning_iter,
+            active_learning=active_learning,
+            w_hx=w_hx,
+            w_k=w_k,
+            info=True
+        )
     else:
         # Load the desired sized dataset under desired option
         amine_list, x_t, y_t, x_v, y_v, all_data, all_labels = process_dataset(

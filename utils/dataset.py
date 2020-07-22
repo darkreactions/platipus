@@ -404,22 +404,24 @@ def process_dataset(train_size=10, active_learning_iter=10, verbose=True, cross_
     """Generate dictionary to store categorical datasets for consistency
 
     To make sure that the experiments are consistent and scientifically rigorous,
-    all models are using the same pre-training, training, and testing experiments.
+        all models are using the same pre-training, training, and testing experiments.
 
     Category 3 represents the class of models that are trained on historical data
-    only without active learning involved.
+        only without active learning involved.
+
     Category 4 has 2 sub-categories:
-        Category 4.1 represents the class of models that are trained on historical
-        data and k+x many amine-specific data without active learning involved.
-        Category 4.2 represents the class of models that are trained on k+x amine
-        only data without active learning involved.
+        - Category 4.1 represents the class of models that are trained on historical
+            data and k+x many amine-specific data without active learning involved.
+        - Category 4.2 represents the class of models that are trained on k+x amine
+            only data without active learning involved.
+
     Category 5 has 2 sub-categories:
-        Category 5.1 represents the class of models that are trained on historical
-        data and k many amine-specific data with active learning involved. In active
-        leaning loop, only x many experiments of the amine are queried.
-        Category 5.2 represents the class of models that are trained on k amine
-        only data without active learning involved. In active leaning loop, only
-        x many experiments of the amine are queried.
+        - Category 5.1 represents the class of models that are trained on historical
+            data and k many amine-specific data with active learning involved. In the
+            active learning loop, only x many experiments of the amine are queried.
+        - Category 5.2 represents the class of models that are trained on k amine
+            only data with active learning involved. In the active learning loop, only
+            x many experiments of the amine are queried.
 
     Args:
         train_size:                 An integer representing the number of amine-specific experiments used for training.

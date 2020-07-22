@@ -298,7 +298,7 @@ def initialize(models_list, args):
     #    pickle.dump(params['cv_statistics'], f)
 
     # Set up the path to save models
-    params['dst_folder'] = Path(save_model("PLATIPUS", params))
+    params['dst_folder'] = Path(save_model(params['model_name'], params))
 
     if params['datasource'] == 'drp_chem':
 
