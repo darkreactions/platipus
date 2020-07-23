@@ -59,16 +59,16 @@ def run_platipus(params):
             # Checking if amine folder exists, and is incomplete
             amine_path = base_folder / Path(amine)
 
-            if not amine_complete(amine_path)
-            logging.info(f'Starting process with amine: {amine}')
-            platipus = Platipus(train_params, amine=amine,
-                                model_name=train_params['model_name'],
-                                epoch_al=True)
+            if not amine_complete(amine_path):
+                logging.info(f'Starting process with amine: {amine}')
+                platipus = Platipus(train_params, amine=amine,
+                                    model_name=train_params['model_name'],
+                                    epoch_al=True)
 
-            logging.info(f'Begin training with amine: {amine}')
-            platipus.meta_train()
-            logging.info(
-                f'Completed active learning with amine: {amine}')
+                logging.info(f'Begin training with amine: {amine}')
+                platipus.meta_train()
+                logging.info(
+                    f'Completed active learning with amine: {amine}')
 
 
 if __name__ == "__main__":
