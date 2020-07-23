@@ -34,8 +34,8 @@ def exp_complete(folder):
     return False
 
 
-def amine_complete(amine_path)
-   if amine_path.exists():
+def amine_complete(amine_path):
+    if amine_path.exists():
         files_in_amine = [x for x in amine_path.iterdir()]
         # If 1k-5k + cv_stat files exist dont run the amine
         if len(files_in_amine) == 6:
@@ -60,14 +60,15 @@ def run_platipus(params):
             amine_path = base_folder / Path(amine)
 
             if not amine_complete(amine_path)
-               logging.info(f'Starting process with amine: {amine}')
-                platipus = Platipus(train_params, amine=amine,
-                                    model_name=train_params['model_name'],
-                                    epoch_al=True)
+            logging.info(f'Starting process with amine: {amine}')
+            platipus = Platipus(train_params, amine=amine,
+                                model_name=train_params['model_name'],
+                                epoch_al=True)
 
-                logging.info(f'Begin training with amine: {amine}')
-                platipus.meta_train()
-                logging.info(f'Completed active learning with amine: {amine}')
+            logging.info(f'Begin training with amine: {amine}')
+            platipus.meta_train()
+            logging.info(
+                f'Completed active learning with amine: {amine}')
 
 
 if __name__ == "__main__":
