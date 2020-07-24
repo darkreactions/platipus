@@ -1,0 +1,4 @@
+python3 -m hpc_scripts.run_parametric.py 123 $LAUNCHER_TSK_ID
+python3 -m hpc_scripts.run_parametric.py 234 $LAUNCHER_TSK_ID
+python3 -m hpc_scripts.run_parametric.py 567 $LAUNCHER_TSK_ID
+python3 -m hpc_scripts.run_parametric.py 890 $LAUNCHER_TSK_ID
