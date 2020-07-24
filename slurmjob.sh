@@ -1,8 +1,10 @@
+#!/bin/bash
 #SBATCH -J Parametric_test
 #SBATCH -N 1
 #SBATCH -n 4
 #SBATCH -p development
 #SBATCH -o Parametric.o%j
+#SBATCH -e Parametric.e%j
 #SBATCH -t 00:05:00
 #          <------ Account String ----->
 # <--- (Use this ONLY if you have MULTIPLE accounts) --->
