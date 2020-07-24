@@ -27,11 +27,12 @@ longhorn_exp = [214, 215, 216, 217, 218, 219, 220, 221, 222, 223, 224, 225, 226,
 
 
 def exp_complete(folder):
-    """
     if folder.exists():
+        return True
+    """
         dirs = [x for x in folder.iterdir() if x.is_dir()]
         if len(dirs) == 16:
-            return True
+            
     """
     return False
 
