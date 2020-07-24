@@ -364,7 +364,7 @@ def run_model(RandomForest_params, category):
         )
 
         for amine in amine_list:
-            print(f'Training and active learning on amine {amine}')
+
             # Create the RandomForest model instance for the specific amine
             ARF = ActiveRandomForest(amine=amine, config=config, verbose=verbose, stats_path=stats_path, model_name=model_name)
             # Load the training and validation set into the model

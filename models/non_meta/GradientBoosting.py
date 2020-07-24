@@ -369,7 +369,7 @@ def run_model(GradientBoosting_params, category):
 
         # print(training_batches.keys())
         for amine in amine_list:
-            print(f'Training and active learning on amine {amine}')
+
             # Create the GradientBoosting model instance for the specific amine
             AGB = ActiveGradientBoosting(amine=amine, config=config, verbose=verbose, stats_path=stats_path,
                                      model_name=model_name)

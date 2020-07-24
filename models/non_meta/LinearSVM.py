@@ -336,17 +336,21 @@ def run_model(LinearSVM_params, category):
     to_params = True
 
     if fine_tuning:
-        class_weights = [{0: i, 1: 1.0-i} for i in np.linspace(.05, .95, num=10)]
+        class_weights = [{0: i, 1: 1.0-i} for i in np.linspace(.1, .9, num=9)]
         class_weights.append('balanced')
         class_weights.append(None)
 
         ft_params = {
-            'penalty': ['l1', 'l2'],
-            'loss': ['hinge', 'squared_hinge'],
-            'dual': [True, False],
-            'C': [.001, .01, .1, 1, 10],
-            'tol': [.0001, .001, .01, .1, 1],
-            'fit_intercept': [True, False],
+            # 'penalty': ['l1', 'l2'],
+            'penalty': ['l1'],
+            # 'loss': ['hinge', 'squared_hinge'],
+            'loss': ['squared_hinge'],
+            'dual': [False],
+            # 'C': [.001, .01, .1, 1, 10],
+            'C': [i for i in np.linspace(0.001, 0.01, num=10)],
+            # 'tol': [.0001, .001, .01, .1, 1],
+            'tol': [i for i in np.linspace(0.01, 0.1, num=10)],
+            'fit_intercept': [True],
             'class_weight': class_weights,
         }
 

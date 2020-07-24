@@ -55,24 +55,53 @@ knn_params = {
 }
 
 svm_configs = {
-    'category_3': {},
+    'category_3': {
+        'kernel': 'poly',
+        'C': 0.001,
+        'degree': 3,
+        'gamma': 'auto',
+        'tol': 0.001,
+        'decision_function_shape': 'ovo',
+        'break_ties': True,
+        'class_weight': None
+    },
     'category_4_i': {},
-    'category_4_ii': {},
     'category_5_i': {},
-    'category_5_ii': {}
 }
 
 svm_params = {
-    'configs': svm_configs,
+    'configs': None,
     'model_name': 'SVM'
 }
 
 linearsvm_configs = {
-    'category_3': {},
-    'category_4_i': {},
-    'category_4_ii': {},
-    'category_5_i': {},
-    'category_5_ii': {}
+    'category_3': {
+        'penalty': 'l1',
+        'loss': 'squared_hinge',
+        'dual': False,
+        'C': 0.01,
+        'tol': 0.08875,
+        'fit_intercept': True,
+        'class_weight': {0: 0.05, 1: 0.95}
+    },
+    'category_4_i': {
+        'penalty': 'l2',
+        'loss': 'squared_hinge',
+        'dual': False,
+        'C': 0.001,
+        'tol': 0.15,
+        'fit_intercept': True,
+        'class_weight': {0: 0.09, 1: 0.91}
+    },
+    'category_5_i': {
+        'penalty': 'l1',
+        'loss': 'squared_hinge',
+        'dual': False,
+        'C': 0.01,
+        'tol': 1,
+        'fit_intercept': False,
+        'class_weight': {0: 0.05, 1: 0.95}
+    },
 }
 
 linearsvm_params = {

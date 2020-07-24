@@ -203,13 +203,14 @@ def plot_all_lines(stats_dict, dst, style_combinations, show=False):
         linestyle = style_combinations[model]['linestyle']
         if len(num_examples) != 1:
             # Plot line graphs for models with active learning
-            acc.plot(num_examples, stats_dict[model]['accuracies'], marker=linestyle, color=color, linewidth=4,
-                     label=model)
-            prec.plot(num_examples, stats_dict[model]['precisions'], marker=linestyle, color=color, linewidth=4,
-                      label=model)
-            rec.plot(num_examples, stats_dict[model]['recalls'], marker=linestyle, color=color, linewidth=4,
-                     label=model)
-            bcr.plot(num_examples, stats_dict[model]['bcrs'], marker=linestyle, color=color, linewidth=4, label=model)
+            acc.plot(num_examples, stats_dict[model]['accuracies'], marker=linestyle, markersize=15, color=color,
+                     linewidth=4, label=model)
+            prec.plot(num_examples, stats_dict[model]['precisions'], marker=linestyle, markersize=15, color=color,
+                      linewidth=4, label=model)
+            rec.plot(num_examples, stats_dict[model]['recalls'], marker=linestyle, markersize=15, color=color,
+                     linewidth=4, label=model)
+            bcr.plot(num_examples, stats_dict[model]['bcrs'], marker=linestyle, markersize=15, color=color,
+                     linewidth=4, label=model)
         else:
             # Plot bar graphs for models without active learning
             acc.axhline(y=stats_dict[model]['accuracies'], linestyle=linestyle, linewidth=2, color=color, label=model)
@@ -390,6 +391,7 @@ def plot_all_graphs(cv_stats):
     avg_stats = find_avg_metrics(cv_stats)
     rand_model = list(avg_stats.keys())[0]
     num_examples = len(avg_stats[rand_model]['accuracies'])
+    style_combinations = generate_style_combos(models_to_plot)
 
     # Find the success rate of each amine, both volume wise and percentage wise
     names, success_volume, success_percentage = find_success_rate()
@@ -436,8 +438,6 @@ def plot_all_graphs(cv_stats):
         plot_bcr_vs_success_rate(models, cv_stats, bcr_graph_dst, names, success_volume, success_percentage, category=cat)
 
     # Plot graphs for all models
-    style_combinations = generate_style_combos(models_to_plot)
-
     bcr_graph_dst = '{0:s}/bcr_against_all.png'.format(bcr_graph_folder)
     plot_bcr_vs_success_rate(models_to_plot, cv_stats, bcr_graph_dst, names, success_volume, success_percentage, style_combinations=style_combinations)
 

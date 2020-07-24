@@ -345,7 +345,7 @@ def run_model(LogisticRegression_params, category):
         )
 
         for amine in amine_list:
-            print(f'Training and active learning on amine {amine}')
+
             # Create the LogisticRegression model instance for the specific amine
             ALR = ActiveLogisticRegression(amine=amine, config=config, verbose=verbose, stats_path=stats_path,
                                      model_name=model_name)
