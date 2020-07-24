@@ -57,7 +57,7 @@ if __name__ == '__main__':
             common_params,
             model_params,
             category
-        )'''
+        )
 
     # SVM
     base_model = SVM
@@ -71,7 +71,7 @@ if __name__ == '__main__':
                 common_params,
                 model_params,
                 category
-            )
+            )'''
 
     '''
     # DecisionTree
@@ -83,7 +83,7 @@ if __name__ == '__main__':
             common_params,
             model_params,
             category
-        )
+        )'''
 
     # Random Forest
     base_model = RandomForest
@@ -96,7 +96,7 @@ if __name__ == '__main__':
             category
         )
 
-    # logistic Regression
+    '''# logistic Regression
     base_model = LogisticRegression
     model_params = logisticregression_params
     for category in categories:
@@ -108,10 +108,10 @@ if __name__ == '__main__':
                 common_params,
                 model_params,
                 category
-            )
+            )'''
 
     # Gradient Boosting
-    base_model = GradientBoosting
+    '''base_model = GradientBoosting
     model_params = gradientboosting_params
     for category in categories:
         if '4_ii' not in category and '5_ii' not in category:
@@ -122,8 +122,8 @@ if __name__ == '__main__':
                 common_params,
                 model_params,
                 category
-            )
+            )'''
 
-    # Use cv_stats.pkl to plot all graphs
+    '''# Use cv_stats.pkl to plot all graphs
     cv_stats = read_pickle(common_params['stats_path'])
     plot_all_graphs(cv_stats)'''
