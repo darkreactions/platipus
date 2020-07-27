@@ -5,6 +5,7 @@ import os
 
 import numpy as np
 from sklearn.metrics import roc_auc_score
+import timeout_decorator
 
 from models.non_meta.SVM import ActiveSVM
 from utils.dataset import process_dataset
@@ -21,24 +22,23 @@ def parse_args():
         N/A
 
     Returns:
-        args: Namespace object with the following attributes: TODO Documentation
-            category:
-            start:
-            end:
+        args: Namespace object with the following attributes:
+            category:       A string representing the category the model is fine tuning under.
+            index:          An integer representing the combination index to try for fine tuning.
 
     """
 
     parser = argparse.ArgumentParser(description='Setup variables for fine tuningh SVM.')
     parser.add_argument('--category', type=str, default='category_3', help="model's category to fine tune")
 
-    parser.add_argument('--start', type=int, default=0, help="model's category to fine tune")
-    parser.add_argument('--end', type=int, default=None, help="The ending index of the combination to try")
+    parser.add_argument('--index', type=int, default=0, help="model's combination index to try")
 
     args = parser.parse_args()
 
     return args
 
 
+@timeout_decorator.timeout(90)
 def grid_search(clf, combinations, active_learning=True, w_hx=True, w_k=True, info=False):
     """Fine tune the model based on average bcr performance to find the best model hyper-parameters.
 
@@ -124,6 +124,7 @@ def grid_search(clf, combinations, active_learning=True, w_hx=True, w_k=True, in
         ft_history['base_auc'] = base_avg_auc
 
         best_metric = base_avg_auc
+        best_recall = base_avg_recall
         best_option = {}
     
         if info:
@@ -143,6 +144,7 @@ def grid_search(clf, combinations, active_learning=True, w_hx=True, w_k=True, in
         base_avg_bcr = ft_history['base_bcr']
         base_avg_auc = ft_history['base_auc']
         best_metric = ft_history['auc']
+        best_recall = ft_history['recall']
         best_option = ft_history['config']
 
     # Try out each possible combinations of hyper-parameters
@@ -180,7 +182,7 @@ def grid_search(clf, combinations, active_learning=True, w_hx=True, w_k=True, in
         avg_bcr = sum(bcrs) / len(bcrs)
         avg_auc = sum(aucs) / len(aucs)
 
-        if avg_auc > best_metric:
+        if best_metric - avg_auc < .01 and avg_recall > best_recall:
             if info:
                 print(f'The previous best option is {best_option}')
                 print(f'The current best setting is {option}')
@@ -193,16 +195,19 @@ def grid_search(clf, combinations, active_learning=True, w_hx=True, w_k=True, in
                 print()
 
             best_metric = avg_auc
+            best_recall = avg_recall
             best_option = option
 
     # Log last best performance and save it to path
     ft_history['auc'] = best_metric
+    ft_history['recall'] = best_recall
     ft_history['config'] = best_option
     with open(ft_pkl_path, 'wb') as f:
         pickle.dump(ft_history, f)
 
 
 def fine_tune(params):
+    """TODO DOCUMENTATION"""
     combinations = []
 
     class_weights = [{0: i, 1: 1.0 - i} for i in np.linspace(.1, .9, num=9)]
@@ -229,9 +234,8 @@ def fine_tune(params):
         if not (config['kernel'] != 'poly' and config['degree'] != 1):
             unique_combo.append(config)
 
-    start = params['start']
-    end = params['end'] if params['end'] else len(unique_combo)
-    combo_batch = unique_combo[start:end]
+    idx = params['index']
+    combo = unique_combo[idx: idx+1]    # TODO: ugly patch. Not the best way doing this.
 
     cat_settings = {
         'category-3': [False, True, False],
@@ -244,14 +248,17 @@ def fine_tune(params):
     category = params['category']
     settings = cat_settings[category]
 
-    _ = grid_search(
-        ActiveSVM,
-        combo_batch,
-        active_learning=settings[0],
-        w_hx=settings[1],
-        w_k=settings[2],
-        info=True
-    )
+    try:
+        _ = grid_search(
+            ActiveSVM,
+            combo,
+            active_learning=settings[0],
+            w_hx=settings[1],
+            w_k=settings[2],
+            info=True
+        )
+    except TimeoutError:
+        print()
 
 
 def main():
