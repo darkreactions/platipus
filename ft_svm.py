@@ -5,7 +5,6 @@ import os
 
 import numpy as np
 from sklearn.metrics import roc_auc_score
-import timeout_decorator
 
 from models.non_meta.SVM import ActiveSVM
 from utils.dataset import process_dataset
@@ -29,7 +28,7 @@ def parse_args():
     """
 
     parser = argparse.ArgumentParser(description='Setup variables for fine tuningh SVM.')
-    parser.add_argument('--category', type=str, default='category_3', help="model's category to fine tune")
+    parser.add_argument('--category', type=str, default='category-3', help="model's category to fine tune")
 
     parser.add_argument('--index', type=int, default=0, help="model's combination index to try")
 
@@ -38,7 +37,6 @@ def parse_args():
     return args
 
 
-@timeout_decorator.timeout(90)
 def grid_search(clf, combinations, active_learning=True, w_hx=True, w_k=True, info=False):
     """Fine tune the model based on average bcr performance to find the best model hyper-parameters.
 
@@ -248,17 +246,14 @@ def fine_tune(params):
     category = params['category']
     settings = cat_settings[category]
 
-    try:
-        _ = grid_search(
-            ActiveSVM,
-            combo,
-            active_learning=settings[0],
-            w_hx=settings[1],
-            w_k=settings[2],
-            info=True
-        )
-    except TimeoutError:
-        print()
+    _ = grid_search(
+        ActiveSVM,
+        combo,
+        active_learning=settings[0],
+        w_hx=settings[1],
+        w_k=settings[2],
+        info=True
+    )
 
 
 def main():
