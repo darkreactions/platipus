@@ -251,9 +251,9 @@ class Platipus:
                 checkpoint_filename = Path(
                     f"{self.datasource}_{self.k_shot}shot_{epoch+1}.pt")
                 logging.info(checkpoint_filename)
+                torch.save(checkpoint, self.dst_folder /
+                           checkpoint_filename)
                 if self.epoch_al:
-                    torch.save(checkpoint, self.dst_folder /
-                               checkpoint_filename)
                     self.model_name_temp = f"{self.model_name}_{epoch+1}"
                     self.test_model_actively()
 
