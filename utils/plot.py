@@ -1,10 +1,12 @@
 import os
 from collections import defaultdict
-from matplotlib import pyplot as plt
+#from matplotlib import pyplot as plt
 from pathlib import Path
 
 from utils import read_pickle, find_avg_metrics, find_success_rate, find_bcr
-
+import matplotlib
+matplotlib.use('Agg')
+from matplotlib import pyplot as plt
 
 def plot_categorical_graph(num_examples, stats_dict, dst, amine=None, amine_index=None, models=[], show=False):
     """Plot metrics graphs for all models under the same category in comparison

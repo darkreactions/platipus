@@ -292,7 +292,7 @@ def test_model_actively(params, amine=None):
         # Randomly pick a point to start active learning with
         rand_index = np.random.choice(len(x_t) + len(x_v) - 1)
 
-        data_dict = read_pickle('./results/non_meta_data.pkl')
+        #data_dict = read_pickle('./results/non_meta_data.pkl')
 
         if 'platipus' in model.lower():
             """

@@ -58,7 +58,7 @@ if __name__ == '__main__':
             model_params,
             category
         )
-    
+
     # SVM
     base_model = SVM
     model_params = svm_params
