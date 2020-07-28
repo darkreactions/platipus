@@ -1,3 +1,7 @@
+"""
+Don't use this file if you have to.
+This is a SVC based on the model provided by libSVM.
+"""
 import argparse
 from collections import defaultdict
 import itertools
@@ -40,6 +44,8 @@ class ActiveSVC:
         """Initialization of the ActiveSVM model"""
 
         self.amine = amine
+        # Set the default setting to return probabilities (-b 1)
+        # and mute unnecessary default output of the libSVM models (-q).
         self.config = config if config else '-b 1 -q'
         self.metrics = defaultdict(list)
         self.verbose = verbose
@@ -70,13 +76,17 @@ class ActiveSVC:
             print(f'The testing labels has dimension of {self.y_v.shape}.')
 
     def train(self, warning=True):
-        """ Train the SVM model by setting up the ActiveLearner.
-
-        """
+        """ Train the SVC using methods built into libSVM."""
+        # Set the training data and labels
         prob = svm_problem(self.y_t, self.x_t)
+
+        # Set the SVC hyper-parameters
         params = svm_parameter(self.config)
+
+        # Declare model by training
         self.model = svm_train(prob, params)
 
+        # Evaluate model performance
         self.evaluate(warning=warning)
 
     def active_learning(self, num_iter=None, warning=True, to_params=False):
@@ -261,9 +271,6 @@ def parse_args():
             test:               A train_flag attribute. Including it in the command line will set the train_flag to
                                     False.
             cross_validate:     A boolean. Including it in the command line will run the model with cross-validation.
-            pretrain:           A boolean representing if it will be trained under option 1 or option 2.
-                                    Option 1 is train with observations of other tasks and validate on the
-                                    task-specific observations.
                                     Option 2 is to train and validate on the task-specific observations.
             full_dataset:       A boolean representing if we want to load the full dataset or the test sample dataset.
             verbose:            A boolean. Including it in the command line will output additional information to the
@@ -281,9 +288,6 @@ def parse_args():
     parser.set_defaults(train_flag=True)
 
     parser.add_argument('--cross_validate', action='store_true', help='use cross-validation for training')
-    parser.add_argument('--pretrain', action='store_true', help='load the dataset under option 1. Not include this will'
-                                                                ' load the dataset under option 2. See documentation in'
-                                                                ' codes for details.')
     parser.add_argument('--full', dest='full_dataset', action='store_true', help='load the full dataset or the test '
                                                                                  'sample dataset')
     parser.add_argument('--verbose', action='store_true')
@@ -294,7 +298,7 @@ def parse_args():
 
 
 def dict_to_str_config(cfg_dict):
-    """TODO DOCUMENTATION"""
+    """Convert the hyper-parameter combination from dictionary form into string form for libSVM models"""
 
     # Set the base configuration to use C-SVC
     config = '-s 0 '
