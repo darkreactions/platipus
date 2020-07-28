@@ -43,6 +43,17 @@ if __name__ == '__main__':
     base_model = KNN
     model_params = knn_params
     for category in categories:
+        run_non_meta_model(
+            base_model,
+            common_params,
+            model_params,
+            category
+        )
+
+    # SVM
+    base_model = SVM
+    model_params = svm_params
+    for category in categories:
         if '4_ii' not in category and '5_ii' not in category:
             # Excluding categories that have too few
             # successful experiments for training
@@ -52,16 +63,6 @@ if __name__ == '__main__':
                 model_params,
                 category
             )
-
-    # SVM
-    base_model = SVM
-    model_params = svm_params
-    run_non_meta_model(
-        base_model,
-        common_params,
-        model_params,
-        'category_3'
-    )
 
     # Linear SVC
     base_model = LinearSVM
