@@ -9,7 +9,7 @@ common_params = {
     'test_data': True,  # TODO: redundant with full_dataset?
     'meta': False,
     'full_dataset': True,
-    'fine_tuning': True,
+    'fine_tuning': False,
     'with_historical_data': True,   # Train models with historical data of other amines
     'with_k': False,     # Train the model with k additional amine-specific experiments
     'train_size': 10,   # k after pretrain
@@ -23,7 +23,7 @@ common_params = {
 knn_configs = {
     'category_3': {
         'n_neighbors': 3,
-        'leaf_size': 30,
+        'leaf_size': 1,
         'p': 1
     },
     'category_4_i': {
@@ -33,18 +33,18 @@ knn_configs = {
     },
     'category_4_ii': {
         'n_neighbors': 3,
-        'leaf_size': 30,
+        'leaf_size': 1,
         'p': 1
     },
     'category_5_i': {
-        'n_neighbors': 3,
-        'leaf_size': 30,
+        'n_neighbors': 1,
+        'leaf_size': 1,
         'p': 1
     },
     'category_5_ii': {
-        'n_neighbors': 3,
-        'leaf_size': 30,
-        'p': 1
+        'n_neighbors': 1,
+        'leaf_size': 1,
+        'p': 3
     },
 }
 
@@ -142,7 +142,7 @@ lr_configs = {
         'tol': 1e-4,
         'C': 0.1,
         'solver': 'lbfgs',
-        'max_iters': 4000
+        'max_iter': 4000
     },
     'category_4_i': {
         'penalty': 'l2',
@@ -150,7 +150,7 @@ lr_configs = {
         'tol': 1e-4,
         'C': 0.1,
         'solver': 'lbfgs',
-        'max_iters': 4000
+        'max_iter': 4000
     },
     'category_4_ii': {
         'penalty': 'l2',
@@ -158,7 +158,7 @@ lr_configs = {
         'tol': 1e-4,
         'C': 0.1,
         'solver': 'lbfgs',
-        'max_iters': 4000
+        'max_iter': 4000
     },
     'category_5_i': {
         'penalty': 'l2',
@@ -166,7 +166,7 @@ lr_configs = {
         'tol': 1e-4,
         'C': 0.1,
         'solver': 'lbfgs',
-        'max_iters': 4000
+        'max_iter': 4000
     },
     'category_5_ii': {
         'penalty': 'l2',
@@ -174,30 +174,52 @@ lr_configs = {
         'tol': 1e-4,
         'C': 0.1,
         'solver': 'lbfgs',
-        'max_iters': 4000
+        'max_iter': 4000
     },
 }
 
 logisticregression_params = {
-    'config': None,
+    'config': lr_configs,
     'model_name': 'Logistic_Regression'
 }
 
 dt_configs = {
     'category_3': {
-
+        'criterion': 'gini',
+        'splitter': 'best',
+        'max_depth': 7,
+        'min_samples_split': 2,
+        'min_samples_leaf': 2
     },
     'category_4_i': {
-
+        'criterion': 'gini',
+        'splitter': 'random',
+        'max_depth': 11,
+        'min_samples_split': 8,
+        'min_samples_leaf': 1,
+        'class_weight': {0: 0.3, 1: 0.7}
     },
     'category_4_ii': {
-
+        'criterion': 'gini',
+        'splitter': 'best',
+        'max_depth': 3,
+        'min_samples_split': 4,
+        'min_samples_leaf': 1
     },
     'category_5_i': {
-
+        'criterion': 'gini',
+        'splitter': 'random',
+        'max_depth': 11,
+        'min_samples_split': 4,
+        'min_samples_leaf': 3,
+        'class_weight': {0: 0.1, 1: 0.9}
     },
     'category_5_ii': {
-
+        'criterion': 'gini',
+        'splitter': 'best',
+        'max_depth': 4,
+        'min_samples_split': 2,
+        'min_samples_leaf': 1
     },
 }
 

@@ -60,7 +60,6 @@ class ActiveRandomForest:
         self.stats_path = stats_path
         self.model_name = model_name
 
-    # TODO: find out what to do with this part
     def load_dataset(self, x_t, y_t, x_v, y_v, all_data, all_labels):
         """Load the input training and validation data and labels into the model.
 
