@@ -9,7 +9,7 @@ common_params = {
     'test_data': True,  # TODO: redundant with full_dataset?
     'meta': False,
     'full_dataset': True,
-    'fine_tuning': True,
+    'fine_tuning': False,
     'with_historical_data': True,  # Train models with historical data of other amines
     'with_k': False,  # Train the model with k additional amine-specific experiments
     'train_size': 10,  # k after pretrain
@@ -70,7 +70,7 @@ svm_configs = {
 }
 
 svm_params = {
-    'configs': None,
+    'configs': svm_configs,
     'model_name': 'SVM'
 }
 
@@ -107,16 +107,6 @@ linearsvm_configs = {
 linearsvm_params = {
     'configs': linearsvm_configs,
     'model_name': 'LinearSVM'
-}
-
-randomforest_params = {
-    'config': None,
-    'model_name': 'Random_Forest'
-}
-
-logisticregression_params = {
-    'config': None,
-    'model_name': 'Logistic_Regression'
 }
 
 dt_configs = {
@@ -163,6 +153,130 @@ decisiontree_params = {
     'configs': dt_configs,
     'model_name': 'Decision_Tree',
     'visualize': False
+}
+
+rf_configs = {
+    'category_3': {
+            'n_estimators': 1000,
+            'criterion': 'gini',
+            'max_depth': 8,
+            'max_features': None,
+            'bootstrap': True,
+            'min_samples_leaf': 1,
+            'min_samples_split': 2,
+            'ccp_alpha': 0.0
+    },
+    'category_4_i': {
+            'n_estimators': 200,
+            'criterion': 'gini',
+            'max_depth': 8,
+            'max_features': None,
+            'bootstrap': True,
+            'min_samples_leaf': 2,
+            'min_samples_split': 5,
+            'ccp_alpha': 0.0
+    },
+    'category_4_ii': {
+        'n_estimators': 200,
+        'criterion': 'gini',
+        'max_depth': 7,
+        'max_features': None,
+        'bootstrap': True,
+        'min_samples_leaf': 2,
+        'min_samples_split': 10,
+        'ccp_alpha': 0.0
+    },
+    'category_5_i': {
+        'n_estimators': 100,
+        'criterion': 'gini',
+        'max_depth': 8,
+        'max_features': None,
+        'bootstrap': True,
+        'min_samples_leaf': 3,
+        'min_samples_split': 5,
+        'ccp_alpha': 0.0
+    },
+    'category_5_ii': {
+        'n_estimators': 200,
+        'criterion': 'gini',
+        'max_depth': 7,
+        'max_features': None,
+        'bootstrap': True,
+        'min_samples_leaf': 3,
+        'min_samples_split': 5,
+        'ccp_alpha': 0.0
+    },
+}
+
+randomforest_params = {
+    'config': rf_configs,
+    'model_name': 'Random_Forest'
+}
+
+lr_configs = {
+    'category_3': {
+        'penalty': 'l2',
+        'dual': False,
+        'tol': 1e-4,
+        'C': 0.1,
+        'solver': 'lbfgs',
+        'max_iter': 4000
+    },
+    'category_4_i': {
+        'penalty': 'l2',
+        'dual': False,
+        'tol': 1e-4,
+        'C': 0.1,
+        'solver': 'lbfgs',
+        'max_iter': 4000
+    },
+    'category_4_ii': {
+        'penalty': 'l2',
+        'dual': False,
+        'tol': 1e-4,
+        'C': 0.1,
+        'solver': 'lbfgs',
+        'max_iter': 4000
+    },
+    'category_5_i': {
+        'penalty': 'l2',
+        'dual': False,
+        'tol': 1e-4,
+        'C': 0.1,
+        'solver': 'lbfgs',
+        'max_iter': 4000
+    },
+    'category_5_ii': {
+        'penalty': 'l2',
+        'dual': False,
+        'tol': 1e-4,
+        'C': 0.1,
+        'solver': 'lbfgs',
+        'max_iter': 4000
+    },
+}
+
+logisticregression_params = {
+    'config': lr_configs,
+    'model_name': 'Logistic_Regression'
+}
+
+gb_configs = {
+    'category_3': {
+
+    },
+    'category_4_i': {
+
+    },
+    'category_4_ii': {
+
+    },
+    'category_5_i': {
+
+    },
+    'category_5_ii': {
+
+    },
 }
 
 gradientboosting_params = {
