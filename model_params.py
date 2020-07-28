@@ -1,23 +1,24 @@
 from pathlib import Path
 
 common_params = {
-    'datasource': 'drp_chem',
-    'cross_validate': True,
-    'verbose': False,
-    'train_flag': True,
-    'gpu_id': 1,
-    'test_data': True,  # TODO: redundant with full_dataset?
-    'meta': False,
-    'full_dataset': True,
-    'fine_tuning': False,
-    'with_historical_data': True,  # Train models with historical data of other amines
-    'with_k': False,  # Train the model with k additional amine-specific experiments
-    'train_size': 10,  # k after pretrain
     'active_learning': False,
     'active_learning_iter': 10,  # x before active learning
+    'cross_validate': True,
+    'cv_stats_overwrite': True,
+    'datasource': 'drp_chem',
+    'fine_tuning': False,
+    'full_dataset': True,
+    'gpu_id': 1,
+    'meta': False,
+    'save_model': False,
     'stats_path': Path('./results/cv_statistics.pkl'),
-    'cv_stats_overwrite': True,  # TODO: change this to false when running all models
-    'save_model': False
+    'test_data': True,  # TODO: redundant with full_dataset?
+    'train_flag': True,
+    'train_size': 10,  # k after pretrain
+    'verbose': False,
+    'warning': True,
+    'with_historical_data': True,  # Train models with historical data of other amines
+    'with_k': False,  # Train the model with k additional amine-specific experiments
 }
 
 knn_configs = {

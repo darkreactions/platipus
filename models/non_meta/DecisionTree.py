@@ -1,14 +1,12 @@
-import os
-import pickle
-import argparse
-
-import numpy as np
-from pathlib import Path
 from collections import defaultdict
-from sklearn.metrics import confusion_matrix
-from sklearn.tree import DecisionTreeClassifier, export_graphviz
+import os
+from pathlib import Path
+import pickle
 
 from modAL.models import ActiveLearner
+import numpy as np
+from sklearn.metrics import confusion_matrix
+from sklearn.tree import DecisionTreeClassifier, export_graphviz
 
 from utils.utils import grid_search
 from utils.dataset import process_dataset
@@ -81,7 +79,7 @@ class ActiveDecisionTree:
         # Evaluate zero-point performance
         self.evaluate(warning=warning)
 
-    def active_learning(self, num_iter=None, to_params=True):
+    def active_learning(self, num_iter=None, warning=True, to_params=True):
         """The active learning loop
 
         This is the active learning model that loops around the decision tree model
@@ -90,6 +88,8 @@ class ActiveDecisionTree:
         Args:
             num_iter:   An integer that is the number of iterations.
                         Default = None
+            warning:    A boolean that decide if to declare zero division warning or not.
+                        Default = True.
             to_params:  A boolean that decide if to store the metrics to the dictionary,
                         detail see "store_metrics_to_params" function.
                         Default = True
@@ -105,7 +105,7 @@ class ActiveDecisionTree:
             uncertain_data, uncertain_label = self.x_v[query_index].reshape(1, -1), self.y_v[query_index].reshape(1, )
             self.learner.teach(X=uncertain_data, y=uncertain_label)
 
-            self.evaluate()
+            self.evaluate(warning=warning)
 
             # Remove the queried instance from the unlabeled pool.
             self.x_t = np.append(self.x_t, uncertain_data).reshape(-1, self.all_data.shape[1])
@@ -230,61 +230,6 @@ class ActiveDecisionTree:
             pickle.dump(self, f)
 
 
-def parse_args():
-    """Set up the initial variables for running decision tree.
-
-    Retrieves argument values from the terminal command line to create an argparse.Namespace object for
-        initialization.
-
-    Args:
-        N/A
-
-    Returns:
-        args: Namespace object with the following attributes:
-            datasource:         A string identifying the datasource to be used, with default datasource set to drp_chem.
-            train_size          An integer representing the number of samples uses for training after pre-training.
-                                    Default set to 10.
-            pre_learn_size      An integer representing the number of samples used for training before active learning.
-                                    Default set to 10.
-            train:              A train_flag attribute. Including it in the command line will set the train_flag to
-                                    True by default.
-            test:               A train_flag attribute. Including it in the command line will set the train_flag to
-                                    False.
-            cross_validate:     A boolean. Including it in the command line will run the model with cross-validation.
-            pretrain:           A boolean representing if it will be trained under option 1 or option 2.
-                                    Option 1 is train with observations of other tasks and validate on the
-                                    task-specific observations.
-                                    Option 2 is to train and validate on the task-specific observations.
-            full_dataset:       A boolean representing if we want to load the full dataset or the test sample dataset.
-            verbose:            A boolean. Including it in the command line will output additional information to the
-                                    terminal for functions with verbose feature.
-    """
-
-    parser = argparse.ArgumentParser(description='Setup variables for active learning decision tree.')
-    parser.add_argument('--datasource', type=str, default='drp_chem', help='datasource to be used')
-
-    parser.add_argument('--train_size', dest='train_size', default=10, help='number of samples used for training after '
-                                                                            'pre-training')
-    parser.add_argument('--pre_learn_size', dest='pre_learn_size', default=10, help='number of samples used for '
-                                                                                    'training before active learning')
-
-    parser.add_argument('--train', dest='train_flag', action='store_true')
-    parser.add_argument('--test', dest='train_flag', action='store_false')
-    parser.set_defaults(train_flag=True)
-
-    parser.add_argument('--cross_validate', action='store_true', help='use cross-validation for training')
-    parser.add_argument('--pretrain', action='store_true', help='load the dataset under option 1. Not include this will'
-                                                                ' load the dataset under option 2. See documentation in'
-                                                                ' codes for details.')
-    parser.add_argument('--full', dest='full_dataset', action='store_true', help='load the full dataset or the test '
-                                                                                 'sample dataset')
-    parser.add_argument('--verbose', action='store_true')
-
-    args = parser.parse_args()
-
-    return args
-
-
 def run_model(DecisionTree_params, category):
     """Full-scale training, validation and testing using all amines.
     Args:
@@ -293,7 +238,7 @@ def run_model(DecisionTree_params, category):
         category:                    A string representing the category the model is classified under.
     """
 
-    # For visualization, may need deletion
+    # Feature names hard-coded for decision tree visualization
     features = ['_rxn_M_acid', '_rxn_M_inorganic', '_rxn_M_organic', '_solv_GBL', '_solv_DMSO', '_solv_DMF',
                 '_stoich_mmol_org', '_stoich_mmol_inorg', '_stoich_mmol_acid', '_stoich_mmol_solv', '_stoich_org/solv',
                 '_stoich_inorg/solv', '_stoich_acid/solv', '_stoich_org+inorg/solv', '_stoich_org+inorg+acid/solv',
@@ -309,13 +254,13 @@ def run_model(DecisionTree_params, category):
                 '_raw_RelativeHumidity']
 
     # Unload common parameters
-    config = DecisionTree_params['configs'][category]
+    config = DecisionTree_params['configs'][category] if DecisionTree_params['configs'][category] else None
     verbose = DecisionTree_params['verbose']
+    warning = DecisionTree_params['warning']
     stats_path = DecisionTree_params['stats_path']
 
     model_name = DecisionTree_params['model_name']
-    if verbose:
-        print(model_name)
+    print(f'Running model {model_name}')
 
     # Unload the training data specific parameters
     train_size = DecisionTree_params['train_size']
@@ -382,11 +327,11 @@ def run_model(DecisionTree_params, category):
             ADT.load_dataset(x_t[amine], y_t[amine], x_v[amine], y_v[amine], all_data[amine], all_labels[amine])
 
             # Train the data on the training set
-            ADT.train()
+            ADT.train(warning=warning)
 
             # Conduct active learning with all the observations available in the pool
             if active_learning:
-                ADT.active_learning(num_iter=active_learning_iter, to_params=True)
+                ADT.active_learning(num_iter=active_learning_iter, warning=warning, to_params=True)
             else:
                 ADT.store_metrics_to_params()
 
@@ -409,16 +354,3 @@ def run_model(DecisionTree_params, category):
                 ADT.save_model(model_name)
 
             # TODO: testing part not implemented
-
-
-def main():
-    """Main driver function"""
-
-    # This converts the args into a dictionary
-    DecisionTree_params = vars(parse_args())
-
-    run_model(DecisionTree_params)
-
-
-if __name__ == "__main__":
-    main()

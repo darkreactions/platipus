@@ -1,24 +1,12 @@
-"""
-Run the following command lines for full dataset training:
-python KNN.py --datasource=drp_chem --train_size=20 --cross_validate --full --verbose
-python KNN.py --datasource=drp_chem --train_size=20 --cross_validate --pretrain --full --verbose
-
-Run the following command lines for test dataset training (debug):
-python KNN.py --datasource=drp_chem ---train_size=20 -cross_validate --verbose
-python KNN.py --datasource=drp_chem --train_size=20 --cross_validate --pretrain --verbose
-"""
-
-import argparse
-import os
-import pickle
 from collections import defaultdict
+import os
 from pathlib import Path
+import pickle
 
+from modAL.models import ActiveLearner
 import numpy as np
 from sklearn.metrics import confusion_matrix
 from sklearn.neighbors import KNeighborsClassifier
-
-from modAL.models import ActiveLearner
 
 from utils.utils import grid_search
 from utils.dataset import process_dataset
@@ -92,18 +80,20 @@ class ActiveKNN:
         # Evaluate zero-point performance
         self.evaluate(warning=warning)
 
-    def active_learning(self, num_iter=None, to_params=True):
-        """ The active learning loop
+    def active_learning(self, num_iter=None, warning=True, to_params=True):
+        """The active learning loop
 
-        This is the active learning model that loops around the KNN model
+        This is the active learning model that loops around the decision tree model
         to look for the most uncertain point and give the model the label to train
 
         Args:
             num_iter:   An integer that is the number of iterations.
-                            Default = None
-            to_params:  A boolean that decides if to store the metrics to the dictionary,
-                            detail see "store_metrics_to_params" function.
-                            Default = True
+                        Default = None
+            warning:    A boolean that decide if to declare zero division warning or not.
+                        Default = True.
+            to_params:  A boolean that decide if to store the metrics to the dictionary,
+                        detail see "store_metrics_to_params" function.
+                        Default = True
         """
 
         num_iter = num_iter if num_iter else self.x_v.shape[0]
@@ -113,11 +103,10 @@ class ActiveKNN:
             query_index, query_instance = self.learner.query(self.x_v)
 
             # Teach our ActiveLearner model the record it has requested.
-            uncertain_data, uncertain_label = self.x_v[query_index].reshape(
-                1, -1), self.y_v[query_index].reshape(1, )
+            uncertain_data, uncertain_label = self.x_v[query_index].reshape(1, -1), self.y_v[query_index].reshape(1, )
             self.learner.teach(X=uncertain_data, y=uncertain_label)
 
-            self.evaluate()
+            self.evaluate(warning=warning)
 
             # Remove the queried instance from the unlabeled pool.
             self.x_t = np.append(self.x_t, uncertain_data).reshape(-1, self.all_data.shape[1])
@@ -149,7 +138,7 @@ class ActiveKNN:
         if cm[1][1] + cm[0][1] != 0:
             precision = cm[1][1] / (cm[1][1] + cm[0][1])
         else:
-            precision = 1.0  # TODO: I still think 0.0 is better
+            precision = 1.0
             if warning:
                 print('WARNING: zero division during precision calculation')
 
@@ -245,63 +234,6 @@ class ActiveKNN:
         return 'A {0:d}-neighbor KNN model for amine {1:s} using active learning'.format(self.n_neighbors, self.amine)
 
 
-def parse_args():
-    """Set up the initial variables for running KNN.
-
-    Retrieves argument values from the terminal command line to create an argparse.Namespace object for
-        initialization.
-
-    Args:
-        N/A
-
-    Returns:
-        args: Namespace object with the following attributes:
-            datasource:         A string identifying the datasource to be used, with default datasource set to drp_chem.
-            neighbors:          An integer representing the number of neighbors used for KNN. Default set to 1.
-            train_size          An integer representing the number of samples uses for training after pre-training.
-                                    Default set to 10.
-            pre_learn_size      An integer representing the number of samples used for training before active learning.
-                                    Default set to 10.
-            train:              A train_flag attribute. Including it in the command line will set the train_flag to
-                                    True by default.
-            test:               A train_flag attribute. Including it in the command line will set the train_flag to
-                                    False.
-            cross_validate:     A boolean. Including it in the command line will run the model with cross-validation.
-            pretrain:           A boolean representing if it will be trained under option 1 or option 2.
-                                    Option 1 is train with observations of other tasks and validate on the
-                                    task-specific observations.
-                                    Option 2 is to train and validate on the task-specific observations.
-            full_dataset:       A boolean representing if we want to load the full dataset or the test sample dataset.
-            verbose:            A boolean. Including it in the command line will output additional information to the
-                                    terminal for functions with verbose feature.
-    """
-
-    parser = argparse.ArgumentParser(description='Setup variables for active learning KNN.')
-    parser.add_argument('--datasource', type=str, default='drp_chem', help='datasource to be used')
-
-    parser.add_argument('--neighbors', dest='neighbors', default=1, help='number of neighbors for KNN')
-    parser.add_argument('--train_size', dest='train_size', default=10, help='number of samples used for training after '
-                                                                            'pre-training')
-    parser.add_argument('--pre_learn_size', dest='pre_learn_size', default=10, help='number of samples used for '
-                                                                                    'training before active learning')
-
-    parser.add_argument('--train', dest='train_flag', action='store_true')
-    parser.add_argument('--test', dest='train_flag', action='store_false')
-    parser.set_defaults(train_flag=True)
-
-    parser.add_argument('--cross_validate', action='store_true', help='use cross-validation for training')
-    parser.add_argument('--pretrain', action='store_true', help='load the dataset under option 1. Not include this will'
-                                                                ' load the dataset under option 2. See documentation in'
-                                                                ' codes for details.')
-    parser.add_argument('--full', dest='full_dataset', action='store_true', help='load the full dataset or the test '
-                                                                                 'sample dataset')
-    parser.add_argument('--verbose', action='store_true')
-
-    args = parser.parse_args()
-
-    return args
-
-
 def run_model(KNN_params, category):
     """Full-scale training, validation and testing using all amines.
 
@@ -312,8 +244,9 @@ def run_model(KNN_params, category):
     """
 
     # Unload common parameters
-    config = KNN_params['configs'][category]
+    config = KNN_params['configs'][category] if KNN_params['configs'][category] else None
     verbose = KNN_params['verbose']
+    warning = KNN_params['warning']
     stats_path = KNN_params['stats_path']
 
     model_name = KNN_params['model_name']
@@ -372,11 +305,11 @@ def run_model(KNN_params, category):
             KNN.load_dataset(x_t[amine], y_t[amine], x_v[amine], y_v[amine], all_data[amine], all_labels[amine])
 
             # Train the data on the training set
-            KNN.train()
+            KNN.train(warning=warning)
 
             # Conduct active learning with all the observations available in the pool
             if active_learning:
-                KNN.active_learning(num_iter=active_learning_iter, to_params=to_params)
+                KNN.active_learning(num_iter=active_learning_iter, warning=warning, to_params=to_params)
             else:
                 KNN.store_metrics_to_params()
 
@@ -385,16 +318,3 @@ def run_model(KNN_params, category):
                 KNN.save_model(model_name)
 
             # TODO: testing part not implemented
-
-
-def main():
-    """Main driver function"""
-
-    # This converts the args into a dictionary
-    KNN_params = vars(parse_args())
-
-    run_model(KNN_params)
-
-
-if __name__ == "__main__":
-    main()

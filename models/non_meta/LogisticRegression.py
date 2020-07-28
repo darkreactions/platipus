@@ -1,14 +1,12 @@
-import os
-import pickle
-import argparse
-
-import numpy as np
-from pathlib import Path
 from collections import defaultdict
-from sklearn.metrics import confusion_matrix
-from sklearn.linear_model import LogisticRegression
+import os
+from pathlib import Path
+import pickle
 
 from modAL.models import ActiveLearner
+import numpy as np
+from sklearn.metrics import confusion_matrix
+from sklearn.linear_model import LogisticRegression
 
 from utils.utils import grid_search
 from utils.dataset import process_dataset
@@ -21,14 +19,7 @@ class ActiveLogisticRegression:
 
     def __init__(self, amine=None, config=None, verbose=True, stats_path=Path('./results/stats.pkl'),
                  model_name='Logistic Regression'):
-        """initialization of the class
-
-        Args:   TODO: documentation
-            verbose:        A boolean. Output additional information to the
-                            terminal for functions with verbose feature.
-                            Default = True
-
-        """
+        """initialization of the class"""
         self.amine = amine
 
         if config:
@@ -74,15 +65,17 @@ class ActiveLogisticRegression:
         # Evaluate zero-point performance
         self.evaluate(warning=warning)
 
-    def active_learning(self, num_iter=None, to_params=True):
-        """ The active learning loop
+    def active_learning(self, num_iter=None, warning=True, to_params=True):
+        """The active learning loop
 
-        This is the active learning model that loops around the Logistic Regression model
+        This is the active learning model that loops around the decision tree model
         to look for the most uncertain point and give the model the label to train
 
         Args:
             num_iter:   An integer that is the number of iterations.
                         Default = None
+            warning:    A boolean that decide if to declare zero division warning or not.
+                        Default = True.
             to_params:  A boolean that decide if to store the metrics to the dictionary,
                         detail see "store_metrics_to_params" function.
                         Default = True
@@ -98,7 +91,7 @@ class ActiveLogisticRegression:
             uncertain_data, uncertain_label = self.x_v[query_index].reshape(1, -1), self.y_v[query_index].reshape(1, )
             self.learner.teach(X=uncertain_data, y=uncertain_label)
 
-            self.evaluate()
+            self.evaluate(warning=warning)
 
             # Remove the queried instance from the unlabeled pool.
             self.x_t = np.append(self.x_t, uncertain_data).reshape(-1, self.all_data.shape[1])
@@ -222,61 +215,6 @@ class ActiveLogisticRegression:
             pickle.dump(self, f)
 
 
-def parse_args():
-    """Set up the initial variables for running KNN.
-
-    Retrieves argument values from the terminal command line to create an argparse.Namespace object for
-        initialization.
-
-    Args:
-        N/A
-
-    Returns:
-        args: Namespace object with the following attributes:
-            datasource:         A string identifying the datasource to be used, with default datasource set to drp_chem.
-            k_shot:             An integer representing the number of training samples per class, with default set to 1.
-            n_way:              An integer representing the number of classes per task, with default set to 1.
-            num_batches:        An integer representing the number of meta-batches per task, with default set to 250.
-            meta_batch_size:    An integer representing the number of tasks sampled per outer loop.
-                                    It is set to 25 by default.
-            train:              A train_flag attribute. Including it in the command line will set the train_flag to
-                                    True by default.
-            test:               A train_flag attribute. Including it in the command line will set the train_flag to
-                                    False.
-            cross_validate:     A boolean. Including it in the command line will run the model with cross-validation.
-            pretrain:           A boolean representing if it will be trained under option 1 or option 2.
-                                    Option 1 is train with observations of other tasks and validate on the
-                                    task-specific observations.
-                                    Option 2 is to train and validate on the task-specific observations.
-            verbose:            A boolean. Including it in the command line will output additional information to the
-                                    terminal for functions with verbose feature.
-    """
-
-    parser = argparse.ArgumentParser(description='Setup variables for active learning LogisticRegression.')
-    parser.add_argument('--datasource', type=str, default='drp_chem', help='datasource to be used')
-
-    parser.add_argument('--train_size', dest='train_size', default=10, help='number of samples used for training after '
-                                                                            'pre-training')
-    parser.add_argument('--pre_learn_size', dest='pre_learn_size', default=10, help='number of samples used for '
-                                                                                    'training before active learning')
-
-    parser.add_argument('--train', dest='train_flag', action='store_true')
-    parser.add_argument('--test', dest='train_flag', action='store_false')
-    parser.set_defaults(train_flag=True)
-
-    parser.add_argument('--cross_validate', action='store_true', help='use cross-validation for training')
-    parser.add_argument('--pretrain', action='store_true', help='load the dataset under option 1. Not include this will'
-                                                                ' load the dataset under option 2. See documentation in'
-                                                                ' codes for details.')
-    parser.add_argument('--full', dest='full_dataset', action='store_true', help='load the full dataset or the test '
-                                                                                 'sample dataset')
-    parser.add_argument('--verbose', action='store_true')
-
-    args = parser.parse_args()
-
-    return args
-
-
 def run_model(LogisticRegression_params, category):
     """Full-scale training, validation and testing using all amines.
     Args:
@@ -286,13 +224,13 @@ def run_model(LogisticRegression_params, category):
     """
 
     # Unload common parameters
-    config = LogisticRegression_params['config'][category]
+    config = LogisticRegression_params['config'][category] if LogisticRegression_params['config'][category] else None
     verbose = LogisticRegression_params['verbose']
+    warning = LogisticRegression_params['warning']
     stats_path = LogisticRegression_params['stats_path']
 
     model_name = LogisticRegression_params['model_name']
-    if verbose:
-        print(model_name)
+    print(f'Running model {model_name}')
 
     # Unload the training data specific parameters
     train_size = LogisticRegression_params['train_size']
@@ -345,34 +283,25 @@ def run_model(LogisticRegression_params, category):
         )
 
         for amine in amine_list:
-
             # Create the LogisticRegression model instance for the specific amine
             ALR = ActiveLogisticRegression(amine=amine, config=config, verbose=verbose, stats_path=stats_path,
                                      model_name=model_name)
+
             # Load the training and validation set into the model
             ALR.load_dataset(x_t[amine], y_t[amine], x_v[amine], y_v[amine], all_data[amine], all_labels[amine])
+
             # Train the data on the training set
-            ALR.train()
+            ALR.train(warning=warning)
+
             # Conduct active learning with all the observations available in the pool
             if active_learning:
-                ALR.active_learning(num_iter=active_learning_iter, to_params=True)
+                ALR.active_learning(num_iter=active_learning_iter, warning=warning, to_params=True)
             else:
                 ALR.store_metrics_to_params()
+
             # Save the model for future reproducibility
             if save_model:
                 ALR.save_model(model_name)
 
             # TODO: testing part not implemented
 
-
-def main():
-    """Main driver function"""
-
-    # This converts the args into a dictionary
-    LogisticRegression_params = vars(parse_args())
-
-    run_model(LogisticRegression_params)
-
-
-if __name__ == "__main__":
-    main()
