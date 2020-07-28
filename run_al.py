@@ -2,7 +2,7 @@ import models.meta.main as platipus
 from pathlib import Path
 import os
 
-from models.non_meta import RandomForest, KNN, SVC, LinearSVM, DecisionTree, LogisticRegression, GradientBoosting
+from models.non_meta import RandomForest, KNN, SVM, LinearSVM, DecisionTree, LogisticRegression, GradientBoosting
 from utils.plot import plot_all_graphs
 from utils import read_pickle, write_pickle, define_non_meta_model_name, run_non_meta_model, find_avg_metrics
 from model_params import common_params, knn_params, svm_params, randomforest_params, logisticregression_params, \
@@ -35,7 +35,7 @@ if __name__ == '__main__':
     # Listing the categories of experiments we are running
     categories = ['category_3', 'category_4_i', 'category_4_ii', 'category_5_i', 'category_5_ii']
 
-    '''# Meta-models
+    # Meta-models
     # PLATIPUS
     # platipus_train_params = {**common_params, **meta_params, **meta_train}
     # params = platipus.initialize(["PLATIPUS"], platipus_train_params)
@@ -58,19 +58,17 @@ if __name__ == '__main__':
             model_params,
             category
         )
-    '''
+    
     # SVM
-    base_model = SVC
+    base_model = SVM
     model_params = svm_params
-    for category in categories:
-        run_non_meta_model(
-            base_model,
-            common_params,
-            model_params,
-            category
-        )
+    run_non_meta_model(
+        base_model,
+        common_params,
+        model_params,
+        'category_3'
+    )
 
-    '''
     # Linear SVC
     base_model = LinearSVM
     model_params = linearsvm_params
@@ -85,7 +83,6 @@ if __name__ == '__main__':
                 category
             )
 
-    
     # DecisionTree
     base_model = DecisionTree
     model_params = decisiontree_params
@@ -97,7 +94,6 @@ if __name__ == '__main__':
             category
         )
 
-    
     # Random Forest
     base_model = RandomForest
     model_params = randomforest_params
@@ -136,8 +132,7 @@ if __name__ == '__main__':
                 model_params,
                 category
             )
-    
+
     # Use cv_stats.pkl to plot all graphs
     cv_stats = read_pickle(common_params['stats_path'])
     plot_all_graphs(cv_stats)
-    '''
