@@ -1,12 +1,23 @@
+"""
+Run the following command lines for full dataset training:
+python LinearSVM.py --datasource=drp_chem --train_size=20 --cross_validate --full --verbose
+python LinearSVM.py --datasource=drp_chem --train_size=20 --cross_validate --pretrain --full --verbose
+
+Run the following command lines for test dataset training (debug):
+python LinearSVM.py --datasource=drp_chem ---train_size=20 -cross_validate --verbose
+python LinearSVM.py --datasource=drp_chem --train_size=20 --cross_validate --pretrain --verbose
+"""
+
+import argparse
 import os
 import pickle
-import argparse
+from collections import defaultdict
+from pathlib import Path
 
 import numpy as np
-from pathlib import Path
-from collections import defaultdict
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.metrics import confusion_matrix
-from sklearn.tree import DecisionTreeClassifier, export_graphviz
+from sklearn.svm import LinearSVC
 
 from modAL.models import ActiveLearner
 
@@ -14,12 +25,12 @@ from utils.utils import grid_search
 from utils.dataset import process_dataset
 
 
-class ActiveDecisionTree:
-    """ A class of decision tree model with active learning.
-    
+class ActiveLinearSVM:
+    """A Linear SVM machine learning model using active learning with modAL package
+
     Attributes: 
         amine:          A string representing the amine this model is used for.
-        model:          A RandomForestClassifier object as the classifier model.
+        model:          A CalibratedClassifierCV + LinearSVC object as the classifier model.
         metrics:        A dictionary to store the performance metrics locally. It has the format of
                             {'metric_name': [metric_value]}.
         verbose:        A boolean representing whether it will prints out additional information to the terminal or not.
@@ -35,16 +46,19 @@ class ActiveDecisionTree:
         y_preds:        A numpy array representing the predicted labels given all data input.
     """
 
-    def __init__(self, amine=None, config=None, verbose=True, stats_path=Path('./results/stats.pkl'),
-                 model_name='Decision_Tree'):
-        """initialization of the class"""
+    def __init__(self, amine=None, config=None,
+                 verbose=True, stats_path=Path('./results/stats.pkl'),
+                 model_name='LinearSVM'):
+        """Initialization of the ActiveLinearSVM model"""
 
         self.amine = amine
 
+        # Load customized model or use the default fine-tuned setting
         if config:
-            self.model = DecisionTreeClassifier(**config)
+            self.model = CalibratedClassifierCV(LinearSVC(**config))
         else:
-            self.model = DecisionTreeClassifier()
+            # Fine tuned model
+            self.model = CalibratedClassifierCV(LinearSVC())
 
         self.metrics = defaultdict(list)
         self.verbose = verbose
@@ -75,24 +89,25 @@ class ActiveDecisionTree:
             print(f'The testing labels has dimension of {self.y_v.shape}.')
 
     def train(self, warning=True):
-        """Train the decision tree model by setting up the ActiveLearner."""
+        """ Train the LinearSVM model by setting up the ActiveLearner.
 
+        """
         self.learner = ActiveLearner(estimator=self.model, X_training=self.x_t, y_training=self.y_t)
         # Evaluate zero-point performance
         self.evaluate(warning=warning)
 
     def active_learning(self, num_iter=None, to_params=True):
-        """The active learning loop
+        """ The active learning loop
 
-        This is the active learning model that loops around the decision tree model
+        This is the active learning model that loops around the LinearSVM model
         to look for the most uncertain point and give the model the label to train
 
         Args:
             num_iter:   An integer that is the number of iterations.
-                        Default = None
-            to_params:  A boolean that decide if to store the metrics to the dictionary,
-                        detail see "store_metrics_to_params" function.
-                        Default = True
+                            Default = None
+            to_params:  A boolean that decides if to store the metrics to the dictionary,
+                            detail see "store_metrics_to_params" function.
+                            Default = True
         """
 
         num_iter = num_iter if num_iter else self.x_v.shape[0]
@@ -117,7 +132,7 @@ class ActiveDecisionTree:
             self.store_metrics_to_params()
 
     def evaluate(self, warning=True, store=True):
-        """Evaluation of the model
+        """ Evaluation of the model
 
         Args:
             warning:    A boolean that decides if to warn about the zero division issue or not.
@@ -125,10 +140,10 @@ class ActiveDecisionTree:
             store:      A boolean that decides if to store the metrics of the performance of the model.
                             Default = True
         """
-
         # Calculate and report our model's accuracy.
         accuracy = self.learner.score(self.all_data, self.all_labels)
 
+        # Find model predictions
         self.y_preds = self.learner.predict(self.all_data)
 
         # Calculated confusion matrix
@@ -158,13 +173,13 @@ class ActiveDecisionTree:
         Args:
             cm:             A numpy array representing the confusion matrix given our predicted labels and the actual
                                 corresponding labels. It's a 2x2 matrix for the drp_chem model.
-            accuracy:       A float representing the accuracy rate of the model: the rate of correctly predicted
+            accuracy:       A float representing the accuracy rate of the model: the rate of correctly predicted 
                                 reactions out of all reactions.
             precision:      A float representing the precision rate of the model: the rate of the number of actually
                                 successful reactions out of all the reactions predicted to be successful.
-            recall:         A float representing the recall rate of the model: the rate of the number of reactions
+            recall:         A float representing the recall rate of the model: the rate of the number of reactions 
                                 predicted to be successful out of all the actual successful reactions.
-            bcr:            A float representing the balanced classification rate of the model. It's the average value
+            bcr:            A float representing the balanced classification rate of the model. It's the average value 
                                 of recall rate and true negative rate.
         """
 
@@ -201,7 +216,8 @@ class ActiveDecisionTree:
 
         stats_dict[model]['amine'].append(self.amine)
         stats_dict[model]['accuracies'].append(self.metrics['accuracies'])
-        stats_dict[model]['confusion_matrices'].append(self.metrics['confusion_matrices'])
+        stats_dict[model]['confusion_matrices'].append(
+            self.metrics['confusion_matrices'])
         stats_dict[model]['precisions'].append(self.metrics['precisions'])
         stats_dict[model]['recalls'].append(self.metrics['recalls'])
         stats_dict[model]['bcrs'].append(self.metrics['bcrs'])
@@ -218,10 +234,10 @@ class ActiveDecisionTree:
         """
 
         # Set up the main destination folder for the model
-        dst_root = './data/DT/{0:s}'.format(model_name)
+        dst_root = './data/LinearSVM/{0:s}'.format(model_name)
         if not os.path.exists(dst_root):
             os.makedirs(dst_root)
-            print(f'No folder for decision tree model {model_name} storage found')
+            print(f'No folder for LinearSVM model {model_name} storage found')
             print(f'Make folder to store model at')
 
         # Dump the model into the designated folder
@@ -229,9 +245,12 @@ class ActiveDecisionTree:
         with open(os.path.join(dst_root, file_name), "wb") as f:
             pickle.dump(self, f)
 
+    def __str__(self):
+        return 'A LinearSVM model for {0:s} using active learning'.format(self.amine)
+
 
 def parse_args():
-    """Set up the initial variables for running decision tree.
+    """Set up the initial variables for running LinearSVM.
 
     Retrieves argument values from the terminal command line to create an argparse.Namespace object for
         initialization.
@@ -260,7 +279,7 @@ def parse_args():
                                     terminal for functions with verbose feature.
     """
 
-    parser = argparse.ArgumentParser(description='Setup variables for active learning decision tree.')
+    parser = argparse.ArgumentParser(description='Setup variables for active learning LinearSVM.')
     parser.add_argument('--datasource', type=str, default='drp_chem', help='datasource to be used')
 
     parser.add_argument('--train_size', dest='train_size', default=10, help='number of samples used for training after '
@@ -285,71 +304,58 @@ def parse_args():
     return args
 
 
-def run_model(DecisionTree_params, category):
+def run_model(LinearSVM_params, category):
     """Full-scale training, validation and testing using all amines.
+
     Args:
-        DecisionTree_params:         A dictionary of the parameters for the decision tree model.
-                                        See initialize() for more information.
-        category:                    A string representing the category the model is classified under.
-    """
-
-    # For visualization, may need deletion
-    features = ['_rxn_M_acid', '_rxn_M_inorganic', '_rxn_M_organic', '_solv_GBL', '_solv_DMSO', '_solv_DMF',
-                '_stoich_mmol_org', '_stoich_mmol_inorg', '_stoich_mmol_acid', '_stoich_mmol_solv', '_stoich_org/solv',
-                '_stoich_inorg/solv', '_stoich_acid/solv', '_stoich_org+inorg/solv', '_stoich_org+inorg+acid/solv',
-                '_stoich_org/liq', '_stoich_inorg/liq', '_stoich_org+inorg/liq', '_stoich_org/inorg',
-                '_stoich_acid/inorg', '_rxn_Temperature_C', '_rxn_Reactiontime_s', '_feat_AvgPol',
-                '_feat_Refractivity', '_feat_MaximalProjectionArea', '_feat_MaximalProjectionRadius',
-                '_feat_maximalprojectionsize', '_feat_MinimalProjectionArea', '_feat_MinimalProjectionRadius',
-                '_feat_minimalprojectionsize', '_feat_MolPol', '_feat_VanderWaalsSurfaceArea', '_feat_ASA',
-                '_feat_ASA_H', '_feat_ASA_P', '_feat_ASA-', '_feat_ASA+', '_feat_ProtPolarSurfaceArea',
-                '_feat_Hacceptorcount', '_feat_Hdonorcount', '_feat_RotatableBondCount', '_raw_standard_molweight',
-                '_feat_AtomCount_N', '_feat_BondCount', '_feat_ChainAtomCount', '_feat_RingAtomCount',
-                '_feat_primaryAmine', '_feat_secondaryAmine', '_rxn_plateEdgeQ', '_feat_maxproj_per_N',
-                '_raw_RelativeHumidity']
-
+        LinearSVM_params:         A dictionary of the parameters for the LinearSVM model.
+                                See initialize() for more information.
+        category:           A string representing the category the model is classified under.
+     """
+    
     # Unload common parameters
-    config = DecisionTree_params['configs'][category]
-    verbose = DecisionTree_params['verbose']
-    stats_path = DecisionTree_params['stats_path']
+    config = LinearSVM_params['configs'][category]
+    verbose = LinearSVM_params['verbose']
+    stats_path = LinearSVM_params['stats_path']
 
-    model_name = DecisionTree_params['model_name']
-    if verbose:
-        print(model_name)
+    model_name = LinearSVM_params['model_name']
+    print(f'Running model {model_name}')
 
     # Unload the training data specific parameters
-    train_size = DecisionTree_params['train_size']
-    active_learning_iter = DecisionTree_params['active_learning_iter']
-    cross_validation = DecisionTree_params['cross_validate']
-    full = DecisionTree_params['full_dataset']
-    active_learning = DecisionTree_params['active_learning']
-    w_hx = DecisionTree_params['with_historical_data']
-    w_k = DecisionTree_params['with_k']
+    train_size = LinearSVM_params['train_size']
+    active_learning_iter = LinearSVM_params['active_learning_iter']
+    cross_validation = LinearSVM_params['cross_validate']
+    full = LinearSVM_params['full_dataset']
+    active_learning = LinearSVM_params['active_learning']
+    w_hx = LinearSVM_params['with_historical_data']
+    w_k = LinearSVM_params['with_k']
 
     # Specify the desired operation
-    fine_tuning = DecisionTree_params['fine_tuning']
-    save_model = DecisionTree_params['save_model']
-    visualize = DecisionTree_params['visualize']
+    fine_tuning = LinearSVM_params['fine_tuning']
+    save_model = LinearSVM_params['save_model']
+    to_params = True
 
     if fine_tuning:
-        class_weights = [{0: i, 1: 1.0 - i} for i in np.linspace(.05, .95, num=50)]
+        class_weights = [{0: i, 1: 1.0-i} for i in np.linspace(.1, .9, num=9)]
         class_weights.append('balanced')
         class_weights.append(None)
 
-        max_depths = [i for i in range(9, 26)]
-        max_depths.append(None)
-
         ft_params = {
-            'criterion': ['gini', 'entropy'],
-            'splitter': ['best', 'random'],
-            'max_depth': max_depths,
-            'min_samples_split': [i for i in range(2, 11)],
-            'min_samples_leaf': [i for i in range(1, 4)],
-            'class_weight': class_weights
+            # 'penalty': ['l1', 'l2'],
+            'penalty': ['l1'],
+            # 'loss': ['hinge', 'squared_hinge'],
+            'loss': ['squared_hinge'],
+            'dual': [False],
+            # 'C': [.001, .01, .1, 1, 10],
+            'C': [i for i in np.linspace(0.001, 0.01, num=10)],
+            # 'tol': [.0001, .001, .01, .1, 1],
+            'tol': [i for i in np.linspace(0.01, 0.1, num=10)],
+            'fit_intercept': [True],
+            'class_weight': class_weights,
         }
 
         _ = grid_search(
-            ActiveDecisionTree,
+            ActiveLinearSVM,
             ft_params,
             train_size,
             active_learning_iter,
@@ -373,51 +379,38 @@ def run_model(DecisionTree_params, category):
 
         # print(amine_list)
         for amine in amine_list:
+            if cross_validation:
+                # print("Training and cross validation on {} amine.".format(amine))
 
-            # Create the decision tree model instance for the specific amine
-            ADT = ActiveDecisionTree(amine=amine, config=config, verbose=verbose, stats_path=stats_path,
-                                     model_name=model_name)
+                # Create the LinearSVM model instance for the specific amine
+                ALSVM = ActiveLinearSVM(amine=amine, config=config, verbose=verbose, stats_path=stats_path, model_name=model_name)
 
-            # Load the training and validation set into the model
-            ADT.load_dataset(x_t[amine], y_t[amine], x_v[amine], y_v[amine], all_data[amine], all_labels[amine])
+                # Load the training and validation set into the model
+                ALSVM.load_dataset(x_t[amine], y_t[amine], x_v[amine], y_v[amine], all_data[amine], all_labels[amine])
 
-            # Train the data on the training set
-            ADT.train()
+                # Train the data on the training set
+                ALSVM.train()
 
-            # Conduct active learning with all the observations available in the pool
-            if active_learning:
-                ADT.active_learning(num_iter=active_learning_iter, to_params=True)
-            else:
-                ADT.store_metrics_to_params()
+                # Conduct active learning with all the observations available in the pool
+                if active_learning:
+                    ALSVM.active_learning(num_iter=active_learning_iter, to_params=to_params)
+                else:
+                    ALSVM.store_metrics_to_params()
 
-            if visualize:
-                # Plot the decision tree
-                # To compile the graph, use the following command in terminal
-                # dot -Tpng "{dt_file_name}.dot" -o "{desired file name}.png"
-                # If using Jupyter Notebook, add ! in front to run command lines
-                file_name = './results/{0:s}_dt_{1:s}.dot'.format(model_name, amine)
-                export_graphviz(ADT.model,
-                                feature_names=features,
-                                class_names=['FAILURE', 'SUCCESS'],
-                                out_file=file_name,
-                                filled=True,
-                                rounded=True,
-                                special_characters=True)
+                # Save the model for future reproducibility
+                if save_model:
+                    ALSVM.save_model(model_name)
 
-            # Save the model for future reproducibility
-            if save_model:
-                ADT.save_model(model_name)
-
-            # TODO: testing part not implemented
+            # TODO: testing part not implemented: might need to change the logic loading things in
 
 
 def main():
     """Main driver function"""
 
     # This converts the args into a dictionary
-    DecisionTree_params = vars(parse_args())
+    LinearSVM_params = vars(parse_args())
 
-    run_model(DecisionTree_params)
+    run_model(LinearSVM_params)
 
 
 if __name__ == "__main__":
