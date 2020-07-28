@@ -331,12 +331,12 @@ def run_model(RandomForest_params, category):
 
         ft_params = {
             'n_estimators': [100, 200, 500, 1000],
-            'criterion': ['gini'],
+            'criterion': ['gini','entropy'],
             'max_depth': [i for i in range(1, 9)],
             'max_features': ['auto', 'sqrt', 'log2', None],
             'bootstrap': [True],
-            'min_samples_leaf': [1, 2, 3],
-            'min_samples_split': [2, 5, 10],
+            'min_samples_leaf': [i for i in range(1, 6)],
+            'min_samples_split': [i for i in range(2, 11)],
             'ccp_alpha': [.1 * i for i in range(1)],
             'class_weight': class_weights
         }
