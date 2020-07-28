@@ -203,13 +203,13 @@ def plot_all_lines(stats_dict, dst, style_combinations, show=False):
         linestyle = style_combinations[model]['linestyle']
         if len(num_examples) != 1:
             # Plot line graphs for models with active learning
-            acc.plot(num_examples, stats_dict[model]['accuracies'], marker=linestyle, markersize=15, color=color,
+            acc.plot(num_examples, stats_dict[model]['accuracies'], marker=linestyle, markersize=12, color=color,
                      linewidth=4, label=model)
-            prec.plot(num_examples, stats_dict[model]['precisions'], marker=linestyle, markersize=15, color=color,
+            prec.plot(num_examples, stats_dict[model]['precisions'], marker=linestyle, markersize=12, color=color,
                       linewidth=4, label=model)
-            rec.plot(num_examples, stats_dict[model]['recalls'], marker=linestyle, markersize=15, color=color,
+            rec.plot(num_examples, stats_dict[model]['recalls'], marker=linestyle, markersize=12, color=color,
                      linewidth=4, label=model)
-            bcr.plot(num_examples, stats_dict[model]['bcrs'], marker=linestyle, markersize=15, color=color,
+            bcr.plot(num_examples, stats_dict[model]['bcrs'], marker=linestyle, markersize=12, color=color,
                      linewidth=4, label=model)
         else:
             # Plot bar graphs for models without active learning
@@ -321,9 +321,9 @@ def generate_style_combos(models):
     """TODO: DOCUMENTATION"""
     # Have a list of colors and line-styles/markers for different models and categories
     # I wish there's a better way to do this but it's matplotlib
-    list_of_colors = ['violet', 'orangered', 'darkorange', 'seagreen', 'dodgerblue', 'darkviolet', 'teal', 'violet']
-    list_of_linestyles = ['dotted', 'solid', '-.', 'o', '*']
-    list_of_markers = ['d', 'p', '^', 'o', '*']
+    list_of_colors = ['violet', 'orangered', 'darkorange', 'seagreen', 'dodgerblue', 'darkviolet', 'r', 'violet']
+    list_of_linestyles = ['dotted', 'solid', '-.', 'o', '*', 's', 'X']
+    list_of_markers = ['d', 'p', '^', 'o', '*', 's', 'X']
 
     # Set same color for models and line-style for categories
     style_combinations = defaultdict(dict)
@@ -341,9 +341,9 @@ def generate_style_combos(models):
             style_combinations[model]['color'] = list_of_colors[4]
         if 'Gradient' in model:
             style_combinations[model]['color'] = list_of_colors[5]
-        if 'MAML' in model:
-            style_combinations[model]['color'] = list_of_colors[6]
         if 'PLATIPUS' in model:
+            style_combinations[model]['color'] = list_of_colors[6]
+        if 'MAML' in model:
             style_combinations[model]['color'] = list_of_colors[7]
         # TODO: THE FOLLOWING MAY HAVE TO CHANGE ONCE MAML/PLATIPUS IS HERE
         if 'historical_only' in model:
@@ -361,6 +361,12 @@ def generate_style_combos(models):
         if 'amine_only_AL' in model:
             style_combinations[model]['linestyle'] = list_of_linestyles[4]
             style_combinations[model]['marker'] = list_of_markers[4]
+        if '1' in model:
+            style_combinations[model]['linestyle'] = list_of_linestyles[5]
+            style_combinations[model]['marker'] = list_of_markers[5]
+        if '2' in model:
+            style_combinations[model]['linestyle'] = list_of_linestyles[6]
+            style_combinations[model]['marker'] = list_of_markers[6]
 
     return style_combinations
 
@@ -441,5 +447,4 @@ def plot_all_graphs(cv_stats):
     bcr_graph_dst = '{0:s}/bcr_against_all.png'.format(bcr_graph_folder)
     plot_bcr_vs_success_rate(models_to_plot, cv_stats, bcr_graph_dst, names, success_volume, success_percentage, style_combinations=style_combinations)
 
-    avg_stats = find_avg_metrics(cv_stats)
     plot_all_lines(avg_stats, './results/avg_metrics_all_models.png', style_combinations)
