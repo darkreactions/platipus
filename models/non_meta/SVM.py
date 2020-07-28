@@ -1,27 +1,15 @@
-"""
-Run the following command lines for full dataset training:
-python SVM.py --datasource=drp_chem --train_size=20 --cross_validate --full --verbose
-python SVM.py --datasource=drp_chem --train_size=20 --cross_validate --pretrain --full --verbose
-
-Run the following command lines for test dataset training (debug):
-python SVM.py --datasource=drp_chem ---train_size=20 -cross_validate --verbose
-python SVM.py --datasource=drp_chem --train_size=20 --cross_validate --pretrain --verbose
-"""
-
-import argparse
-import os
-import pickle
 from collections import defaultdict
+import os
 from pathlib import Path
+import pickle
 
+from modAL.models import ActiveLearner
 import numpy as np
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.metrics import confusion_matrix
 from sklearn.svm import SVC
 
-from modAL.models import ActiveLearner
-
-from utils.utils import grid_search
+from utils.utils import grid_search, PUK_kernel
 from utils.dataset import process_dataset
 
 
@@ -104,18 +92,20 @@ class ActiveSVM:
         # Evaluate zero-point performance
         self.evaluate(warning=warning)
 
-    def active_learning(self, num_iter=None, to_params=True):
-        """ The active learning loop
+    def active_learning(self, num_iter=None, warning=True, to_params=True):
+        """The active learning loop
 
-        This is the active learning model that loops around the SVM model
+        This is the active learning model that loops around the decision tree model
         to look for the most uncertain point and give the model the label to train
 
         Args:
             num_iter:   An integer that is the number of iterations.
-                            Default = None
-            to_params:  A boolean that decides if to store the metrics to the dictionary,
-                            detail see "store_metrics_to_params" function.
-                            Default = True
+                        Default = None
+            warning:    A boolean that decide if to declare zero division warning or not.
+                        Default = True.
+            to_params:  A boolean that decide if to store the metrics to the dictionary,
+                        detail see "store_metrics_to_params" function.
+                        Default = True
         """
 
         num_iter = num_iter if num_iter else self.x_v.shape[0]
@@ -128,7 +118,7 @@ class ActiveSVM:
             uncertain_data, uncertain_label = self.x_v[query_index].reshape(1, -1), self.y_v[query_index].reshape(1, )
             self.learner.teach(X=uncertain_data, y=uncertain_label)
 
-            self.evaluate()
+            self.evaluate(warning=warning)
 
             # Remove the queried instance from the unlabeled pool.
             self.x_t = np.append(self.x_t, uncertain_data).reshape(-1, self.all_data.shape[1])
@@ -257,61 +247,6 @@ class ActiveSVM:
         return 'A SVM model for {0:s} using active learning'.format(self.amine)
 
 
-def parse_args():
-    """Set up the initial variables for running SVM.
-
-    Retrieves argument values from the terminal command line to create an argparse.Namespace object for
-        initialization.
-
-    Args:
-        N/A
-
-    Returns:
-        args: Namespace object with the following attributes:
-            datasource:         A string identifying the datasource to be used, with default datasource set to drp_chem.
-            train_size          An integer representing the number of samples uses for training after pre-training.
-                                    Default set to 10.
-            pre_learn_size      An integer representing the number of samples used for training before active learning.
-                                    Default set to 10.
-            train:              A train_flag attribute. Including it in the command line will set the train_flag to
-                                    True by default.
-            test:               A train_flag attribute. Including it in the command line will set the train_flag to
-                                    False.
-            cross_validate:     A boolean. Including it in the command line will run the model with cross-validation.
-            pretrain:           A boolean representing if it will be trained under option 1 or option 2.
-                                    Option 1 is train with observations of other tasks and validate on the
-                                    task-specific observations.
-                                    Option 2 is to train and validate on the task-specific observations.
-            full_dataset:       A boolean representing if we want to load the full dataset or the test sample dataset.
-            verbose:            A boolean. Including it in the command line will output additional information to the
-                                    terminal for functions with verbose feature.
-    """
-
-    parser = argparse.ArgumentParser(description='Setup variables for active learning SVM.')
-    parser.add_argument('--datasource', type=str, default='drp_chem', help='datasource to be used')
-
-    parser.add_argument('--train_size', dest='train_size', default=10, help='number of samples used for training after '
-                                                                            'pre-training')
-    parser.add_argument('--pre_learn_size', dest='pre_learn_size', default=10, help='number of samples used for '
-                                                                                    'training before active learning')
-
-    parser.add_argument('--train', dest='train_flag', action='store_true')
-    parser.add_argument('--test', dest='train_flag', action='store_false')
-    parser.set_defaults(train_flag=True)
-
-    parser.add_argument('--cross_validate', action='store_true', help='use cross-validation for training')
-    parser.add_argument('--pretrain', action='store_true', help='load the dataset under option 1. Not include this will'
-                                                                ' load the dataset under option 2. See documentation in'
-                                                                ' codes for details.')
-    parser.add_argument('--full', dest='full_dataset', action='store_true', help='load the full dataset or the test '
-                                                                                 'sample dataset')
-    parser.add_argument('--verbose', action='store_true')
-
-    args = parser.parse_args()
-
-    return args
-
-
 def run_model(SVM_params, category):
     """Full-scale training, validation and testing using all amines.
 
@@ -322,8 +257,9 @@ def run_model(SVM_params, category):
      """
     
     # Unload common parameters
-    config = SVM_params['configs'][category]
+    config = SVM_params['configs'][category] if SVM_params['configs'][category] else None
     verbose = SVM_params['verbose']
+    warning = SVM_params['warning']
     stats_path = SVM_params['stats_path']
 
     model_name = SVM_params['model_name']
@@ -344,16 +280,16 @@ def run_model(SVM_params, category):
     to_params = True
 
     if fine_tuning:
-        class_weights = [{0: i, 1: 1.0-i} for i in np.linspace(.05, .95, num=10)]
+        class_weights = [{0: i, 1: 1.0-i} for i in np.linspace(.1, .9, num=9)]
         class_weights.append('balanced')
         class_weights.append(None)
 
         ft_params = {
-            'kernel': ['poly', 'sigmoid', 'rbf'],
-            'C': [.001, .01, .1, 1, 10, 100],
-            'degree': [0, 1, 2, 3],
+            'kernel': ['poly', 'sigmoid', 'rbf', PUK_kernel],
+            'C': [.01, .1, 1, 10, 100],
+            'degree': [i for i in range(1, 6)],
             'gamma': ['auto', 'scale'],
-            'tol': [.0001, .001, .01, .1, 1],
+            'tol': [.001, .01, .1, 1],
             'decision_function_shape': ['ovo'],
             'break_ties': [True],
             'class_weight': class_weights
@@ -385,20 +321,24 @@ def run_model(SVM_params, category):
         # print(amine_list)
         for amine in amine_list:
             if cross_validation:
-                # print("Training and cross validation on {} amine.".format(amine))
-
                 # Create the SVM model instance for the specific amine
-                ASVM = ActiveSVM(amine=amine, config=config, verbose=verbose, stats_path=stats_path, model_name=model_name)
+                ASVM = ActiveSVM(
+                    amine=amine,
+                    config=config,
+                    verbose=verbose,
+                    stats_path=stats_path,
+                    model_name=model_name
+                )
 
                 # Load the training and validation set into the model
                 ASVM.load_dataset(x_t[amine], y_t[amine], x_v[amine], y_v[amine], all_data[amine], all_labels[amine])
 
                 # Train the data on the training set
-                ASVM.train()
+                ASVM.train(warning=warning)
 
                 # Conduct active learning with all the observations available in the pool
                 if active_learning:
-                    ASVM.active_learning(num_iter=active_learning_iter, to_params=to_params)
+                    ASVM.active_learning(num_iter=active_learning_iter, warning=warning, to_params=to_params)
                 else:
                     ASVM.store_metrics_to_params()
 
@@ -407,16 +347,3 @@ def run_model(SVM_params, category):
                     ASVM.save_model(model_name)
 
             # TODO: testing part not implemented: might need to change the logic loading things in
-
-
-def main():
-    """Main driver function"""
-
-    # This converts the args into a dictionary
-    SVM_params = vars(parse_args())
-
-    run_model(SVM_params)
-
-
-if __name__ == "__main__":
-    main()

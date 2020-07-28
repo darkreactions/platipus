@@ -1,24 +1,12 @@
-"""
-Run the following command lines for full dataset training:
-python RandomForest.py --datasource=drp_chem --train_size=20 --cross_validate --full --verbose
-python RandomForest.py --datasource=drp_chem --train_size=20 --cross_validate --pretrain --full --verbose
-
-Run the following command lines for test dataset training (debug):
-python RandomForest.py --datasource=drp_chem ---train_size=20 -cross_validate --verbose
-python RandomForest.py --datasource=drp_chem --train_size=20 --cross_validate --pretrain --verbose
-"""
-
-import os
-import pickle
-import argparse
-
-import numpy as np
-from pathlib import Path
 from collections import defaultdict
-from sklearn.metrics import confusion_matrix
-from sklearn.ensemble import RandomForestClassifier
+import os
+from pathlib import Path
+import pickle
 
 from modAL.models import ActiveLearner
+import numpy as np
+from sklearn.metrics import confusion_matrix
+from sklearn.ensemble import RandomForestClassifier
 
 from utils.utils import grid_search
 from utils.dataset import process_dataset
@@ -60,7 +48,6 @@ class ActiveRandomForest:
         self.stats_path = stats_path
         self.model_name = model_name
 
-    # TODO: find out what to do with this part
     def load_dataset(self, x_t, y_t, x_v, y_v, all_data, all_labels):
         """Load the input training and validation data and labels into the model.
 
@@ -94,15 +81,17 @@ class ActiveRandomForest:
         # Evaluate zero-point performance
         self.evaluate(warning=warning)
 
-    def active_learning(self, num_iter=None, to_params=True):
-        """ The active learning loop
+    def active_learning(self, num_iter=None, warning=True, to_params=True):
+        """The active learning loop
 
-        This is the active learning model that loops around the Random Forest model
+        This is the active learning model that loops around the decision tree model
         to look for the most uncertain point and give the model the label to train
 
         Args:
             num_iter:   An integer that is the number of iterations.
                         Default = None
+            warning:    A boolean that decide if to declare zero division warning or not.
+                        Default = True.
             to_params:  A boolean that decide if to store the metrics to the dictionary,
                         detail see "store_metrics_to_params" function.
                         Default = True
@@ -118,7 +107,7 @@ class ActiveRandomForest:
             uncertain_data, uncertain_label = self.x_v[query_index].reshape(1, -1), self.y_v[query_index].reshape(1, )
             self.learner.teach(X=uncertain_data, y=uncertain_label)
 
-            self.evaluate()
+            self.evaluate(warning=warning)
 
             # Remove the queried instance from the unlabeled pool.
             self.x_t = np.append(self.x_t, uncertain_data).reshape(-1, self.all_data.shape[1])
@@ -242,58 +231,6 @@ class ActiveRandomForest:
             pickle.dump(self, f)
 
 
-def parse_args():
-    """Set up the initial variables for running SVM.
-
-    Retrieves argument values from the terminal command line to create an argparse.Namespace object for
-        initialization.
-
-    Args:
-        N/A
-
-    Returns:
-        args: Namespace object with the following attributes:
-            datasource:         A string identifying the datasource to be used, with default datasource set to drp_chem.
-            train_size          An integer representing the number of samples use for training. Default set to 1.
-            train:              A train_flag attribute. Including it in the command line will set the train_flag to
-                                    True by default.
-            test:               A train_flag attribute. Including it in the command line will set the train_flag to
-                                    False.
-            cross_validate:     A boolean. Including it in the command line will run the model with cross-validation.
-            pretrain:           A boolean representing if it will be trained under option 1 or option 2.
-                                    Option 1 is train with observations of other tasks and validate on the
-                                    task-specific observations.
-                                    Option 2 is to train and validate on the task-specific observations.
-            full_dataset:       A boolean representing if we want to load the full dataset or the test sample dataset.
-            verbose:            A boolean. Including it in the command line will output additional information to the
-                                    terminal for functions with verbose feature.
-    """
-
-    parser = argparse.ArgumentParser(description='Setup variables for active learning SVM.')
-    parser.add_argument('--datasource', type=str, default='drp_chem', help='datasource to be used')
-
-    parser.add_argument('--train_size', dest='train_size', default=10, help='number of samples used for training after '
-                                                                            'pre-training')
-    parser.add_argument('--pre_learn_size', dest='pre_learn_size', default=10, help='number of samples used for '
-                                                                                    'training before active learning')
-
-    parser.add_argument('--train', dest='train_flag', action='store_true')
-    parser.add_argument('--test', dest='train_flag', action='store_false')
-    parser.set_defaults(train_flag=True)
-
-    parser.add_argument('--cross_validate', action='store_true', help='use cross-validation for training')
-    parser.add_argument('--pretrain', action='store_true', help='load the dataset under option 1. Not include this will'
-                                                                ' load the dataset under option 2. See documentation in'
-                                                                ' codes for details.')
-    parser.add_argument('--full', dest='full_dataset', action='store_true', help='load the full dataset or the test '
-                                                                                 'sample dataset')
-    parser.add_argument('--verbose', action='store_true')
-
-    args = parser.parse_args()
-
-    return args
-
-
 def run_model(RandomForest_params, category):
     """Full-scale training, validation and testing using all amines.
     Args:
@@ -303,13 +240,13 @@ def run_model(RandomForest_params, category):
     """
 
     # Unload common parameters
-    config = RandomForest_params['config'][category]
+    config = RandomForest_params['config'][category] if RandomForest_params['config'][category] else None
     verbose = RandomForest_params['verbose']
+    warning = RandomForest_params['warning']
     stats_path = RandomForest_params['stats_path']
 
     model_name = RandomForest_params['model_name']
-    if verbose:
-        print(model_name)
+    print(f'Running model {model_name}')
 
     # Unload the training data specific parameters
     train_size = RandomForest_params['train_size']
@@ -366,31 +303,28 @@ def run_model(RandomForest_params, category):
         for amine in amine_list:
 
             # Create the RandomForest model instance for the specific amine
-            ARF = ActiveRandomForest(amine=amine, config=config, verbose=verbose, stats_path=stats_path, model_name=model_name)
+            ARF = ActiveRandomForest(
+                amine=amine,
+                config=config,
+                verbose=verbose,
+                stats_path=stats_path,
+                model_name=model_name)
+
             # Load the training and validation set into the model
             ARF.load_dataset(x_t[amine],y_t[amine],x_v[amine],y_v[amine],all_data[amine],all_labels[amine])
+
             # Train the data on the training set
-            ARF.train()
+            ARF.train(warning=warning)
+
             # Conduct active learning with all the observations available in the pool
+            # or just save the zero-point performance
             if active_learning:
-                ARF.active_learning(num_iter=active_learning_iter, to_params=True)
+                ARF.active_learning(num_iter=active_learning_iter, warning=warning, to_params=True)
             else:
                 ARF.store_metrics_to_params()
+
             # Save the model for future reproducibility
             if save_model:
                 ARF.save_model(model_name)
 
             # TODO: testing part not implemented
-
-
-def main():
-    """Main driver function"""
-
-    # This converts the args into a dictionary
-    RandomForest_params = vars(parse_args())
-
-    run_model(RandomForest_params)
-
-
-if __name__ == "__main__":
-    main()
