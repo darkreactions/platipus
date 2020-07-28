@@ -6,8 +6,16 @@ import torch
 import pandas as pd
 import numpy as np
 from sklearn.metrics import roc_auc_score
+from scipy.spatial.distance import pdist, cdist
+from scipy.spatial.distance import squareform
 
 from utils.dataset import process_dataset, import_test_dataset, import_full_dataset
+
+# TODO DELETE
+import warnings
+from sklearn.exceptions import ConvergenceWarning
+
+warnings.filterwarnings(action='ignore', category=ConvergenceWarning)
 
 
 def write_pickle(path, data):
@@ -82,10 +90,12 @@ def load_chem_dataset(k_shot, cross_validation=True, meta_batch_size=32,
     """
     if test:
         print('Getting Test dataset')
-        return import_test_dataset(k_shot, meta_batch_size, num_batches, verbose=verbose, cross_validation=cross_validation)
+        return import_test_dataset(k_shot, meta_batch_size, num_batches, verbose=verbose,
+                                   cross_validation=cross_validation)
     else:
         print('Getting FULL dataset')
-        return import_full_dataset(k_shot, meta_batch_size, num_batches, verbose=verbose, cross_validation=cross_validation)
+        return import_full_dataset(k_shot, meta_batch_size, num_batches, verbose=verbose,
+                                   cross_validation=cross_validation)
 
 
 def find_avg_metrics(stats_dict, min_length=None):
@@ -267,7 +277,8 @@ def create_cv_stats_dict(models):
     return cv_stats_dict
 
 
-def update_cv_stats_dict(cv_stats_dict, model, correct, cm, accuracy, precision, recall, bcr, prob_pred=None, verbose=True):
+def update_cv_stats_dict(cv_stats_dict, model, correct, cm, accuracy, precision, recall, bcr, prob_pred=None,
+                         verbose=True):
     """Update the stats dictionary that stores the performance metrics during the cross-validation stage of a specific
             amine
     Args:
@@ -511,7 +522,8 @@ def run_non_meta_model(base_model, common_params, model_params, category):
     base_model.run_model(base_model_params, category)
 
 
-def grid_search(clf, params, train_size, active_learning_iter, active_learning=True, w_hx=True, w_k=True, info=False):
+def grid_search(clf, params, train_size, active_learning_iter, active_learning=True, w_hx=True, w_k=True, random=False,
+                random_size=10, info=False):
     """Fine tune the model based on average bcr performance to find the best model hyper-parameters.
 
     Similar to GridSearchCV in scikit-learn package, we try out all the combinations and evaluate performance
@@ -527,6 +539,8 @@ def grid_search(clf, params, train_size, active_learning_iter, active_learning=T
         active_learning:            A boolean representing if active learning will be involved in testing or not.
         w_hx:                       A boolean representing if the models are trained with historical data or not.
         w_k:                        A boolean representing if the modes are trained with amine-specific experiments.
+        random:                     A boolean representing if we want to do random search or not.
+        random_size:                An integer representing the number of random combinations to try and compare.
         info:                       A boolean. Setting it to True will make the function print out additional
                                         information during the fine-tuning stage.
                                         Default to False.
@@ -541,6 +555,11 @@ def grid_search(clf, params, train_size, active_learning_iter, active_learning=T
     keys, values = zip(*params.items())
     for bundle in itertools.product(*values):
         combinations.append(dict(zip(keys, bundle)))
+
+    # In case we want to decrease the run time
+    # by doing random search
+    if random:
+        combinations = list(np.random.choice(combinations, size=random_size))
 
     # Load the full dataset under specific categorical option
     amine_list, train_data, train_labels, val_data, val_labels, all_data, all_labels = process_dataset(
@@ -599,6 +618,8 @@ def grid_search(clf, params, train_size, active_learning_iter, active_learning=T
 
     best_option = {}
 
+    option_no = 1
+
     # Try out each possible combinations of hyper-parameters
     print(f'There are {len(combinations)} many combinations to try.')
     for option in combinations:
@@ -608,6 +629,8 @@ def grid_search(clf, params, train_size, active_learning_iter, active_learning=T
         bcrs = []
         aucs = []
 
+        print(f'Trying option {option_no}')
+        option_no += 1
         for amine in amine_list:
             # print("Training and cross validation on {} amine.".format(amine))
             ACLF = clf(amine=amine, config=option, verbose=False)
@@ -656,6 +679,22 @@ def grid_search(clf, params, train_size, active_learning_iter, active_learning=T
         print(f'With an average auc of {best_metric}')
 
     return best_option
+
+
+# Credit: https://github.com/rlphilli/sklearn-PUK-kernel
+def PUK_kernel(X1, X2, sigma=1.0, omega=1.0):
+    # Compute the kernel matrix between two arrays using the Pearson VII function-based universal kernel.
+
+    # Compute squared euclidean distance between each row element pair of the two matrices
+    if X1 is X2 :
+        kernel = squareform(pdist(X1, 'sqeuclidean'))
+    else:
+        kernel = cdist(X1, X2, 'sqeuclidean')
+
+    kernel = (1 + (kernel * 4 * np.sqrt(2**(1.0/omega)-1)) / sigma**2) ** omega
+    kernel = 1/kernel
+
+    return kernel
 
 
 if __name__ == "__main__":
