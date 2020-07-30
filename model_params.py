@@ -66,8 +66,26 @@ svm_configs = {
         'break_ties': True,
         'class_weight': None
     },
-    'category_4_i': {},
-    'category_5_i': {},
+    'category_4_i': {
+        'kernel': 'poly',
+        'C': 0.003,
+        'degree': 3,
+        'gamma': 'auto',
+        'tol': 2,
+        'decision_function_shape': 'ovo',
+        'break_ties': True,
+        'class_weight': {0: 0.3, 1: 0.7}
+    },
+    'category_5_i': {
+        'kernel': 'poly',
+        'C': 0.001,
+        'degree': 2,
+        'gamma': 'auto',
+        'tol': 1,
+        'decision_function_shape': 'ovo',
+        'break_ties': True,
+        'class_weight': None
+    },
 }
 
 svm_params = {
