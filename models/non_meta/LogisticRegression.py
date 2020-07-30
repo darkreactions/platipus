@@ -13,12 +13,35 @@ from utils.dataset import process_dataset
 
 
 class ActiveLogisticRegression:
-    """
-    A class of Logistic Regression model with active learning
+    """A Logistic Regression machine learning model using active learning with modAL package
+
+    Attributes:
+        amine:          A string representing the amine that the Logistic Regression model is used for predictions.
+        model:          A LogisticRegression object as the classifier model.
+        metrics:        A dictionary to store the performance metrics locally. It has the format of
+                            {'metric_name': [metric_value]}.
+        verbose:        A boolean representing whether it will prints out additional information to the terminal or not.
+        stats_path:     A Path object representing the directory of the stats dictionary.
+        model_name:     A string representing the name of the model for future plotting.
+        all_data:       A numpy array representing all the data from the dataset.
+        all_labels:     A numpy array representing all the labels from the dataset.
+        x_t:            A numpy array representing the training data used for model training.
+        y_t:            A numpy array representing the training labels used for model training.
+        x_v:            A numpy array representing the testing data used for active learning.
+        y_v:            A numpy array representing the testing labels used for active learning.
+        learner:        An ActiveLearner to conduct active learning with. See modAL documentation for more details.
     """
 
     def __init__(self, amine=None, config=None, verbose=True, stats_path=Path('./results/stats.pkl'),
                  model_name='Logistic Regression'):
+        """initialization of the class
+
+        Args:
+            verbose:        A boolean. Output additional information to the
+                            terminal for functions with verbose feature.
+                            Default = True
+
+        """
         """initialization of the class"""
         self.amine = amine
 

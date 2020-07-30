@@ -334,6 +334,12 @@ def load_test_samples(hold_out_amines, df, to_exclude, k_shot, amine_header, sco
 
 
 def find_index(selected_experiements, all_experiments):
+    '''
+    TODO: DOCUMENTATION
+    :param selected_experiements:
+    :param all_experiments:
+    :return:
+    '''
     qry_index = []
     for experiment in selected_experiements:
         i = 0
@@ -511,6 +517,7 @@ def process_dataset(train_size=10, active_learning_iter=10, verbose=True, cross_
         )
 
         full_amines = list(full_training_op1.keys())
+        print(full_amines)
         test_amines = list(test_training_op1.keys())
 
         for amine in full_amines:

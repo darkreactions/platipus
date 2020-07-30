@@ -3,7 +3,7 @@ from collections import defaultdict
 #from matplotlib import pyplot as plt
 from pathlib import Path
 
-from utils import read_pickle, find_avg_metrics, find_success_rate, find_bcr
+from utils import read_pickle, find_avg_metrics, find_success_rate, find_bcr, find_winning_models
 import matplotlib
 matplotlib.use('Agg')
 from matplotlib import pyplot as plt
@@ -387,7 +387,7 @@ def plot_all_graphs(cv_stats):
     # Parse the models into 3 main categories
     cat_3 = [model for model in models_to_plot if 'historical_only' in model]
     cat_4 = [model for model in models_to_plot if 'amine' in model and not ('AL' in model)]
-    cat_5 = [model for model in models_to_plot if 'AL' in model]
+    cat_5 = [model for model in models_to_plot if 'AL' in model or ('PLATIPUS' in model)]
 
     all_cats = {
         'category_3': cat_3,
@@ -395,8 +395,38 @@ def plot_all_graphs(cv_stats):
         'category_5': cat_5,
     }
 
+    # Parse the models into each model's names
+    # TODO: Hard coded the model names
+    knn = [model for model in models_to_plot if 'KNN' in model]
+    rf = [model for model in models_to_plot if 'Random' in model]
+    lr = [model for model in models_to_plot if 'Logistic' in model]
+    dt = [model for model in models_to_plot if 'Decision' in model]
+    svm = [model for model in models_to_plot if 'SVM' in model]
+    platipus = [model for model in models_to_plot if 'PLATIPUS' in model]
+    all_mod = {
+        'KNN': knn,
+        'Random_Forest': rf,
+        'Logistic_Regression': lr,
+        'Decision_Tree': dt,
+        'SVM' : svm,
+        'PLATIPUS': platipus
+    }
+    # Parse the models into specific categories
+    hist_only = [model for model in models_to_plot if 'historical_only' in model]
+    hist_amine = [model for model in models_to_plot if 'historical_amine' in model and not ('AL' in model)]
+    amine_only = [model for model in models_to_plot if 'amine_only' in model and not ('AL' in model)]
+    hist_amine_al = [model for model in models_to_plot if 'historical_amine_AL' in model or ('PLATIPUS' in model)]
+    amine_only_al = [model for model in models_to_plot if 'amine_only_AL' in model]
+
+    all_subcats = {
+        'historical_only': hist_only,
+        'historical_amine': hist_amine,
+        'amine_only': amine_only,
+        'historical_amine_AL': hist_amine_al,
+        'amine_only_AL': amine_only_al,
+    }
     # TODO: COMMENT
-    avg_stats = find_avg_metrics(cv_stats)
+    avg_stats = find_avg_metrics(cv_stats, models_to_plot)
     rand_model = list(avg_stats.keys())[0]
     num_examples = len(avg_stats[rand_model]['accuracies'])
     style_combinations = generate_style_combos(models_to_plot)
@@ -450,3 +480,34 @@ def plot_all_graphs(cv_stats):
     plot_bcr_vs_success_rate(models_to_plot, cv_stats, bcr_graph_dst, names, success_volume, success_percentage, style_combinations=style_combinations)
 
     plot_all_lines(avg_stats, './results/avg_metrics_all_models.png', style_combinations)
+    # plot the winning models for each category
+    winning_stats = find_winning_models(avg_stats, all_cats)
+    plot_all_lines(winning_stats, './results/winning_models.png', style_combinations)
+
+    # save the graphs for each model
+    mod_graph_folder = './results/by_model'
+    if not os.path.exists(mod_graph_folder):
+        os.makedirs(mod_graph_folder)
+        print(f'No folder for graphs of models not found')
+        print('Make folder to store results at')
+    else:
+        print('Found existing folder. Graphs will be stored at')
+    print(mod_graph_folder)
+    for mod in list(all_mod.keys()):
+        dst_path = './results/by_model/{}.png'.format(mod)
+        avg_stats_mod = find_avg_metrics(cv_stats, all_mod[mod])
+        plot_all_lines(avg_stats_mod, dst_path, style_combinations)
+
+    # save the graphs for each category
+    subcat_graph_folder = './results/by_category'
+    if not os.path.exists(subcat_graph_folder):
+        os.makedirs(subcat_graph_folder)
+        print(f'No folder for graphs by category not found')
+        print('Make folder to store results at')
+    else:
+        print('Found existing folder. Graphs will be stored at')
+    print(subcat_graph_folder)
+    for subcat in list(all_subcats.keys()):
+        dst_path = './results/by_category/{}.png'.format(subcat)
+        avg_stats_cat = find_avg_metrics(cv_stats, all_subcats[subcat])
+        plot_all_lines(avg_stats_cat, dst_path, style_combinations)

@@ -98,12 +98,13 @@ def load_chem_dataset(k_shot, cross_validation=True, meta_batch_size=32,
                                    cross_validation=cross_validation)
 
 
-def find_avg_metrics(stats_dict, min_length=None):
+def find_avg_metrics(stats_dict, models, min_length=None):
     """Calculate the average metrics of several models' performances
 
     Args:
         stats_dict:         A dictionary representing the performance metrics of the machine learning models.
                                 It has the format of {model_name: {metric_name: [[metric_values for each amine]]}}
+        modes:              A list of the models that we want to find the average metrics for
         min_length:         An integer representing the fewest number of points to start metrics calculations.
 
     Returns:
@@ -114,7 +115,7 @@ def find_avg_metrics(stats_dict, min_length=None):
     # Set up default dictionary to store average metrics for each model
     avg_stat = {}
 
-    all_models = list(stats_dict.keys())
+    all_models = models
     """random_model = all_models[0]
 
     if not min_length:
@@ -178,6 +179,31 @@ def find_avg_metrics(stats_dict, min_length=None):
             avg_stat[model]['bcrs'].append(avg_bcr)
 
     return avg_stat
+
+def find_winning_models(avg_stat,all_cat):
+    '''Find the winning models for each category of models
+
+    Args:
+        avg_stat:           A dictionary representing the average performance metrics of the machine learning models.
+                                It has the format of {model_name: {metric_name: [[avg_metric_values for model]]}}
+        all_cat:            A dictionary representing the different non_meta models in each category
+                                It has the format of {category: [all the models in this category]}
+
+    Returns:
+        best_model_bcr:     A dictionary representing the best performing models according to their auc_to_bcr.
+                                It has the format of {model_name: {metric_name: [metric_values]}}.
+    '''
+    best_model_bcr = {}
+    cats = list(all_cat.keys())
+    for cat in cats:
+        cat_models = all_cat[cat]
+        cat_best_bcr = {}
+        for model in list(avg_stat.keys()):
+            if model in cat_models:
+                cat_best_bcr[model] = avg_stat[model]['bcrs']
+        cat_best_bcr = max(cat_best_bcr, key=lambda x: np.trapz(cat_best_bcr[x]) / len(cat_best_bcr[x]))
+        best_model_bcr[cat_best_bcr] = avg_stat[cat_best_bcr]
+    return best_model_bcr
 
 
 def save_model(model, params, amine=None):
