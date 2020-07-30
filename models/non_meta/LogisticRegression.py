@@ -224,7 +224,7 @@ def run_model(LogisticRegression_params, category):
     """
 
     # Unload common parameters
-    config = LogisticRegression_params['config'][category] if LogisticRegression_params['config'][category] else None
+    config = LogisticRegression_params['config'][category] if LogisticRegression_params['config'] else None
     verbose = LogisticRegression_params['verbose']
     warning = LogisticRegression_params['warning']
     stats_path = LogisticRegression_params['stats_path']

@@ -240,7 +240,7 @@ def run_model(RandomForest_params, category):
     """
 
     # Unload common parameters
-    config = RandomForest_params['config'][category] if RandomForest_params['config'][category] else None
+    config = RandomForest_params['config'][category] if RandomForest_params['config'] else None
     verbose = RandomForest_params['verbose']
     warning = RandomForest_params['warning']
     stats_path = RandomForest_params['stats_path']

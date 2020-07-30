@@ -244,7 +244,7 @@ def run_model(KNN_params, category):
     """
 
     # Unload common parameters
-    config = KNN_params['configs'][category] if KNN_params['configs'][category] else None
+    config = KNN_params['configs'][category] if KNN_params['configs'] else None
     verbose = KNN_params['verbose']
     warning = KNN_params['warning']
     stats_path = KNN_params['stats_path']

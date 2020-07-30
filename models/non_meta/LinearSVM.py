@@ -249,7 +249,7 @@ def run_model(LinearSVM_params, category):
      """
     
     # Unload common parameters
-    config = LinearSVM_params['configs'][category] if LinearSVM_params['configs'][category] else None
+    config = LinearSVM_params['configs'][category] if LinearSVM_params['configs'] else None
     verbose = LinearSVM_params['verbose']
     warning = LinearSVM_params['warning']
     stats_path = LinearSVM_params['stats_path']

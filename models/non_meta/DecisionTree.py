@@ -254,7 +254,7 @@ def run_model(DecisionTree_params, category):
                 '_raw_RelativeHumidity']
 
     # Unload common parameters
-    config = DecisionTree_params['configs'][category] if DecisionTree_params['configs'][category] else None
+    config = DecisionTree_params['configs'][category] if DecisionTree_params['configs'] else None
     verbose = DecisionTree_params['verbose']
     warning = DecisionTree_params['warning']
     stats_path = DecisionTree_params['stats_path']

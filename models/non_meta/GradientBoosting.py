@@ -248,7 +248,7 @@ def run_model(GradientBoosting_params, category):
     """
 
     # Unload common parameters
-    config = GradientBoosting_params['config'][category] if GradientBoosting_params['config'][category] else None
+    config = GradientBoosting_params['config'][category] if GradientBoosting_params['config'] else None
     verbose = GradientBoosting_params['verbose']
     warning = GradientBoosting_params['warning']
     stats_path = GradientBoosting_params['stats_path']

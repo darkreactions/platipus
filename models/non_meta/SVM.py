@@ -257,7 +257,7 @@ def run_model(SVM_params, category):
      """
     
     # Unload common parameters
-    config = SVM_params['configs'][category] if SVM_params['configs'][category] else None
+    config = SVM_params['configs'][category] if SVM_params['configs'] else None
     verbose = SVM_params['verbose']
     warning = SVM_params['warning']
     stats_path = SVM_params['stats_path']
