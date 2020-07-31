@@ -195,14 +195,19 @@ def find_winning_models(avg_stat,all_cat):
     '''
     best_model_bcr = {}
     cats = list(all_cat.keys())
+    # Find the best performing model in each category
     for cat in cats:
         cat_models = all_cat[cat]
         cat_best_bcr = {}
         for model in list(avg_stat.keys()):
-            if model in cat_models:
+            if model in cat_models and 'PLATIPUS' not in model:
                 cat_best_bcr[model] = avg_stat[model]['bcrs']
         cat_best_bcr = max(cat_best_bcr, key=lambda x: np.trapz(cat_best_bcr[x]) / len(cat_best_bcr[x]))
         best_model_bcr[cat_best_bcr] = avg_stat[cat_best_bcr]
+    # add the platipus line into the graph to compare with the best performing ones
+    for model in list(avg_stat.keys()):
+        if 'PLATIPUS' in model:
+            best_model_bcr[model] = avg_stat[model]
     return best_model_bcr
 
 
