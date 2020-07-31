@@ -402,6 +402,7 @@ def plot_all_graphs(cv_stats):
     lr = [model for model in models_to_plot if 'Logistic' in model]
     dt = [model for model in models_to_plot if 'Decision' in model]
     svm = [model for model in models_to_plot if 'SVM' in model]
+    gbc = [model for model in models_to_plot if 'Gradient' in model]
     platipus = [model for model in models_to_plot if 'PLATIPUS' in model]
     all_mod = {
         'KNN': knn,
@@ -409,6 +410,7 @@ def plot_all_graphs(cv_stats):
         'Logistic_Regression': lr,
         'Decision_Tree': dt,
         'SVM' : svm,
+        'GBC' : gbc,
         'PLATIPUS': platipus
     }
     # Parse the models into specific categories
@@ -481,7 +483,7 @@ def plot_all_graphs(cv_stats):
 
     plot_all_lines(avg_stats, './results/avg_metrics_all_models.png', style_combinations)
     # plot the winning models for each category
-    winning_stats = find_winning_models(avg_stats, all_cats)
+    winning_stats = find_winning_models(avg_stats, all_subcats)
     plot_all_lines(winning_stats, './results/winning_models.png', style_combinations)
 
     # save the graphs for each model
