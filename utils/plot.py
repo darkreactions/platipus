@@ -421,6 +421,7 @@ def plot_all_graphs(cv_stats):
     lr = [model for model in models_to_plot if 'Logistic' in model]
     dt = [model for model in models_to_plot if 'Decision' in model]
     svm = [model for model in models_to_plot if 'SVM' in model]
+    gbc = [model for model in models_to_plot if 'Gradient' in model]
     platipus = [model for model in models_to_plot if 'PLATIPUS' in model]
     all_mod = {
         'KNN': knn,
@@ -428,6 +429,7 @@ def plot_all_graphs(cv_stats):
         'Logistic_Regression': lr,
         'Decision_Tree': dt,
         'SVM' : svm,
+        'GBC' : gbc,
         'PLATIPUS': platipus
     }
     # Parse the models into specific categories
