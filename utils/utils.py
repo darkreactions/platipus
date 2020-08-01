@@ -180,8 +180,9 @@ def find_avg_metrics(stats_dict, models, min_length=None):
 
     return avg_stat
 
+
 def find_winning_models(avg_stat,all_cat):
-    '''Find the winning models for each category of models
+    """Find the winning models for each category of models
 
     Args:
         avg_stat:           A dictionary representing the average performance metrics of the machine learning models.
@@ -192,7 +193,7 @@ def find_winning_models(avg_stat,all_cat):
     Returns:
         best_model_bcr:     A dictionary representing the best performing models according to their auc_to_bcr.
                                 It has the format of {model_name: {metric_name: [metric_values]}}.
-    '''
+    """
     best_model_bcr = {}
     cats = list(all_cat.keys())
     for cat in cats:
@@ -712,7 +713,7 @@ def PUK_kernel(X1, X2, sigma=1.0, omega=1.0):
     # Compute the kernel matrix between two arrays using the Pearson VII function-based universal kernel.
 
     # Compute squared euclidean distance between each row element pair of the two matrices
-    if X1 is X2 :
+    if X1 is X2:
         kernel = squareform(pdist(X1, 'sqeuclidean'))
     else:
         kernel = cdist(X1, X2, 'sqeuclidean')

@@ -280,51 +280,6 @@ logisticregression_params = {
     'model_name': 'Logistic_Regression'
 }
 
-dt_configs = {
-    'category_3': {
-        'criterion': 'gini',
-        'splitter': 'best',
-        'max_depth': 7,
-        'min_samples_split': 2,
-        'min_samples_leaf': 2
-    },
-    'category_4_i': {
-        'criterion': 'gini',
-        'splitter': 'random',
-        'max_depth': 11,
-        'min_samples_split': 8,
-        'min_samples_leaf': 1,
-        'class_weight': {0: 0.3, 1: 0.7}
-    },
-    'category_4_ii': {
-        'criterion': 'gini',
-        'splitter': 'best',
-        'max_depth': 3,
-        'min_samples_split': 4,
-        'min_samples_leaf': 1
-    },
-    'category_5_i': {
-        'criterion': 'gini',
-        'splitter': 'random',
-        'max_depth': 11,
-        'min_samples_split': 4,
-        'min_samples_leaf': 3,
-        'class_weight': {0: 0.1, 1: 0.9}
-    },
-    'category_5_ii': {
-        'criterion': 'gini',
-        'splitter': 'best',
-        'max_depth': 4,
-        'min_samples_split': 2,
-        'min_samples_leaf': 1
-    },
-}
-
-decisiontree_params = {
-    'configs': dt_configs,
-    'model_name': 'Decision_Tree'
-}
-
 gb_configs = {
     'category_3': {
 
