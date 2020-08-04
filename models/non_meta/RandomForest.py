@@ -43,25 +43,26 @@ class ActiveRandomForest:
         else:
             self.model = RandomForestClassifier(n_estimators=100, criterion='gini', max_depth=8, min_samples_split=2,
                                                 min_samples_leaf=1, max_features=None, bootstrap=True, ccp_alpha=0.0)
-        self.metrics = defaultdict(list)
+
+        self.metrics = defaultdict(dict)
         self.verbose = verbose
         self.stats_path = stats_path
         self.model_name = model_name
 
-    def load_dataset(self, x_t, y_t, x_v, y_v, all_data, all_labels):
+    def load_dataset(self, set_id, x_t, y_t, x_v, y_v, all_data, all_labels):
         """Load the input training and validation data and labels into the model.
 
         Args:
+            set_id:             An integer representing the id of the random draw that we are loading.
             x_t:                A 2-D numpy array representing the training data.
             y_t:                A 2-D numpy array representing the training labels.
             x_v:                A 2-D numpy array representing the validation data.
             y_v:                A 2-D numpy array representing the validation labels.
             all_data:           A 2-D numpy array representing all the data in the active learning pool.
             all_labels:         A 2-D numpy array representing all the labels in the active learning pool.
-
-        Returns:
-            N/A
         """
+        self.draw_id = set_id
+        self.metrics[self.draw_id] = defaultdict(list)
 
         self.x_t, self.y_t, self.x_v, self.y_v = x_t, y_t, x_v, y_v
 
@@ -75,13 +76,13 @@ class ActiveRandomForest:
             print(f'The testing labels has dimension of {self.y_v.shape}.')
 
     def train(self, warning=True):
-        """ Train the random forest model by setting up the ActiveLearner."""
+        """Train the KNN model by setting up the ActiveLearner."""
 
         self.learner = ActiveLearner(estimator=self.model, X_training=self.x_t, y_training=self.y_t)
         # Evaluate zero-point performance
         self.evaluate(warning=warning)
 
-    def active_learning(self, num_iter=None, warning=True, to_params=True):
+    def active_learning(self, num_iter=None, warning=True):
         """The active learning loop
 
         This is the active learning model that loops around the decision tree model
@@ -92,9 +93,6 @@ class ActiveRandomForest:
                         Default = None
             warning:    A boolean that decide if to declare zero division warning or not.
                         Default = True.
-            to_params:  A boolean that decide if to store the metrics to the dictionary,
-                        detail see "store_metrics_to_params" function.
-                        Default = True
         """
 
         num_iter = num_iter if num_iter else self.x_v.shape[0]
@@ -115,11 +113,8 @@ class ActiveRandomForest:
             self.x_v = np.delete(self.x_v, query_index, axis=0)
             self.y_v = np.delete(self.y_v, query_index)
 
-        if to_params:
-            self.store_metrics_to_params()
-
     def evaluate(self, warning=True, store=True):
-        """ Evaluation of the model
+        """Evaluation of the model
 
         Args:
             warning:    A boolean that decides if to warn about the zero division issue or not.
@@ -127,13 +122,12 @@ class ActiveRandomForest:
             store:      A boolean that decides if to store the metrics of the performance of the model.
                             Default = True
         """
+
         # Calculate and report our model's accuracy.
         accuracy = self.learner.score(self.all_data, self.all_labels)
 
-        # Find model predictions
         self.y_preds = self.learner.predict(self.all_data)
 
-        # Calculated confusion matrix
         cm = confusion_matrix(self.all_labels, self.y_preds)
 
         # To prevent nan value for precision, we set it to 1 and send out a warning message
@@ -170,11 +164,11 @@ class ActiveRandomForest:
                                 of recall rate and true negative rate.
         """
 
-        self.metrics['confusion_matrices'].append(cm)
-        self.metrics['accuracies'].append(accuracy)
-        self.metrics['precisions'].append(precision)
-        self.metrics['recalls'].append(recall)
-        self.metrics['bcrs'].append(bcr)
+        self.metrics[self.draw_id]['confusion_matrices'].append(cm)
+        self.metrics[self.draw_id]['accuracies'].append(accuracy)
+        self.metrics[self.draw_id]['precisions'].append(precision)
+        self.metrics[self.draw_id]['recalls'].append(recall)
+        self.metrics[self.draw_id]['bcrs'].append(bcr)
 
         if self.verbose:
             print(cm)
@@ -183,12 +177,29 @@ class ActiveRandomForest:
             print('recall for model is', recall)
             print('balanced classification rate for model is', bcr)
 
+    def find_inner_avg(self):
+        """Find the average across all random draws"""
+        metric_names = ['accuracies', 'precisions', 'recalls', 'bcrs']
+        rand_draws = list(self.metrics.keys())
+
+        for metric in metric_names:
+            lst_of_metrics = []
+            for set_id in rand_draws:
+                lst_of_metrics.append(self.metrics[set_id][metric])
+            self.metrics['average'][metric] = list(np.average(lst_of_metrics, axis=0))
+
+        lst_of_confusion_matrices = []
+        for set_id in rand_draws:
+            lst_of_confusion_matrices.append(self.metrics[set_id]['confusion_matrices'])
+        self.metrics['average']['confusion_matrices'] = lst_of_confusion_matrices
+
     def store_metrics_to_params(self):
         """Store the metrics results to the model's parameters dictionary
 
         Use the same logic of saving the metrics for each model.
         Dump the cross validation statistics to a pickle file.
         """
+        self.find_inner_avg()
 
         model = self.model_name
 
@@ -202,11 +213,12 @@ class ActiveRandomForest:
             stats_dict[model] = defaultdict(list)
 
         stats_dict[model]['amine'].append(self.amine)
-        stats_dict[model]['accuracies'].append(self.metrics['accuracies'])
-        stats_dict[model]['confusion_matrices'].append(self.metrics['confusion_matrices'])
-        stats_dict[model]['precisions'].append(self.metrics['precisions'])
-        stats_dict[model]['recalls'].append(self.metrics['recalls'])
-        stats_dict[model]['bcrs'].append(self.metrics['bcrs'])
+        stats_dict[model]['accuracies'].append(self.metrics['average']['accuracies'])
+        stats_dict[model]['confusion_matrices'].append(
+            self.metrics['average']['confusion_matrices'])
+        stats_dict[model]['precisions'].append(self.metrics['average']['precisions'])
+        stats_dict[model]['recalls'].append(self.metrics['average']['recalls'])
+        stats_dict[model]['bcrs'].append(self.metrics['average']['bcrs'])
 
         # Save this dictionary in case we need it later
         with open(self.stats_path, "wb") as f:
@@ -249,6 +261,7 @@ def run_model(RandomForest_params, category):
     print(f'Running model {model_name}')
 
     # Unload the training data specific parameters
+    num_draws = RandomForest_params['num_draws']
     train_size = RandomForest_params['train_size']
     cross_validation = RandomForest_params['cross_validate']
     active_learning = RandomForest_params['active_learning']
@@ -256,10 +269,12 @@ def run_model(RandomForest_params, category):
     w_k = RandomForest_params['with_k']
     active_learning_iter = RandomForest_params['active_learning_iter']
     full = RandomForest_params['full_dataset']
+    draw_success = RandomForest_params['draw_success']
 
     # Specify the desired operation
     fine_tuning = RandomForest_params['fine_tuning']
     save_model = RandomForest_params['save_model']
+    to_params = True
 
     if fine_tuning:
         class_weights = [{0: i, 1: 1.0 - i} for i in np.linspace(.05, .95, num=50)]
@@ -278,18 +293,25 @@ def run_model(RandomForest_params, category):
             'class_weight': class_weights
         }
 
-        _ = grid_search(
+        result_path = './results/ft_{}.pkl'.format(model_name)
+
+        grid_search(
             ActiveRandomForest,
             ft_params,
+            result_path,
+            num_draws,
             train_size,
             active_learning_iter,
             active_learning=active_learning,
             w_hx=w_hx,
             w_k=w_k,
-            info=True
+            draw_success=draw_success
         )
+
     else:
-        amine_list, x_t, y_t, x_v, y_v, all_data, all_labels = process_dataset(
+        # Load the desired sized dataset under desired option
+        dataset = process_dataset(
+            num_draw=num_draws,
             train_size=train_size,
             active_learning_iter=active_learning_iter,
             verbose=verbose,
@@ -297,8 +319,12 @@ def run_model(RandomForest_params, category):
             full=full,
             active_learning=active_learning,
             w_hx=w_hx,
-            w_k=w_k
+            w_k=w_k,
+            success=draw_success
         )
+
+        draws = list(dataset.keys())
+        amine_list = list(dataset[0]['x_t'].keys())
 
         for amine in amine_list:
 
@@ -310,17 +336,26 @@ def run_model(RandomForest_params, category):
                 stats_path=stats_path,
                 model_name=model_name)
 
-            # Load the training and validation set into the model
-            ARF.load_dataset(x_t[amine],y_t[amine],x_v[amine],y_v[amine],all_data[amine],all_labels[amine])
+            for set_id in draws:
+                # Unload the randomly drawn dataset values
+                x_t, y_t, x_v, y_v, all_data, all_labels = dataset[set_id]['x_t'], \
+                                                           dataset[set_id]['y_t'], \
+                                                           dataset[set_id]['x_v'], \
+                                                           dataset[set_id]['y_v'], \
+                                                           dataset[set_id]['all_data'], \
+                                                           dataset[set_id]['all_labels']
 
-            # Train the data on the training set
-            ARF.train(warning=warning)
+                # Load the training and validation set into the model
+                ARF.load_dataset(set_id, x_t[amine],y_t[amine],x_v[amine],y_v[amine],all_data[amine],all_labels[amine])
 
-            # Conduct active learning with all the observations available in the pool
-            # or just save the zero-point performance
-            if active_learning:
-                ARF.active_learning(num_iter=active_learning_iter, warning=warning, to_params=True)
-            else:
+                # Train the data on the training set
+                ARF.train(warning=warning)
+
+                # Conduct active learning with all the observations available in the pool
+                if active_learning:
+                    ARF.active_learning(num_iter=active_learning_iter, warning=warning)
+
+            if to_params:
                 ARF.store_metrics_to_params()
 
             # Save the model for future reproducibility
