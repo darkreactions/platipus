@@ -6,10 +6,12 @@ common_params = {
     'cross_validate': True,
     'cv_stats_overwrite': True,
     'datasource': 'drp_chem',
+    'draw_success': False,
     'fine_tuning': False,
     'full_dataset': True,
     'gpu_id': 1,
     'meta': False,
+    'num_draws': 5,
     'save_model': False,
     'stats_path': Path('./results/cv_statistics.pkl'),
     'test_data': True,  # TODO: redundant with full_dataset?
