@@ -49,7 +49,7 @@ As of August 1, the experimental procedure is as follows:
          Models include: kNN, SVM, Decision Tree, Random Forest, Logistic Regression, Gradient Boosting Tree.  
          **NOTE**: SVM, Logistic Regression and Gradient Boosting Tree are using a slightly different set of data under this category. For more details, see portion on creating the dataset.
       </li>  
-      </ul>  
+      </ul>
       **As of now, k is set to 10 and x is set to 10.**  
       
    2. training set, validation set, random draws, etc. To Be Continued
