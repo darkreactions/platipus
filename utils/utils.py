@@ -1,13 +1,15 @@
+from collections import defaultdict
 import itertools
 from pathlib import Path
 import pickle
-import torch
+import time
 
 import pandas as pd
 import numpy as np
 from sklearn.metrics import roc_auc_score
 from scipy.spatial.distance import pdist, cdist
 from scipy.spatial.distance import squareform
+import torch
 
 from utils.dataset import process_dataset, import_test_dataset, import_full_dataset
 
@@ -469,7 +471,7 @@ def find_bcr(category, cv_stats, amine_names):
     return wanted_bcrs
 
 
-def define_non_meta_model_name(model_name, active_learning, w_hx, w_k):
+def define_non_meta_model_name(model_name, active_learning, w_hx, w_k, success):
     """ Function to define the suffix of non-meta model
     Args:
         model_name:         A string representing the base model name of the non-meta model.
@@ -477,6 +479,9 @@ def define_non_meta_model_name(model_name, active_learning, w_hx, w_k):
         w_hx:               A boolean representing if the model will be trained with historical data or not.
         w_k:                A boolean representing if the model will be trained with k additional experiments of the
                                 task-specific experiments or not.
+        success:            A boolean representing if the model is trained with regular randomly drawn datasets or
+                                datasets with at least one successful experiment for each amine.
+
     returns:
         A string representing the model name with proper suffix
     """
@@ -512,10 +517,12 @@ def define_non_meta_model_name(model_name, active_learning, w_hx, w_k):
                 print("Can't find appropriate category for the model.")
                 print("Using default name instead.")
 
-    return model_name + suffix
+    random_draw_handle = '_with_success' if success else ''
+
+    return model_name + suffix + random_draw_handle
 
 
-def run_non_meta_model(base_model, common_params, model_params, category):
+def run_non_meta_model(base_model, common_params, model_params, category, success=False):
     """Run non-meta models under desired category
 
     Args:
@@ -523,6 +530,9 @@ def run_non_meta_model(base_model, common_params, model_params, category):
         common_params:      A dictionary representing the common parameters used across all models.
         model_params:       A dictionary representing the base-model specific parameters.
         category:           A string representing the category of the model to be run.
+        success:            A boolean representing if we are using regular random draws with no success specification
+                                or random draws with at least one success.
+                                Default = False (regular random draw).
     """
 
     # Set up the settings of each category
@@ -542,20 +552,23 @@ def run_non_meta_model(base_model, common_params, model_params, category):
     base_model_params['active_learning'] = settings[category][0]
     base_model_params['with_historical_data'] = settings[category][1]
     base_model_params['with_k'] = settings[category][2]
+    base_model_params['draw_success'] = success
 
     # Define the model's name given the category it is in
     base_model_params['model_name'] = define_non_meta_model_name(
         base_model_params['model_name'],
         base_model_params['active_learning'],
         base_model_params['with_historical_data'],
-        base_model_params['with_k'])
+        base_model_params['with_k'],
+        base_model_params['draw_success']
+    )
 
     # Run the non-meta models
     base_model.run_model(base_model_params, category)
 
 
-def grid_search(clf, params, train_size, active_learning_iter, active_learning=True, w_hx=True, w_k=True, random=False,
-                random_size=10, info=False):
+def grid_search(clf, ft_params, path, num_draws, train_size, active_learning_iter, active_learning=True, w_hx=True,
+                w_k=True, draw_success=False, random=False, random_size=10):
     """Fine tune the model based on average bcr performance to find the best model hyper-parameters.
 
     Similar to GridSearchCV in scikit-learn package, we try out all the combinations and evaluate performance
@@ -563,7 +576,10 @@ def grid_search(clf, params, train_size, active_learning_iter, active_learning=T
 
     Args:
         clf:                        A class object representing the classifier being fine tuned.
-        params:                     A dictionary representing the possible hyper-parameter values to try out.
+        ft_params:                  A dictionary representing the possible hyper-parameter values to try out.
+        path:                       A string representing the directory path to store the statistics of all combinations
+                                        tried during one stage of fine tuning.
+        num_draws:                  An integer representing the number of random drawn to create the dataset.
         train_size:                 An integer representing the number of amine-specific experiments used for training.
                                         Corresponds to the k in the category description.
         active_learning_iter:       An integer representing the number of iterations in an active learning loop.
@@ -571,30 +587,33 @@ def grid_search(clf, params, train_size, active_learning_iter, active_learning=T
         active_learning:            A boolean representing if active learning will be involved in testing or not.
         w_hx:                       A boolean representing if the models are trained with historical data or not.
         w_k:                        A boolean representing if the modes are trained with amine-specific experiments.
+        draw_success:               A boolean representing if the models are trained on regular randomly-drawn datasets
+                                        or random datasets with at least one success for each amine.
         random:                     A boolean representing if we want to do random search or not.
         random_size:                An integer representing the number of random combinations to try and compare.
-        info:                       A boolean. Setting it to True will make the function print out additional
-                                        information during the fine-tuning stage.
-                                        Default to False.
+
     Returns:
         best_option:                A dictionary representing the hyper-parameters that yields the best performance on
                                         average. The keys may vary for models.
     """
 
+    # Initialize dictionary to keep all configurations' performances
+    ft_log = defaultdict(dict)
+
     # Set all possible combinations
     combinations = []
 
-    keys, values = zip(*params.items())
+    keys, values = zip(*ft_params.items())
     for bundle in itertools.product(*values):
         combinations.append(dict(zip(keys, bundle)))
 
-    # In case we want to decrease the run time
-    # by doing random search
+    # Random search if we are not searching through the whole grid
     if random:
         combinations = list(np.random.choice(combinations, size=random_size))
 
     # Load the full dataset under specific categorical option
-    amine_list, train_data, train_labels, val_data, val_labels, all_data, all_labels = process_dataset(
+    dataset = process_dataset(
+        num_draw=num_draws,
         train_size=train_size,
         active_learning_iter=active_learning_iter,
         verbose=False,
@@ -602,55 +621,60 @@ def grid_search(clf, params, train_size, active_learning_iter, active_learning=T
         full=True,
         active_learning=active_learning,
         w_hx=w_hx,
-        w_k=w_k
+        w_k=w_k,
+        success=draw_success
     )
+
+    draws = list(dataset.keys())
+    amine_list = list(dataset[0]['x_t'].keys())
 
     # Set baseline performance
     base_accuracies = []
     base_precisions = []
     base_recalls = []
     base_bcrs = []
-    base_aucs = []
+
+    # Log the starting time of fine tuning
+    start_time = time.time()
 
     for amine in amine_list:
         ACLF = clf(amine=amine, verbose=False)
 
-        # Exact and load the training and validation set into the model
-        x_t, y_t = train_data[amine], train_labels[amine]
-        x_v, y_v = val_data[amine], val_labels[amine]
-        all_task_data, all_task_labels = all_data[amine], all_labels[amine]
-        ACLF.load_dataset(x_t, y_t, x_v, y_v, all_task_data, all_task_labels)
+        for set_id in draws:
+            # Unload the randomly drawn dataset values
+            x_t, y_t, x_v, y_v, all_data, all_labels = dataset[set_id]['x_t'], \
+                                                       dataset[set_id]['y_t'], \
+                                                       dataset[set_id]['x_v'], \
+                                                       dataset[set_id]['y_v'], \
+                                                       dataset[set_id]['all_data'], \
+                                                       dataset[set_id]['all_labels']
 
-        ACLF.train(warning=False)
+            # Load the training and validation set into the model
+            ACLF.load_dataset(
+                set_id,
+                x_t[amine],
+                y_t[amine],
+                x_v[amine],
+                y_v[amine],
+                all_data[amine],
+                all_labels[amine]
+            )
 
-        # Calculate AUC
-        auc = roc_auc_score(ACLF.all_labels, ACLF.y_preds)
+            # Train the data on the training set
+            ACLF.train(warning=False)
 
-        base_accuracies.append(ACLF.metrics['accuracies'][-1])
-        base_precisions.append(ACLF.metrics['precisions'][-1])
-        base_recalls.append(ACLF.metrics['recalls'][-1])
-        base_bcrs.append(ACLF.metrics['bcrs'][-1])
-        base_aucs.append(auc)
+        ACLF.find_inner_avg()
+
+        base_accuracies.append(ACLF.metrics['average']['accuracies'][-1])
+        base_precisions.append(ACLF.metrics['average']['precisions'][-1])
+        base_recalls.append(ACLF.metrics['average']['recalls'][-1])
+        base_bcrs.append(ACLF.metrics['average']['bcrs'][-1])
 
     # Calculated the average baseline performances
-    base_avg_accuracy = sum(base_accuracies) / len(base_accuracies)
-    base_avg_precision = sum(base_precisions) / len(base_precisions)
-    base_avg_recall = sum(base_recalls) / len(base_recalls)
-    base_avg_bcr = sum(base_bcrs) / len(base_bcrs)
-    base_avg_auc = sum(base_aucs) / len(base_aucs)
-
-    best_metric = base_avg_auc
-
-    if info:
-        print(f'Baseline average accuracy is {base_avg_accuracy}')
-        print(f'Baseline average precision is {base_avg_precision}')
-        print(f'Baseline average recall is {base_avg_recall}')
-        print(f'Baseline average bcr is {base_avg_bcr}')
-        print(f'Baseline average auc is {base_avg_auc}')
-
-    best_option = {}
-
-    option_no = 1
+    ft_log['Default']['accuracies'] = sum(base_accuracies) / len(base_accuracies)
+    ft_log['Default']['precisions'] = sum(base_precisions) / len(base_precisions)
+    ft_log['Default']['recalls'] = sum(base_recalls) / len(base_recalls)
+    ft_log['Default']['bcrs'] = sum(base_bcrs) / len(base_bcrs)
 
     # Try out each possible combinations of hyper-parameters
     print(f'There are {len(combinations)} many combinations to try.')
@@ -659,58 +683,64 @@ def grid_search(clf, params, train_size, active_learning_iter, active_learning=T
         precisions = []
         recalls = []
         bcrs = []
-        aucs = []
 
-        print(f'Trying option {option_no}')
-        option_no += 1
         for amine in amine_list:
             # print("Training and cross validation on {} amine.".format(amine))
             ACLF = clf(amine=amine, config=option, verbose=False)
 
-            # Exact and load the training and validation set into the model
-            x_t, y_t = train_data[amine], train_labels[amine]
-            x_v, y_v = val_data[amine], val_labels[amine]
-            all_task_data, all_task_labels = all_data[amine], all_labels[amine]
+            for set_id in draws:
+                # Unload the randomly drawn dataset values
+                x_t, y_t, x_v, y_v, all_data, all_labels = dataset[set_id]['x_t'], \
+                                                           dataset[set_id]['y_t'], \
+                                                           dataset[set_id]['x_v'], \
+                                                           dataset[set_id]['y_v'], \
+                                                           dataset[set_id]['all_data'], \
+                                                           dataset[set_id]['all_labels']
 
-            ACLF.load_dataset(x_t, y_t, x_v, y_v, all_task_data, all_task_labels)
-            ACLF.train(warning=False)
+                # Load the training and validation set into the model
+                ACLF.load_dataset(
+                    set_id,
+                    x_t[amine],
+                    y_t[amine],
+                    x_v[amine],
+                    y_v[amine],
+                    all_data[amine],
+                    all_labels[amine]
+                )
 
-            # Calculate AUC
-            auc = roc_auc_score(ACLF.all_labels, ACLF.y_preds)
+                # Train the data on the training set
+                ACLF.train(warning=False)
 
-            accuracies.append(ACLF.metrics['accuracies'][-1])
-            precisions.append(ACLF.metrics['precisions'][-1])
-            recalls.append(ACLF.metrics['recalls'][-1])
-            bcrs.append(ACLF.metrics['bcrs'][-1])
-            aucs.append(auc)
+            ACLF.find_inner_avg()
 
-        avg_accuracy = sum(accuracies) / len(accuracies)
-        avg_precision = sum(precisions) / len(precisions)
-        avg_recall = sum(recalls) / len(recalls)
-        avg_bcr = sum(bcrs) / len(bcrs)
-        avg_auc = sum(aucs) / len(aucs)
+            accuracies.append(ACLF.metrics['average']['accuracies'][-1])
+            precisions.append(ACLF.metrics['average']['precisions'][-1])
+            recalls.append(ACLF.metrics['average']['recalls'][-1])
+            bcrs.append(ACLF.metrics['average']['bcrs'][-1])
 
-        if avg_auc > best_metric:
-            if info:
-                print(f'The previous best option is {best_option}')
-                print(f'The current best setting is {option}')
-                print(f'The fine-tuned average accuracy is {avg_accuracy} vs. the base accuracy {base_avg_accuracy}')
-                print(
-                    f'The fine-tuned average precision is {avg_precision} vs. the base precision {base_avg_precision}')
-                print(f'The fine-tuned average recall rate is {avg_recall} vs. the base recall rate {base_avg_recall}')
-                print(f'The fine-tuned average bcr is {avg_bcr} vs. the base bcr {base_avg_bcr}')
-                print(f'The fine-tuned average auc is {avg_auc} vs. the base auc {base_avg_auc}')
-                print()
+        ft_log[str(option)]['accuracies'] = sum(accuracies) / len(accuracies)
+        ft_log[str(option)]['precisions'] = sum(precisions) / len(precisions)
+        ft_log[str(option)]['recalls'] = sum(recalls) / len(recalls)
+        ft_log[str(option)]['bcrs'] = sum(bcrs) / len(bcrs)
 
-            best_metric = avg_auc
-            best_option = option
+    # Find the total time used for fine tuning
+    end_time = time.time()
+    time_lapsed = end_time - start_time
 
-    if info:
-        print()
-        print(f'The best setting for all amines is {best_option}')
-        print(f'With an average auc of {best_metric}')
+    # Make time used more readable
+    days = int(time_lapsed / 86400)
+    hours = int((time_lapsed - (86400 * days)) / 3600)
+    minutes = int((time_lapsed - (86400 * days) - (3600 * hours)) / 60)
+    seconds = round(time_lapsed - (86400 * days) - (3600 * hours) - (minutes * 60), 2)
+    per_combo = round(time_lapsed / (len(combinations)), 4)
 
-    return best_option
+    print('Fine tuning completed.')
+    print(f'Total time used: {days} days {hours} hours {minutes} minutes {seconds} seconds.')
+    print(f'Or about {per_combo} seconds per combination.')
+
+    # Save the fine tuning performances to pkl
+    with open(path, 'wb') as f:
+        pickle.dump(ft_log, f)
 
 
 # Credit: https://github.com/rlphilli/sklearn-PUK-kernel
