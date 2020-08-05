@@ -6,8 +6,7 @@
    * [Getting Started](#getting-started)
       * [Remotely](#on-a-lab-machine-remotely)
       * [Locally](#on-your-own-device-locally)
-   * [Structure](#structure)  
-      * [Folder Roadmap](#folder-roadmap)
+   * [Repo Structure](#structure)  
    * [Usage](#usage)
       * [To Run Non-meta Models](#to-run-the-non-meta-models-based-on-the-categories)
       * [To Fine Tune Non-meta Models](#to-run-fine-tuning-for-the-non-meta-models)
@@ -162,19 +161,99 @@ To run the codes on a Haverford CS Department lab machine remotely, either set u
 Follow step 2 to 7 above, with a slightly different step 4: either use venv and make sure your python version is 3.6 or higher, or [download and install anaconda](https://www.anaconda.com/products/individual)
 
 ## Structure
-### Folder Roadmap
-
-### Main Driver Files
-
-### data
-
-### models
-
-### results
-
-How to Interpret
-
-### utils
+```
+├── README.md
+├── __init__.py
+├── data: the folder that contains all the experimental data files
+│   ├── DRP chemical experiments csv files
+│   ├── 2020.07.02_cleanup_for_AL.nb
+│   ├── data_analysis.ipynb
+│   ├── model_analysis.ipynb
+│   ├── non_meta_data.pkl: the dataset pickle file for all non-meta models.
+│   ├── percent.csv
+│   ├── selected_k
+│   │   ├── CSV Files of the selected experiments from each random draws
+│   └── temperature_humidity_logs.csv
+├── fine_tune.sh: the bash script to run fine tuning process and log the terminal output for models
+│                  except for SVM and GBT. 
+├── fine_tune_gbc.sh: the bash script to run fine tuning process and log the terminal output for GBT. 
+├── fine_tune_svm.sh: the bash script to run fine tuning process and log the terminal output for SVM. 
+├── ft_gbc.py: the python script to fine tune GBT.
+├── ft_svm.py: the python script to fine tune SVM.
+├── hpc_params.py: the parameters/setting file used to run script on High Performance Computer 
+│                  (**Usage to be updated**)
+├── hpc_scripts: the folder that contains the script to run on HPC
+│   ├── __init__.py
+│   ├── hpc_params.py
+│   ├── local_meta_test.py
+│   ├── maverick.sh
+│   └── run_mpi.py
+├── maverick.sh: (**Usage to be updated**)
+├── model_params.py: The parameters/setting file to run models.
+├── models: the folder than contains all the machine learning models
+│   ├── __init__.py
+│   ├── meta
+│   │   ├── FC_net.py
+│   │   ├── __init__.py
+│   │   ├── core.py:  (**Usage to be updated**)
+│   │   ├── main.py:  (**Usage to be updated**)
+│   │   ├── maml.py:  (**Usage to be updated**)
+│   │   └── platipus.py: (**Usage to be updated**)
+│   └── non_meta: the folder that contains all the non-meta machine learning models.
+│       ├── DecisionTree.py: Decision tree model with active learning feature.
+│       ├── GradientBoosting.py: Gradient boosting tree model with active learning feature.
+│       ├── KNN.py: k-nearest neighbors model with active learning feature.
+│       ├── LinearSVM.py: Linear SVM classifier model with active learning feature. 
+│       │                 This is a mid-stage test model. Please use SVM.py instead.
+│       ├── LogisticRegression.py: Logistic regression model with active learning feature. 
+│       ├── RandomForest.py: Random forest model with active learning feature.
+│       ├── SVC.py: SVM models built using libsvm package. 
+│       │           This is a mid-stage test model. Please use SVM.py instead.
+│       ├── SVM.py: SVM classifier model with active learning feature.
+│       └── __init__.py
+├── mpi_run.sh: (**Usage to be updated**)
+├── requirements.txt: the required packages to run files in this repo. (See "Packages used")
+├── results: the folder that contains all the performance statistics and the corresponding graphs.
+│   ├── avg_metrics_all_models.png
+│   ├── by_category
+│   │   ├── amine_only.png
+│   │   ├── amine_only_AL.png
+│   │   ├── historical_amine.png
+│   │   ├── historical_amine_AL.png
+│   │   └── historical_only.png
+│   ├── by_model
+│   │   ├── Decision_Tree.png
+│   │   ├── KNN.png
+│   │   ├── Logistic_Regression.png
+│   │   ├── PLATIPUS.png
+│   │   ├── Random_Forest.png
+│   │   └── SVM.png
+│   ├── category_3
+│   │   ├── average_metrics_category_3.png
+│   │   ├── amine-specific model graphs
+│   ├── category_4
+│   │   ├── average_metrics_category_4.png
+│   │   ├── amine-specific model graphs
+│   ├── category_5
+│   │   ├── average_metrics_category_5.png
+│   │   ├── amine-specific model graphs
+│   ├── success_rate
+│   │   ├── bcr_against_all.png
+│   │   ├── bcr_against_success_category_3.png
+│   │   ├── bcr_against_success_category_4.png
+│   │   └── bcr_against_success_category_5.png
+│   ├── cv_statistics.pkl: the pkl file that contains all the model performance statistics.
+│   └── winning_models.png
+├── run_al.py: the python script to run models with the model_params.py setting.
+├── run_mpi.py
+└── utils: the folder than contains all the utility python scripts and functions
+    ├── __init__.py
+    ├── csv_check.py
+    ├── data_generator.py
+    ├── dataset.py
+    ├── plot.py
+    └── utils.py
+```
 
 ## Usage
 ### To run the non-meta models based on the categories
@@ -241,7 +320,7 @@ How to Interpret
 
 ## Built with
 * [Gareth’s DRP repository](https://github.com/gxnicholas/gareth-platipus)
-* Packages used:
+* Packages used
 
    | Name | Documentation |
    | ----- | ----- |
