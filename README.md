@@ -20,12 +20,12 @@
 This is the machine learning model repository of [Dark Reactions Project](https://darkreactions.haverford.edu/) to learn about the experimental data collected from the chemists and provide insights on the direction of future experiments. On top of the traditional machine learning models, this repository is using meta-learning models such as MAML and PLATIPUS to predict the experimental outcomes more accurately. The use of this repository extends to the interpretability project and the recommendation system as well. 
 
 ### Experimental Plan
-Currently, it is using "0057.perovskitedata_DRPFeatures_2020-07-02.csv" as the raw historical dataset. Within the dataset, all the experiments of 16 amines with uniform distribution and at least one successful experiment are selected as historical data. 
+Currently, we are using "0057.perovskitedata_DRPFeatures_2020-07-02.csv" as the raw historical dataset. Within the dataset, **all the experiments of 16 amines with uniform distribution and at least one successful experiment are selected as historical data**. 
 
-Excluding the distribution header (column name: <span>_raw_modelname</span>), the amine header (column name: <span>_rxn_organic-inchikey</span>), the score header (column name: <span>_out_crystalscore</span>), and the name header (column name: <span>name</span>), the data has in total 51 features. As for the labels, instead of the four classes the raw dataset provided, there are only two classes of labels used to train and validate models: if the experiment has a crystal score of 4, we mark the label as 1, a success; otherwise we mark the label as 0, a failure. 
+Excluding the distribution header (column name: <span>_raw_modelname</span>), the amine header (column name: <span>_rxn_organic-inchikey</span>), the score header (column name: <span>_out_crystalscore</span>), and the name header (column name: <span>name</span>), the data has in total **51 features**. As for the labels, instead of the four classes the raw dataset provided, there are only **two classes of labels** used to train and validate models: if the experiment has a crystal score of 4, we mark the label as **1, a success**; otherwise we mark the label as **0, a failure**. 
 
 As of August 1, the experimental procedure is as follows:  
-   1.  Generate the dataset with different training set variants corresponding to the following categories:
+   1.  First, establish the definitions of the following categories before generating the corresponding training set variants for the dataset:
       <ul>
       <li> **Category 3**: Models trained on **historical data only with no active learning involved**. In other words, each task/amine-specific is trained on all the experiments of the other 15 amines prior to validation.  
          Models include: kNN, SVM, Decision Tree, Random Forest, Logistic Regression, Gradient Boosting Tree.  
@@ -50,15 +50,57 @@ As of August 1, the experimental procedure is as follows:
          **NOTE**: SVM, Logistic Regression and Gradient Boosting Tree are using a slightly different set of data under this category. For more details, see portion on creating the dataset.
       </li>  
       </ul>
-      **As of now, k is set to 10 and x is set to 10.**  
+      **As of now, k is set to 10 and x is set to 10.**
       
-   2. training set, validation set, random draws, etc. To Be Continued
+   2. Create the dataset for each amine in the following steps:  
+      <ul>
+      <li>For <b>training set</b>: 
+        <ul>
+          <li><b>Category 3</b>: No need for random draws since there's only the historical data from all other 15 amines.</li>
+          <li>For all other categories, first do 5 random draws and select k + x experiments from all the amine-specific experiments. Then do another 5 random draws to select the k + x experiments, but this time we require the selected k experiments to have at least 2 successful experiments. This is to provide a jump start for some models due to the low number of successful experiments of some amines. We call the second set of 5 random draws "random draws with success". Keep the selected k and x of each random draw so that all categories can use the same ones. </li>
+          <li><b>Category 4.1</b>: there are five different training sets from the 5 regular random draws. Each set consists of all the historical experiments from the other 15 amines <b>plus</b> the selected k+x amine-specific experiment. <b>Each set shares the same k experiments from the corresponding random draws with category 5.1</b>.
+          </li>
+          <li>
+            <b>Category 4.2</b>: there are five different training sets from the 5 random draws with success. Each set consists of <b>only</b> the selected k+x amine-specific experiment. <b>Each set shares the same k experiments from the corresponding random draws with category 5.2</b>.
+          </li>
+          <li><b>Category 5.1</b>: there are five different training sets from the 5 regular random draws. Each set consists of all the historical experiments from the other 15 amines <b>plus</b> the selected k amine-specific experiment. <b>Each set shares the same k experiments from the corresponding random draws with category 4.1</b>.
+          </li>
+          <li>
+            <b>Category 5.2</b>: there are five different training sets from the 5 random draws with success. Each set consists of <b>only</b> the selected k amine-specific experiment. <b>Each set shares the same k experiments from the corresponding random draws with category 4.2</b>.
+          </li>
+        </ul>  
+      </li>
+      <li>For <b>validation set</b>: the validation set consists of all the experiments of this amine, and this is the case across all categories. In other words, the validation data will be all the amine-specific data, and the validation labels will be all the corresponding amine-specific labels.
+      </li>
+      <li>For <b>active learning pool</b> used by models from category 5.1 and 5.2: the active learning pool consists of all the experiments of this amine except for the selected k experiments from each random draw. 
+      </li>
+      </ul>  
+   3. **_(TO BE UPDATED WITH THE FINALIZED PLAN)_** Fine tune and look for the best hyper-parameter combinations of each categorical model using the above training and validation sets. The validation process is the same for all models, and there's no active learning involved during fine tuing. We then store each configuration's performance and select the one with the best performance afterwards with some post-processing. **For the purpose of our project, the best performance is defined as when a set of hyper-parameter configurations has a BCR score higher than the previous best BCR score minus epsilon and has a higher recall in our implementation. The current epsilon is 0.01.**  
+   For more information, see our [hyper-parameter tuning log here](https://docs.google.com/document/d/1HK8sn3cmrVFRjhJ8rYur_7LnbnreADlbcvCWDPGTq6E/edit?usp=sharing).
+   4. Train and validate the models using the above training and validation sets. For models with active learning, conduct x=10 active learning iterations for validation. 
+   5. Evaluate and plot each categorical model's performance by calculating the average accuracies, precisions, recalls, and balanced classification rates (referred to as BCR) over all runs on the different training set variants of each amine-specific model and of all 16 models. Plot the per-amine success volume versus BCR for the chosen x value as well.  
+   6. **CONSULT THE GROUP BEFORE PROCEEDING TO RUNNING ON THE HOLD OUT SET.**
+   7. Run all of the above on the holdout set: 3 (out of 4) amines with successes and experiments performed uniformly at random that have been held out since the beginning of this process
+   8. Based on the above, choose the best of the below model categories (balancing between the above metrics) to run live:
+      * PLATIPUS (active learning loop required)
+      * MAML (no active learning involved)
+      * Best from category 3 above (no active learning involved)
+      * Best from category 4 above (no active learning involved)
+      * Best from category 5 above (active learning loop required)
+   9. Live experiments will be run on one of the held out amines (the one with an 11% success rate) as well as the 3 additional unknown amines Mansoor has prepared
+  10. For each of the 4 test amines: run a single 96 well plate of uniform randomly chosen experiments for a single new (or held out) amine.
+  11. Screen the above amines.  Stop evaluating any amines that have 0 success from the 96.
+  12. Randomly choose k of the 96 new amine experiments to use as k above.
+  13. Train the models from step 8.
+  14. Test the fully trained models against the 96 - k experiments for the new amine not yet used for training.  Run all the evaluations from step 6.
+  15. Use the fully trained (post-AL-loop) models to predict successes given all possible experiments (challenge problem list).
+  16. Rank order any labeled successful experiments based on model-reported confidence so that highest-confidence labels are at the top.  Perform 96/#models experiments in order from this list per model on a single new plate.
 
 ## Getting Started
 
 ### On a Lab Machine, Remotely
 
-To run the codes on a Haverford CS Department lab machine remotely, either set up your ssh login or connect through Haverford’s VPN before the following steps. For more information, please see [this document](https://docs.google.com/document/d/1uSfLYzD9UnveVdMeRMvp-At2NC1YFqGQfzBOfNT1J14/edit) created by the CS Department.
+To run the codes on a Haverford CS Department lab machine remotely, either set up your ssh login or connect through Haverford’s VPN before the following steps. For more information, please see [this document](https://docs.google.com/document/d/1uSfLYzD9UnveVdMeRMvp-At2NC1YFqGQfzBOfNT1J14/edit) from the Haverford CS Department.
 
 1. ssh into a lab machine by entering:
    ```sh 
