@@ -355,7 +355,7 @@ def find_index(selected_experiements, all_experiments):
     return qry_index
 
 
-def write_sel_to_csv(data_dict, num_draw): # TODO CHANGE!!!!!
+def write_sel_to_csv(data_dict, num_draw):
     """Find the selected k amine-specific experiments and write them to two csv files
 
     Args:
@@ -441,7 +441,29 @@ def load_data_dict(data_dict, setting, amine, data, set_id=0):
 
 
 def random_draw(data, num_draws=5, k_size=10, x_size=10, success=False, min_success=2):
-    """TODO: Documentation"""
+    """Do number of random draws to select k + x amine specific experiments
+
+    Args:
+        data:               A tuple of all the amine specific experiments to do random draws from.
+        num_draws:          An integer representing the number of random draws to conduct.
+        k_size:             An integer representing the number of amine specific experiments in each draw to match the k
+                                in the experimental plan.
+        x_size:             An integer representing the number of amine specific experiments in each draw to match the x
+                                in the experimental plan. This is on top of the k experiments above.
+        success:            A boolean representing if we want to include a few successful experiments in each set of k
+                                experiments or not. This is used for SVM, LR, and GBT that use amine only experiments
+                                for training.
+        min_success:        An integer representing the minimum number of successful experiments required in each random
+                                draw if we are forcing each set to have some successful experiments.
+
+    Returns:
+        draws:              A dictionary representing sets of random draws, with the following hierarchy:
+                                --> set_id |--> k_x, k_y: the selected k experiments data and labels.
+                                           |--> x_v, y_v: all amine experiments except for the selected k.
+                                           |              Used as the pool for active learning.
+                                           |--> x_qry, y_qry: the selected k+x experiments data and labels.
+    """
+
     # Set default dictionary
     draws = defaultdict(dict)
 
@@ -494,7 +516,39 @@ def random_draw(data, num_draws=5, k_size=10, x_size=10, success=False, min_succ
 
 def generate_dataset(import_function, dataset_type, data_dict, num_draws=5, train_size=10, active_learning_iter=10,
                      cross_validation=True, verbose=True):
-    """TODO: DOCUMENTATION"""
+    """Generate the dataset used for training and validation with numbers of random draws
+
+    Args:
+        import_function:                The function to import the dataset.
+                                            It should be either import_full_dataset or import_test_dataset.
+        dataset_type:                   A string representing the type of dataset we are generating.
+                                            It should be either 'full' or 'test'
+        data_dict:                      A dictionary that stores all the training and validation sets generated.
+        num_draws:                      An integer representing the number of random draws to generate the dataset.
+        train_size:                     An integer representing the number of experiments required in each random draw,
+                                            corresponds to the k value in the experimental plan.
+        active_learning_iter:           An integer representing the number of experiments required in each random draw,
+                                            corresponds to the x value in the experimental plan.
+        cross_validation:               A boolean representing if we want to generate validation set or not.
+        verbose:                        A boolean representing if we want to output additional information when
+                                            generating dataset or not.
+
+    Returns:
+        data_dict:                      A dictionary representing the desired dataset, with the following hierarchy:
+                 --> 'full' or 'test'
+                    --> 'random' or 'w/_success'
+                        --> 'k_x' or 'k_y'
+                            --> integer 0 to 4 (given we want 5 random draws)
+                                --> amine
+                                    --> data
+                 --> settings as a tuple in the format of
+                    ('full' / 'test', 'w/_AL' / 'w/o_AL', 'w/_hx' / 'w/o_hx', 'w/_k' / 'w/o_k', 'w/_x' / 'w/o_x',
+                        'random' / 'w/_success')
+                    --> integer 0 to 4 (given we want 5 random draws, only 0 if querying for category 3)
+                        --> 'x_t', 'y_t', 'x_v', 'y_v', 'all_data', or 'all_labels'
+                            --> amine
+                                --> data
+    """
     training, validation, testing, counts = import_function(
         train_size,
         meta_batch_size=25,
@@ -638,21 +692,33 @@ def generate_dataset(import_function, dataset_type, data_dict, num_draws=5, trai
 
 def process_dataset(num_draw=5, train_size=10, active_learning_iter=10, verbose=True, cross_validation=True, full=True,
                     active_learning=True, w_hx=True, w_k=True, success=False):
-
     """
-    data_dict --> 'full' or 'test'
-                    --> 'random' or 'w/_success'
-                        --> 'k_x' or 'k_y'
-                            --> integer 0 to 4 (given we want 5 random draws)
-                                --> amine
-                                    --> data
-                 --> settings as a tuple in the format of
-                    ('full' / 'test', 'w/_AL' / 'w/o_AL', 'w/_hx' / 'w/o_hx', 'w/_k' / 'w/o_k', 'w/_x' / 'w/o_x',
-                        'random' / 'w/_success')
-                    --> integer 0 to 4 (given we want 5 random draws)
-                        --> 'x_t', 'y_t', 'x_v', 'y_v', 'all_data', or 'all_labels'
-                            --> amine
-                                --> data
+    Generate and/or provide the desired training and validation data for categorical models
+
+    Args:
+        num_draw:                       An integer representing the number of random draws to generate the dataset.
+        train_size:                     An integer representing the number of experiments required in each random draw,
+                                            corresponds to the k value in the experimental plan.
+        active_learning_iter:           An integer representing the number of experiments required in each random draw,
+                                            corresponds to the x value in the experimental plan.
+        cross_validation:               A boolean representing if we want to generate validation set or not.
+        verbose:                        A boolean representing if we want to output additional information when
+                                            generating dataset or not.
+        full:                           A boolean representing if we want to import the full or the test dataset.
+        active_learning:                A boolean representing if the model will conduct active learning with the given
+                                            data or not.
+        w_hx:                           A boolean representing if the model will be trained with historical data or not.
+        w_k:                            A boolean representing if the model will be trained with the k amine-specific
+                                            experiments in each set or not.
+        success:                        A boolean representing if the model will be given a jump start with some
+                                            successful experiments in the training set or not.
+
+    Returns:
+        A dictionary of training and validation data and labels with the following structure:
+            --> integer 0 to 4 (given we want 5 random draws, only 0 if querying for category 3)
+                --> 'x_t', 'y_t', 'x_v', 'y_v', 'all_data', or 'all_labels'
+                    --> amine
+                        --> data
     """
 
     data_dict = defaultdict(dict)
