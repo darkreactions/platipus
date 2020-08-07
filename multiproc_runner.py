@@ -59,11 +59,9 @@ def main():
         ('GradientBoosting', 'gradientboosting_params')
     ]
 
-    # The following dictionary is shared among all processes,
-    # so each model will generate its own key based on its config
-    manager = Manager()
-    result_data = manager.dict()
 
+if __name__ == '__main__':
+  
     # List of arguments to run desired models
     configs = [
         (result_data, model_and_params[0], model_and_params[1], category)
