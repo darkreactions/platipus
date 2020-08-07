@@ -1,5 +1,6 @@
 from collections import defaultdict
 import itertools
+import os
 from pathlib import Path
 import pickle
 import time
@@ -13,7 +14,6 @@ import torch
 
 from utils.dataset import process_dataset, import_test_dataset, import_full_dataset
 
-# TODO DELETE
 import warnings
 from sklearn.exceptions import ConvergenceWarning
 
@@ -522,7 +522,7 @@ def define_non_meta_model_name(model_name, active_learning, w_hx, w_k, success):
     return model_name + suffix + random_draw_handle
 
 
-def run_non_meta_model(base_model, common_params, model_params, category, success=False):
+def run_non_meta_model(base_model, common_params, model_params, category, result_dict=None, success=False):
     """Run non-meta models under desired category
 
     Args:
@@ -530,6 +530,7 @@ def run_non_meta_model(base_model, common_params, model_params, category, succes
         common_params:      A dictionary representing the common parameters used across all models.
         model_params:       A dictionary representing the base-model specific parameters.
         category:           A string representing the category of the model to be run.
+        result_dict:        A dictionary used to store performance metrics when running multi-processing scripts.
         success:            A boolean representing if we are using regular random draws with no success specification
                                 or random draws with at least one success.
                                 Default = False (regular random draw).
@@ -552,6 +553,7 @@ def run_non_meta_model(base_model, common_params, model_params, category, succes
     base_model_params['active_learning'] = settings[category][0]
     base_model_params['with_historical_data'] = settings[category][1]
     base_model_params['with_k'] = settings[category][2]
+    base_model_params['result_dict'] = result_dict
     base_model_params['draw_success'] = success
 
     # Define the model's name given the category it is in
@@ -568,7 +570,7 @@ def run_non_meta_model(base_model, common_params, model_params, category, succes
 
 
 def grid_search(clf, ft_params, path, num_draws, train_size, active_learning_iter, active_learning=True, w_hx=True,
-                w_k=True, draw_success=False, random=False, random_size=10):
+                w_k=True, draw_success=False, random=False, random_size=10, result_dict=None, model_name=''):
     """Fine tune the model based on average bcr performance to find the best model hyper-parameters.
 
     Similar to GridSearchCV in scikit-learn package, we try out all the combinations and evaluate performance
@@ -591,14 +593,25 @@ def grid_search(clf, ft_params, path, num_draws, train_size, active_learning_ite
                                         or random datasets with at least one success for each amine.
         random:                     A boolean representing if we want to do random search or not.
         random_size:                An integer representing the number of random combinations to try and compare.
+        result_dict:                A dictionary representing the result dictionary used during multi-thread processing.
+        model_name:                 A string representing the name of the model being fine tuned.
 
     Returns:
         best_option:                A dictionary representing the hyper-parameters that yields the best performance on
                                         average. The keys may vary for models.
     """
 
-    # Initialize dictionary to keep all configurations' performances
-    ft_log = defaultdict(dict)
+    # Load or initialize dictionary to keep all configurations' performances
+    if result_dict:
+        ft_log = result_dict
+    elif os.path.exists(path):
+        with open(path, 'rb') as f:
+            ft_log = pickle.load(f)
+    else:
+        ft_log = defaultdict(dict)
+
+    if model_name not in ft_log:
+        ft_log[model_name] = defaultdict(dict)
 
     # Set all possible combinations
     combinations = []
@@ -638,55 +651,12 @@ def grid_search(clf, ft_params, path, num_draws, train_size, active_learning_ite
     start_time = time.time()
 
     for amine in amine_list:
-        ACLF = clf(amine=amine, verbose=False)
-
-        for set_id in draws:
-            # Unload the randomly drawn dataset values
-            x_t, y_t, x_v, y_v, all_data, all_labels = dataset[set_id]['x_t'], \
-                                                       dataset[set_id]['y_t'], \
-                                                       dataset[set_id]['x_v'], \
-                                                       dataset[set_id]['y_v'], \
-                                                       dataset[set_id]['all_data'], \
-                                                       dataset[set_id]['all_labels']
-
-            # Load the training and validation set into the model
-            ACLF.load_dataset(
-                set_id,
-                x_t[amine],
-                y_t[amine],
-                x_v[amine],
-                y_v[amine],
-                all_data[amine],
-                all_labels[amine]
-            )
-
-            # Train the data on the training set
-            ACLF.train(warning=False)
-
-        ACLF.find_inner_avg()
-
-        base_accuracies.append(ACLF.metrics['average']['accuracies'][-1])
-        base_precisions.append(ACLF.metrics['average']['precisions'][-1])
-        base_recalls.append(ACLF.metrics['average']['recalls'][-1])
-        base_bcrs.append(ACLF.metrics['average']['bcrs'][-1])
-
-    # Calculated the average baseline performances
-    ft_log['Default']['accuracies'] = sum(base_accuracies) / len(base_accuracies)
-    ft_log['Default']['precisions'] = sum(base_precisions) / len(base_precisions)
-    ft_log['Default']['recalls'] = sum(base_recalls) / len(base_recalls)
-    ft_log['Default']['bcrs'] = sum(base_bcrs) / len(base_bcrs)
-
-    # Try out each possible combinations of hyper-parameters
-    print(f'There are {len(combinations)} many combinations to try.')
-    for option in combinations:
-        accuracies = []
-        precisions = []
-        recalls = []
-        bcrs = []
-
-        for amine in amine_list:
-            # print("Training and cross validation on {} amine.".format(amine))
-            ACLF = clf(amine=amine, config=option, verbose=False)
+        if amine == 'XZUCBFLUEBDNSJ-UHFFFAOYSA-N' and draw_success:
+            # Skipping the amine with only 1 successful experiment overall
+            # Can't run 4-ii and 5-ii models on this amine
+            continue
+        else:
+            ACLF = clf(amine=amine, verbose=False)
 
             for set_id in draws:
                 # Unload the randomly drawn dataset values
@@ -713,15 +683,68 @@ def grid_search(clf, ft_params, path, num_draws, train_size, active_learning_ite
 
             ACLF.find_inner_avg()
 
-            accuracies.append(ACLF.metrics['average']['accuracies'][-1])
-            precisions.append(ACLF.metrics['average']['precisions'][-1])
-            recalls.append(ACLF.metrics['average']['recalls'][-1])
-            bcrs.append(ACLF.metrics['average']['bcrs'][-1])
+            base_accuracies.append(ACLF.metrics['average']['accuracies'][-1])
+            base_precisions.append(ACLF.metrics['average']['precisions'][-1])
+            base_recalls.append(ACLF.metrics['average']['recalls'][-1])
+            base_bcrs.append(ACLF.metrics['average']['bcrs'][-1])
 
-        ft_log[str(option)]['accuracies'] = sum(accuracies) / len(accuracies)
-        ft_log[str(option)]['precisions'] = sum(precisions) / len(precisions)
-        ft_log[str(option)]['recalls'] = sum(recalls) / len(recalls)
-        ft_log[str(option)]['bcrs'] = sum(bcrs) / len(bcrs)
+    # Calculated the average baseline performances
+    ft_log[model_name]['Default']['accuracies'] = sum(base_accuracies) / len(base_accuracies)
+    ft_log[model_name]['Default']['precisions'] = sum(base_precisions) / len(base_precisions)
+    ft_log[model_name]['Default']['recalls'] = sum(base_recalls) / len(base_recalls)
+    ft_log[model_name]['Default']['bcrs'] = sum(base_bcrs) / len(base_bcrs)
+
+    # Try out each possible combinations of hyper-parameters
+    print(f'There are {len(combinations)} many combinations to try.')
+    for option in combinations:
+        accuracies = []
+        precisions = []
+        recalls = []
+        bcrs = []
+
+        for amine in amine_list:
+            if amine == 'XZUCBFLUEBDNSJ-UHFFFAOYSA-N' and draw_success:
+                # Skipping the amine with only 1 successful experiment overall
+                # Can't run 4-ii and 5-ii models on this amine
+                continue
+            else:
+                # print("Training and cross validation on {} amine.".format(amine))
+                ACLF = clf(amine=amine, config=option, verbose=False)
+
+                for set_id in draws:
+                    # Unload the randomly drawn dataset values
+                    x_t, y_t, x_v, y_v, all_data, all_labels = dataset[set_id]['x_t'], \
+                                                               dataset[set_id]['y_t'], \
+                                                               dataset[set_id]['x_v'], \
+                                                               dataset[set_id]['y_v'], \
+                                                               dataset[set_id]['all_data'], \
+                                                               dataset[set_id]['all_labels']
+
+                    # Load the training and validation set into the model
+                    ACLF.load_dataset(
+                        set_id,
+                        x_t[amine],
+                        y_t[amine],
+                        x_v[amine],
+                        y_v[amine],
+                        all_data[amine],
+                        all_labels[amine]
+                    )
+
+                    # Train the data on the training set
+                    ACLF.train(warning=False)
+
+                ACLF.find_inner_avg()
+
+                accuracies.append(ACLF.metrics['average']['accuracies'][-1])
+                precisions.append(ACLF.metrics['average']['precisions'][-1])
+                recalls.append(ACLF.metrics['average']['recalls'][-1])
+                bcrs.append(ACLF.metrics['average']['bcrs'][-1])
+
+        ft_log[model_name][str(option)]['accuracies'] = sum(accuracies) / len(accuracies)
+        ft_log[model_name][str(option)]['precisions'] = sum(precisions) / len(precisions)
+        ft_log[model_name][str(option)]['recalls'] = sum(recalls) / len(recalls)
+        ft_log[model_name][str(option)]['bcrs'] = sum(bcrs) / len(bcrs)
 
     # Find the total time used for fine tuning
     end_time = time.time()
@@ -734,13 +757,14 @@ def grid_search(clf, ft_params, path, num_draws, train_size, active_learning_ite
     seconds = round(time_lapsed - (86400 * days) - (3600 * hours) - (minutes * 60), 2)
     per_combo = round(time_lapsed / (len(combinations)), 4)
 
-    print('Fine tuning completed.')
+    print(f'Fine tuning for {model_name} completed.')
     print(f'Total time used: {days} days {hours} hours {minutes} minutes {seconds} seconds.')
     print(f'Or about {per_combo} seconds per combination.')
 
-    # Save the fine tuning performances to pkl
-    with open(path, 'wb') as f:
-        pickle.dump(ft_log, f)
+    # Save the fine tuning performances to pkl if not multi-processing
+    if not result_dict:
+        with open(path, 'wb') as f:
+            pickle.dump(ft_log, f)
 
 
 # Credit: https://github.com/rlphilli/sklearn-PUK-kernel
