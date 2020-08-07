@@ -8,6 +8,14 @@
       * [Locally](#on-your-own-device-locally)
    * [Repo Structure](#structure)  
    * [Usage](#usage)
+      * [Dataset](#dataset)
+      * [Meta Models](#meta-models)
+      * [Non-Meta Models](#non-meta-models)
+        * [Visualize Decision Trees](#visualize-decision-trees)
+      * [Results](#results)
+        * [Graphs](#graphs)
+        * [Model Performance Statistics](#statistics)
+        * [Fine Tuning Results](#fine-tuning-performance-logs)
       * [To Run Non-meta Models](#to-run-the-non-meta-models-based-on-the-categories)
       * [To Fine Tune Non-meta Models](#to-run-fine-tuning-for-the-non-meta-models)
       * [Transfer Files Remotely w/ SCP](#to-scp-results-and-graphs-from-the-remote-lab-machines-to-local-directories)
@@ -189,6 +197,7 @@ Follow step 2 to 7 above, with a slightly different step 4: either use venv and 
 │   ├── maverick.sh
 │   └── run_mpi.py
 ├── maverick.sh: (**Usage to be updated**)
+├── multiproc_runner.py: a python script to run models concurrently.
 ├── model_params.py: The parameters/setting file to run models.
 ├── models: the folder than contains all the machine learning models
 │   ├── __init__.py
@@ -214,36 +223,39 @@ Follow step 2 to 7 above, with a slightly different step 4: either use venv and 
 ├── mpi_run.sh: (**Usage to be updated**)
 ├── requirements.txt: the required packages to run files in this repo. (See "Packages used")
 ├── results: the folder that contains all the performance statistics and the corresponding graphs.
-│   ├── avg_metrics_all_models.png
-│   ├── by_category
+│   ├── avg_metrics_all_models.png: the 4-plot graphs of all models. The 4 plots are: accuracy, precision, recall, 
+│   │                               and BCR vs. the additional number of points given.
+│   ├── by_category: the 4-plot graphs of models in each sub-categories.
 │   │   ├── amine_only.png
 │   │   ├── amine_only_AL.png
 │   │   ├── historical_amine.png
 │   │   ├── historical_amine_AL.png
 │   │   └── historical_only.png
-│   ├── by_model
+│   ├── by_model: the 4-plot graphs of models of each type of classifier.
 │   │   ├── Decision_Tree.png
 │   │   ├── KNN.png
 │   │   ├── Logistic_Regression.png
 │   │   ├── PLATIPUS.png
 │   │   ├── Random_Forest.png
 │   │   └── SVM.png
-│   ├── category_3
+│   ├── category_3: the 4-plot graphs of models of category 3.
 │   │   ├── average_metrics_category_3.png
 │   │   ├── amine-specific model graphs
-│   ├── category_4
+│   ├── category_4: the 4-plot graphs of models of category 4.1 and 4.2.
 │   │   ├── average_metrics_category_4.png
 │   │   ├── amine-specific model graphs
-│   ├── category_5
+│   ├── category_5: the 4-plot graphs of models of category 5.1 and 5.2.
 │   │   ├── average_metrics_category_5.png
 │   │   ├── amine-specific model graphs
-│   ├── success_rate
+│   ├── success_rate: the 2-plot graphs of all models and of models under each category. 
+│   │   │             The two plots are: BCR vs. Success Volume and BCR vs. Success Percentage. 
 │   │   ├── bcr_against_all.png
 │   │   ├── bcr_against_success_category_3.png
 │   │   ├── bcr_against_success_category_4.png
 │   │   └── bcr_against_success_category_5.png
 │   ├── cv_statistics.pkl: the pkl file that contains all the model performance statistics.
-│   └── winning_models.png
+│   └── winning_models.png: the 4-plot graph of models with the highest AUC of BCR in each sub-category. 
+│                            PLATIPUS is alwasy included.
 ├── run_al.py: the python script to run models with the model_params.py setting.
 ├── run_mpi.py
 └── utils: the folder than contains all the utility python scripts and functions
@@ -256,9 +268,81 @@ Follow step 2 to 7 above, with a slightly different step 4: either use venv and 
 ```
 
 ## Usage
+### Dataset
+In folder ```data```, you will find the pickle file named ```non_meta_data.pkl``` that contains the dataset dictionary. If not, run process_dataset function by either calling it in the utils/dataset.py script, or run any number of models using multiproc_runner.py or run_al.py. For more info, please see the instruction below.  
+
+To load the dictionary in a python terminal or a jupyter notebook, use either the read_pickle function in utils/utils.py, or use the following lines:
+```python
+
+path_of_dataset = <the directory where the dataset is located, type=str>
+
+with open(path_of_dataset, "rb") as f:
+    dataset = pickle.load(f)
+```
+The structure of the dataset dictionary is as follows:  
+```
+dataset 
+├── 'full' or 'test'
+│    └── 'random' or 'w/_success'
+│        └── 'k_x' or 'k_y'
+│          └── integer 0 to 4 (given we want 5 random draws)
+│            └── amine
+│              └── data
+│
+└── settings as a tuple in the format of
+  ('full' / 'test', 'w/_AL' / 'w/o_AL', 'w/_hx' / 'w/o_hx', 'w/_k' / 'w/o_k', 'w/_x' / 'w/o_x', 'random' / 'w/_success')
+     └──integer 0 to 4 (given we want 5 random draws, only 0 if querying for category 3)
+       └──'x_t', 'y_t', 'x_v', 'y_v', 'all_data', or 'all_labels'
+         └──amine
+           └──data
+```
+
+### Meta Models
+**TO BE UPDATED**
+
+### Non-Meta Models
+Unlike meta-models that utilize meta-training and meta-learning, non-meta models are the traditional machine learning models that follow the same train-validate-test pipeline. Currently the repository has 6 running non-meta classifier models: kNN, SVM, Decision Tree, Random Forest, Logistic Regression, and Gradient Boosting Tree. All of them are built on top of the base classifier model:```ActiveLearningClassifier```, located in models/non_meta/BaseClassifier.py.
+
+The basic pipeline of running an amine-specific non-meta model is as follows:
+1. Identify the machine learning model and the hyper-parameter configuration. 
+
+2. Load the dataset under designated categorical settings.  
+
+> For each random draw:  
+
+3. Train the model with the loaded training set and evaluate using all the experiments of that amine.  
+
+4. If the model does conduct active learning, query the data pool **x=10** times, each time picking the most uncertain point in the pool.  
+
+> After running all random draws
+
+5. Average out model's performance over all the random draws and save the metrics to a dictionary in the repository.  
+
+For more details, see the documentation in the base model's python script and each model's python script.
+
+#### Visualize Decision Trees
+To visualize each decision tree, first set the visualize parameter of decisiontree_params dictionary in model_params.py to True. Then when running decision tree models, it will automatically generate the .dot files of each decision tree. To convert it into actual pictures, run the following command:
+```sh
+dot -Tpng "<dt_file_name>.dot" -o "<desired file name>.png"
+```
+The file name of the .dot files should be in the format of ```<model_name>_dt_<amine_handle>_<random_draw_id>.dot```.
+
+To complile the graphs in batches, it is recommended to use Jupyter notebook, copy the list of amines from dataset.py, and generate/run commands with a for-loop.
+
+### Results
+#### Graphs
+See [folder structure](#structure) for more details.
+
+#### Statistics
+In this folder, ```cv_statistics.pkl``` contains the dictionary with all the performance information of the models you've run. The current structure of the dictionary is ```{model_name:{metric_name: [metric_value]}}```. To load the dictionary, see similar instructions in the [dataset](#dataset) section.
+
+#### Fine Tuning Performance Logs
+If you are fine tuning any models, there will be a bunch of pkl files named in the format of ```ft_<model_name>.pkl```. These pickle files contain the dictionaries with the performance metrics of each configuration tried during the fine tuning stage. The current structure of the dictionary is ```{configuration in string form:{metric_name: metric_value}}```. To load the dictionary, see similar instructions in the [dataset](#dataset) section.
+
 ### To run the non-meta models based on the categories
-1. Specify the categories that we want to run the models on in the [run_al.py file](https://github.com/darkreactions/platipus/blob/0665aed38ba2e2978285511c38f2052ab8f98ff7/run_al.py#L29)  
-2. Define the models that we are want to run in run_al.py file  
+0. Set up all the parameters in model_params.py. Make sure fine_tuning in common_params is set to False.
+1. Specify the categories that we want to run the models on in [run_al.py](https://github.com/darkreactions/platipus/blob/0665aed38ba2e2978285511c38f2052ab8f98ff7/run_al.py#L29) or multiproc_runner.py.
+2. Define the models that we are want to run in run_al.py file or multiproc_runner.py.
 3. Type screen in terminal 
 4. Enter
 5. Activate your virtual environment:  
@@ -271,19 +355,27 @@ Follow step 2 to 7 above, with a slightly different step 4: either use venv and 
    ```sh
    conda activate platipus
    ```
-6. Run run_al.py file 
+6. Run run_al.py file to run models in a single thread:
    ```sh
    python run_al.py
    ```
+   
+   Run multiproc_runner.py to run models in multi-threads:
+   ```sh
+   python multiproc_runner.py
+   ```
 
 ### To run fine tuning for the non-meta models
+For models except for SVM and GBT:
 1. Change the ‘fine_tuning’ key in the common_params dictionary in model_params.py into True
-     
-2. Specify the categories and models we want to run fine tuning on in run_al.py file  
-  * If it is for SVM model, specify the categories in the parser argument in fine_tuning_svm.sh 
-  * If it is for GBC model, specify the categories in the parser argument in fine_tuning_gbc.sh 
-3. Type screen in terminal and enter  
-4. Activate your virtual environment:  
+
+2. Go to each model's python script to change the hyper-parameters and their ranges. 
+
+3. Specify the categories and models we want to run fine tuning on in run_al.py file 
+
+4. Type screen in terminal and enter  
+
+5. Activate your virtual environment:  
      
    For virtualenv:
    ```sh
@@ -293,18 +385,34 @@ Follow step 2 to 7 above, with a slightly different step 4: either use venv and 
    ```sh
    conda activate platipus
    ```
-5. Run fine_tune.sh for models except for SVM and GBC:
+6. Run fine_tune.sh for models except for SVM and GBC:
    ```sh 
    bash fine_tune.sh
    ```
-   Run fine_tune_svm.sh to fine tune SVM:
+For SVM and GBT:
+1. Go into ft_svm.py or ft_gbc.py to change the hyper-parameters and their ranges you'd like to fine tune.
+
+2. Specify the categories to fine tune on in fine_tune_svm.sh / fine_tune_gbc.sh, and change the maximum index in the for loop based on the total number of combinations you'd like to try.
+
+3. Activate your virtual environment:  
+     
+   For virtualenv:
    ```sh
+   source platipus/bin/activate
+   ```
+   For anaconda:
+   ```sh
+   conda activate platipus
+   ```
+4. Run fine_tune_svm.sh for SVM:
+   ```sh 
    bash fine_tune_svm.sh
    ```
-   Run fine_tune_gbc.sh to fine tune GBC:
-   ```sh
+   Run fine_tune_gbc.sh for GBT:
+   ```sh 
    bash fine_tune_gbc.sh
    ```
+   
 > Requires a different method to run if running on HPC, but we haven’t changed it yet
 
 ### To scp results and graphs from the remote lab machines to local directories  
@@ -341,5 +449,9 @@ Follow step 2 to 7 above, with a slightly different step 4: either use venv and 
 * Vincent Yu [@vjmoriarty](https://github.com/vjmoriarty)
 
 ## To Be Continued...
+- [ ] Make sure PLATIPUS and non-meta models are storing their performance metrics in the same structure to cv_statistics.pkl
+- [ ] Fine tune all non-meta models.
+- [ ] Post process fine tuning information.
+- [ ] Update plot.py to incorporate the current model line-up.  
 - [ ] Implement the testing branch of the dataset.  
 - [ ] Implement the testing portion of the non-meta models.  
