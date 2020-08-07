@@ -1,9 +1,9 @@
 import os
 
-from models.non_meta import RandomForest, KNN, SVM, LinearSVM, DecisionTree, LogisticRegression, GradientBoosting
+from models.non_meta import RandomForest, KNN, SVM, DecisionTree, LogisticRegression, GradientBoosting
 from utils.plot import plot_all_graphs
-from utils import read_pickle, write_pickle, define_non_meta_model_name, run_non_meta_model, find_avg_metrics
-from model_params import common_params, knn_params, svm_params, linearsvm_params, randomforest_params, \
+from utils import read_pickle, run_non_meta_model
+from model_params import common_params, knn_params, svm_params, randomforest_params, \
     logisticregression_params, decisiontree_params, gradientboosting_params, meta_train, meta_test
 
 if __name__ == '__main__':
@@ -143,7 +143,7 @@ if __name__ == '__main__':
                 category,
                 success=True
             )
-    
+
     # Use cv_stats.pkl to plot all graphs
     cv_stats = read_pickle(common_params['stats_path'])
     plot_all_graphs(cv_stats)
