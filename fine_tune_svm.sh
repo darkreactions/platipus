@@ -1,7 +1,7 @@
 #!/bin/sh
 # Run this to train/test full model
 # All print statements are stored in the designated folder
-category='category-4-i'
+category='category_4_i'
 
 log_folder="./fine_tuning_logs/$category"
 
