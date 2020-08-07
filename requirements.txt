@@ -1,12 +1,9 @@
-javabridge
 libsvm
 matplotlib
 modAL
 numpy
 pandas
-python-weka-wrapper3
 scikit-learn
-seaborn
 torch
 torchvision
 

@@ -1,9 +1,9 @@
 import os
 
-from models.non_meta import RandomForest, KNN, SVM, LinearSVM, DecisionTree, LogisticRegression, GradientBoosting
+from models.non_meta import RandomForest, KNN, SVM, DecisionTree, LogisticRegression, GradientBoosting
 from utils.plot import plot_all_graphs
-from utils import read_pickle, write_pickle, define_non_meta_model_name, run_non_meta_model, find_avg_metrics
-from model_params import common_params, knn_params, svm_params, linearsvm_params, randomforest_params, \
+from utils import read_pickle, run_non_meta_model
+from model_params import common_params, knn_params, svm_params, randomforest_params, \
     logisticregression_params, decisiontree_params, gradientboosting_params, meta_train, meta_test
 
 if __name__ == '__main__':
@@ -55,28 +55,23 @@ if __name__ == '__main__':
     model_params = svm_params
     for category in categories:
         if '4_ii' not in category and '5_ii' not in category:
-            # Excluding categories that have too few
-            # successful experiments for training
+            # Use regular random drawn datasets for categories
+            # that have sufficient successful experiments for training
             run_non_meta_model(
                 base_model,
                 common_params,
                 model_params,
                 category
             )
-
-
-    # Linear SVC
-    base_model = LinearSVM
-    model_params = linearsvm_params
-    for category in categories:
-        if '4_ii' not in category and '5_ii' not in category:
-            # Excluding categories that have too few
-            # successful experiments for training
+        else:
+            # Use random drawn datasets with at least one success for
+            # categories that few sufficient successful experiments for training
             run_non_meta_model(
                 base_model,
                 common_params,
                 model_params,
-                category
+                category,
+                success=True
             )
 
     # DecisionTree
@@ -106,13 +101,23 @@ if __name__ == '__main__':
     model_params = logisticregression_params
     for category in categories:
         if '4_ii' not in category and '5_ii' not in category:
-            # Excluding categories that have too few
-            # successful experiments for training
+            # Use regular random drawn datasets for categories
+            # that have sufficient successful experiments for training
             run_non_meta_model(
                 base_model,
                 common_params,
                 model_params,
                 category
+            )
+        else:
+            # Use random drawn datasets with at least one success for
+            # categories that few sufficient successful experiments for training
+            run_non_meta_model(
+                base_model,
+                common_params,
+                model_params,
+                category,
+                success=True
             )
 
     # Gradient Boosting
@@ -120,15 +125,26 @@ if __name__ == '__main__':
     model_params = gradientboosting_params
     for category in categories:
         if '4_ii' not in category and '5_ii' not in category:
-            # Excluding categories that have too few
-            # successful experiments for training
+            # Use regular random drawn datasets for categories
+            # that have sufficient successful experiments for training
             run_non_meta_model(
                 base_model,
                 common_params,
                 model_params,
                 category
             )
+        else:
+            # Use random drawn datasets with at least one success for
+            # categories that few sufficient successful experiments for training
+            run_non_meta_model(
+                base_model,
+                common_params,
+                model_params,
+                category,
+                success=True
+            )
 
     # Use cv_stats.pkl to plot all graphs
     cv_stats = read_pickle(common_params['stats_path'])
     plot_all_graphs(cv_stats)
+

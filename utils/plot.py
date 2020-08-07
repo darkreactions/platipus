@@ -8,21 +8,24 @@ import matplotlib
 matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 
-def plot_categorical_graph(num_examples, stats_dict, dst, amine=None, amine_index=None, models=[], show=False):
+
+def plot_categorical_graph(stats_dict, dst, style_combinations, amine=None, amine_index=None, models=None,
+                           show=False):
     """Plot metrics graphs for all models under the same category in comparison
 
     The graph will have 4 subplots, which are for: accuracy, precision, recall, and bcr, from left to right,
         top to bottom
 
     Args:
-        num_examples:       A list representing the number of examples we are working with at each point.
         stats_dict:         A dictionary with each model as key and a dictionary of model specific metrics as value.
                                 Each metric dictionary has the same keys: 'accuracies', 'precisions', 'recalls', 'bcrs',
                                 and their corresponding list of values for each model as dictionary values.
         dst:                A string representing the relative path that the graph will be saved to.
                                 Graph name and format should be included.
+        style_combinations: A dictionary with each model as key and another dictionary as value, which has
+                                color/linestyle as key and the corresponding color/marker/linestyle as value.
         amine:              A string representing the amine that our model metrics are for. Default to be None.
-        amine_index         An integer representing the index of the amine to plot.
+        amine_index:        An integer representing the index of the amine to plot.
         models:             A list representing the names all the models to plot.
         show:               A boolean representing whether we want to show the graph or not. Default to False to
                                 seamlessly run the whole model,
@@ -54,7 +57,7 @@ def plot_categorical_graph(num_examples, stats_dict, dst, amine=None, amine_inde
         f'Averaged BCR curve', fontsize=20)
 
     # Exact all models available for plotting if not given as input
-    if len(models) == 0:
+    if not models:
         models = list(stats_dict.keys())
 
     # Temporary category identifier to determine line chart of bar chart
@@ -62,40 +65,55 @@ def plot_categorical_graph(num_examples, stats_dict, dst, amine=None, amine_inde
 
     # Plot each model's metrics
     for model in models:
+        color = style_combinations[model]['color']
+        marker = style_combinations[model]['marker']
         if amine:
             # Plotting amine-specific graphs
             num_examples = [i for i in range(len(stats_dict[model]['accuracies'][amine_index]))]
             if len(num_examples) != 1:
                 # Plot line graphs for models with active learning
-                acc.plot(num_examples, stats_dict[model]['accuracies'][amine_index], 'o-', label=model, alpha=0.6)
-                prec.plot(num_examples, stats_dict[model]['precisions'][amine_index], 'o-', label=model, alpha=0.6)
-                rec.plot(num_examples, stats_dict[model]['recalls'][amine_index], 'o-', label=model, alpha=0.6)
-                bcr.plot(num_examples, stats_dict[model]['bcrs'][amine_index], 'o-', label=model, alpha=0.6)
+                acc.plot(num_examples, stats_dict[model]['accuracies'][amine_index], marker=marker, markersize=12,
+                         color=color, label=model, alpha=0.6)
+                prec.plot(num_examples, stats_dict[model]['precisions'][amine_index], marker=marker, markersize=12,
+                         color=color, label=model, alpha=0.6)
+                rec.plot(num_examples, stats_dict[model]['recalls'][amine_index], marker=marker, markersize=12,
+                         color=color, label=model, alpha=0.6)
+                bcr.plot(num_examples, stats_dict[model]['bcrs'][amine_index], marker=marker, markersize=12,
+                         color=color, label=model, alpha=0.6)
             else:
                 # Plot bar graphs for models without active learning
-                acc.bar(models.index(model) / 2, stats_dict[model]['accuracies'][amine_index], 0.25, label=model,
-                        alpha=0.6)
-                prec.bar(models.index(model) / 2, stats_dict[model]['precisions'][amine_index], 0.25, label=model,
-                         alpha=0.6)
-                rec.bar(models.index(model) / 2, stats_dict[model]['recalls'][amine_index], 0.25, label=model,
-                        alpha=0.6)
-                bcr.bar(models.index(model) / 2, stats_dict[model]['bcrs'][amine_index], 0.25, label=model, alpha=0.6)
+                acc.bar(models.index(model) / 2, stats_dict[model]['accuracies'][amine_index], 0.25, color=color,
+                        label=model, alpha=0.6)
+                prec.bar(models.index(model) / 2, stats_dict[model]['precisions'][amine_index], 0.25, color=color,
+                        label=model, alpha=0.6)
+                rec.bar(models.index(model) / 2, stats_dict[model]['recalls'][amine_index], 0.25, color=color,
+                        label=model, alpha=0.6)
+                bcr.bar(models.index(model) / 2, stats_dict[model]['bcrs'][amine_index], 0.25, color=color,
+                        label=model, alpha=0.6)
                 with_AL = False
         else:
             # Plotting avg metrics graph
             num_examples = [i for i in range(len(stats_dict[model]['accuracies']))]
             if len(num_examples) != 1:
                 # Plot line graphs for models with active learning
-                acc.plot(num_examples, stats_dict[model]['accuracies'], 'o-', label=model, alpha=0.6)
-                prec.plot(num_examples, stats_dict[model]['precisions'], 'o-', label=model, alpha=0.6)
-                rec.plot(num_examples, stats_dict[model]['recalls'], 'o-', label=model, alpha=0.6)
-                bcr.plot(num_examples, stats_dict[model]['bcrs'], 'o-', label=model, alpha=0.6)
+                acc.plot(num_examples, stats_dict[model]['accuracies'], marker=marker, markersize=12,
+                         color=color, label=model, alpha=0.6)
+                prec.plot(num_examples, stats_dict[model]['precisions'], marker=marker, markersize=12,
+                          color=color, label=model, alpha=0.6)
+                rec.plot(num_examples, stats_dict[model]['recalls'], marker=marker, markersize=12,
+                         color=color, label=model, alpha=0.6)
+                bcr.plot(num_examples, stats_dict[model]['bcrs'], marker=marker, markersize=12,
+                         color=color, label=model, alpha=0.6)
             else:
                 # Plot bar graphs for models without active learning
-                acc.bar(models.index(model) / 2, stats_dict[model]['accuracies'], 0.25, label=model, alpha=0.6)
-                prec.bar(models.index(model) / 2, stats_dict[model]['precisions'], 0.25, label=model, alpha=0.6)
-                rec.bar(models.index(model) / 2, stats_dict[model]['recalls'], 0.25, label=model, alpha=0.6)
-                bcr.bar(models.index(model) / 2, stats_dict[model]['bcrs'], 0.25, label=model, alpha=0.6)
+                acc.bar(models.index(model) / 2, stats_dict[model]['accuracies'], 0.25, color=color,
+                        label=model, alpha=0.6)
+                prec.bar(models.index(model) / 2, stats_dict[model]['precisions'], 0.25, color=color,
+                         label=model, alpha=0.6)
+                rec.bar(models.index(model) / 2, stats_dict[model]['recalls'], 0.25, color=color,
+                        label=model, alpha=0.6)
+                bcr.bar(models.index(model) / 2, stats_dict[model]['bcrs'], 0.25, color=color,
+                        label=model, alpha=0.6)
                 with_AL = False
 
     # Making the graphs more readable
@@ -214,7 +232,7 @@ def plot_all_lines(stats_dict, dst, style_combinations, show=False):
             bcr.plot(num_examples, stats_dict[model]['bcrs'], marker=linestyle, markersize=12, color=color,
                      linewidth=4, label=model)
         else:
-            # Plot bar graphs for models without active learning
+            # Plot horizontal lines for models without active learning
             acc.axhline(y=stats_dict[model]['accuracies'], linestyle=linestyle, linewidth=2, color=color, label=model)
             prec.axhline(y=stats_dict[model]['precisions'], linestyle=linestyle, linewidth=2, color=color, label=model)
             rec.axhline(y=stats_dict[model]['recalls'], linestyle=linestyle, linewidth=2, color=color, label=model)
@@ -261,7 +279,8 @@ def plot_all_lines(stats_dict, dst, style_combinations, show=False):
     plt.close()
 
 
-def plot_bcr_vs_success_rate(models, cv_stats, dst, names, success_volume, success_percentage, category=None, style_combinations = None, show=False):
+def plot_bcr_vs_success_rate(models, cv_stats, dst, names, success_volume, success_percentage, category=None,
+                             style_combinations=None, show=False):
     """TODO: DOCUMENTATION"""
     fig = plt.figure(figsize=(24, 12))
     vol = plt.subplot(1, 2, 1)
@@ -468,23 +487,14 @@ def plot_all_graphs(cv_stats):
         # Plotting individual graphs for each task-specific model
         for i, amine in enumerate(amines):
             graph_dst = '{0:s}/cv_metrics_{1:s}.png'.format(avg_graph_folder, amine)
-            plot_categorical_graph(96, cv_stats, graph_dst, amine=amine, amine_index=i, models=models)
+            plot_categorical_graph(cv_stats, graph_dst, style_combinations, amine=amine, amine_index=i, models=models)
 
         # Plotting avg graphs for all models in one category
         avg_graph_dst = '{0:s}/average_metrics_{1:s}.png'.format(avg_graph_folder, cat)
-        plot_categorical_graph(num_examples, avg_stats, avg_graph_dst, models=models)
+        plot_categorical_graph(avg_stats, avg_graph_dst, style_combinations, models=models)
 
         bcr_graph_dst = '{0:s}/bcr_against_success_{1:s}.png'.format(bcr_graph_folder, cat)
         plot_bcr_vs_success_rate(models, cv_stats, bcr_graph_dst, names, success_volume, success_percentage, category=cat)
-
-    # Plot graphs for all models
-    bcr_graph_dst = '{0:s}/bcr_against_all.png'.format(bcr_graph_folder)
-    plot_bcr_vs_success_rate(models_to_plot, cv_stats, bcr_graph_dst, names, success_volume, success_percentage, style_combinations=style_combinations)
-
-    plot_all_lines(avg_stats, './results/avg_metrics_all_models.png', style_combinations)
-    # plot the winning models for each category
-    winning_stats = find_winning_models(avg_stats, all_subcats)
-    plot_all_lines(winning_stats, './results/winning_models.png', style_combinations)
 
     # save the graphs for each model
     mod_graph_folder = './results/by_model'
@@ -512,4 +522,16 @@ def plot_all_graphs(cv_stats):
     for subcat in list(all_subcats.keys()):
         dst_path = './results/by_category/{}.png'.format(subcat)
         avg_stats_cat = find_avg_metrics(cv_stats, all_subcats[subcat])
-        plot_all_lines(avg_stats_cat, dst_path, style_combinations)
+        plot_categorical_graph(avg_stats_cat, dst_path, style_combinations, models=all_subcats[subcat])
+
+    # Plot BCR vs. success rate graphs for all models
+    bcr_graph_dst = '{0:s}/bcr_against_all.png'.format(bcr_graph_folder)
+    plot_bcr_vs_success_rate(models_to_plot, cv_stats, bcr_graph_dst, names, success_volume, success_percentage,
+                             style_combinations=style_combinations)
+
+    # Plot the winning models for each category
+    winning_stats = find_winning_models(avg_stats, all_cats)
+    plot_all_lines(winning_stats, './results/winning_models.png', style_combinations)
+
+    # Plot graphs for all models
+    plot_all_lines(avg_stats, './results/avg_metrics_all_models.png', style_combinations)
