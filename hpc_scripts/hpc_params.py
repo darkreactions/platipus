@@ -5,9 +5,9 @@ common_params = {
     'verbose': False,
     'train_flag': True,
     'gpu_id': 1,
-    'test_data': True,  # TODO: redundant with full_dataset?
+    'test_data': False,  # TODO: redundant with full_dataset?
     'meta': False,  # TODO: redundant with pretrain?
-    'full_dataset': False,
+    'full_dataset': True,
     'fine_tuning': False,
     'pretrain': True,
     'train_size': 10,   # k after pretrain
@@ -18,13 +18,14 @@ common_params = {
 }
 
 meta_params = {
+    'num_hidden_units': (200, 100, 100),
     'k_shot': 10,
     'n_way': 2,
     'inner_lr': 1e-3,
     'meta_lr': 1e-3,
     'pred_lr': 1e-1,
     'meta_batch_size': 10,
-    'Lt': 1,
+    'Lt': 2,
     'Lv': 100,
     'num_inner_updates': 10,
     'kl_reweight': 0.0001,
@@ -48,6 +49,7 @@ meta_test = {
 
 
 local_meta_params = {
+    'num_hidden_units': (200, 100, 100),
     'k_shot': 10,
     'n_way': 2,
     'inner_lr': 1e-3,
@@ -65,7 +67,7 @@ local_meta_params = {
 }
 
 local_meta_train = {
-    'num_epochs': 4,
+    'num_epochs': 8,
     'resume_epoch': 0,
     'train_flag': True
 }
