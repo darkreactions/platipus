@@ -378,7 +378,8 @@ def initialize(models_list, args):
         net = FCNet(
             dim_input=51,
             dim_output=params['num_classes_per_task'],
-            num_hidden_units=(200, 100, 100),
+            #num_hidden_units=(200, 100, 100),
+            num_hidden_units=params['num_hidden_units'],
             device=device
         )
         params['net'] = net
