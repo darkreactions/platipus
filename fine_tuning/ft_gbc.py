@@ -26,10 +26,13 @@ def parse_args():
 
     """
 
-    parser = argparse.ArgumentParser(description='Setup variables for fine tuning GBT.')
-    parser.add_argument('--category', type=str, default='category_3', help="model's category to fine tune")
+    parser = argparse.ArgumentParser(
+        description='Setup variables for fine tuning GBT.')
+    parser.add_argument('--category', type=str, default='H',
+                        help="model's category to fine tune")
 
-    parser.add_argument('--index', type=int, default=0, help="model's combination index to try")
+    parser.add_argument('--index', type=int, default=0,
+                        help="model's combination index to try")
 
     args = parser.parse_args()
 
@@ -110,11 +113,11 @@ def grid_search(clf, combinations, path, num_draws, train_size, active_learning_
                 for set_id in draws:
                     # Unload the randomly drawn dataset values
                     x_t, y_t, x_v, y_v, all_data, all_labels = dataset[set_id]['x_t'], \
-                                                               dataset[set_id]['y_t'], \
-                                                               dataset[set_id]['x_v'], \
-                                                               dataset[set_id]['y_v'], \
-                                                               dataset[set_id]['all_data'], \
-                                                               dataset[set_id]['all_labels']
+                        dataset[set_id]['y_t'], \
+                        dataset[set_id]['x_v'], \
+                        dataset[set_id]['y_v'], \
+                        dataset[set_id]['all_data'], \
+                        dataset[set_id]['all_labels']
 
                     # Load the training and validation set into the model
                     ACLF.load_dataset(
@@ -132,15 +135,20 @@ def grid_search(clf, combinations, path, num_draws, train_size, active_learning_
 
                 ACLF.find_inner_avg()
 
-                base_accuracies.append(ACLF.metrics['average']['accuracies'][-1])
-                base_precisions.append(ACLF.metrics['average']['precisions'][-1])
+                base_accuracies.append(
+                    ACLF.metrics['average']['accuracies'][-1])
+                base_precisions.append(
+                    ACLF.metrics['average']['precisions'][-1])
                 base_recalls.append(ACLF.metrics['average']['recalls'][-1])
                 base_bcrs.append(ACLF.metrics['average']['bcrs'][-1])
 
         # Calculated the average baseline performances
-        ft_log[model_name]['Default']['accuracies'] = sum(base_accuracies) / len(base_accuracies)
-        ft_log[model_name]['Default']['precisions'] = sum(base_precisions) / len(base_precisions)
-        ft_log[model_name]['Default']['recalls'] = sum(base_recalls) / len(base_recalls)
+        ft_log[model_name]['Default']['accuracies'] = sum(
+            base_accuracies) / len(base_accuracies)
+        ft_log[model_name]['Default']['precisions'] = sum(
+            base_precisions) / len(base_precisions)
+        ft_log[model_name]['Default']['recalls'] = sum(
+            base_recalls) / len(base_recalls)
         ft_log[model_name]['Default']['bcrs'] = sum(base_bcrs) / len(base_bcrs)
 
     # Try out each possible combinations of hyper-parameters
@@ -162,11 +170,11 @@ def grid_search(clf, combinations, path, num_draws, train_size, active_learning_
                 for set_id in draws:
                     # Unload the randomly drawn dataset values
                     x_t, y_t, x_v, y_v, all_data, all_labels = dataset[set_id]['x_t'], \
-                                                               dataset[set_id]['y_t'], \
-                                                               dataset[set_id]['x_v'], \
-                                                               dataset[set_id]['y_v'], \
-                                                               dataset[set_id]['all_data'], \
-                                                               dataset[set_id]['all_labels']
+                        dataset[set_id]['y_t'], \
+                        dataset[set_id]['x_v'], \
+                        dataset[set_id]['y_v'], \
+                        dataset[set_id]['all_data'], \
+                        dataset[set_id]['all_labels']
 
                     # Load the training and validation set into the model
                     ACLF.load_dataset(
@@ -189,9 +197,12 @@ def grid_search(clf, combinations, path, num_draws, train_size, active_learning_
                 recalls.append(ACLF.metrics['average']['recalls'][-1])
                 bcrs.append(ACLF.metrics['average']['bcrs'][-1])
 
-        ft_log[model_name][str(option)]['accuracies'] = sum(accuracies) / len(accuracies)
-        ft_log[model_name][str(option)]['precisions'] = sum(precisions) / len(precisions)
-        ft_log[model_name][str(option)]['recalls'] = sum(recalls) / len(recalls)
+        ft_log[model_name][str(option)]['accuracies'] = sum(
+            accuracies) / len(accuracies)
+        ft_log[model_name][str(option)]['precisions'] = sum(
+            precisions) / len(precisions)
+        ft_log[model_name][str(option)]['recalls'] = sum(
+            recalls) / len(recalls)
         ft_log[model_name][str(option)]['bcrs'] = sum(bcrs) / len(bcrs)
 
     # Save the fine tuning performances to pkl if not multi-processing
@@ -237,11 +248,11 @@ def fine_tune(params):
     # Preset the active_learning, w_hx, w_k, and draw_success settings
     # for each category
     cat_settings = {
-        'category_3': [False, True, False, False],
-        'category_4_i': [False, True, True, False],
-        'category_4_ii': [False, False, True, True],
-        'category_5_i': [True, True, True, False],
-        'category_5_ii': [True, False, True, True],
+        'H': [False, True, False, False],
+        'Hkx': [False, True, True, False],
+        'kx': [False, False, True, True],
+        'ALHk': [True, True, True, False],
+        'ALk': [True, False, True, True],
     }
 
     # Set the model and dataset specific variables

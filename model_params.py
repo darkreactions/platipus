@@ -24,27 +24,27 @@ common_params = {
 }
 
 knn_configs = {
-    'category_3': {
+    'H': {
         'n_neighbors': 3,
         'leaf_size': 1,
         'p': 1
     },
-    'category_4_i': {
+    'Hkx': {
         'n_neighbors': 1,
         'leaf_size': 1,
         'p': 1
     },
-    'category_4_ii': {
+    'kx': {
         'n_neighbors': 3,
         'leaf_size': 1,
         'p': 1
     },
-    'category_5_i': {
+    'ALHk': {
         'n_neighbors': 1,
         'leaf_size': 1,
         'p': 1
     },
-    'category_5_ii': {
+    'ALk': {
         'n_neighbors': 1,
         'leaf_size': 1,
         'p': 3
@@ -52,13 +52,13 @@ knn_configs = {
 }
 
 knn_params = {
-    'neighbors': 2,
+    # 'neighbors': 2,
     'configs': knn_configs,
     'model_name': 'KNN'
 }
 
 svm_configs = {
-    'category_3': {
+    'H': {
         'kernel': 'poly',
         'C': 0.001,
         'degree': 3,
@@ -68,7 +68,7 @@ svm_configs = {
         'break_ties': True,
         'class_weight': None
     },
-    'category_4_i': {
+    'Hkx': {
         'kernel': 'poly',
         'C': 0.003,
         'degree': 3,
@@ -78,7 +78,7 @@ svm_configs = {
         'break_ties': True,
         'class_weight': {0: 0.3, 1: 0.7}
     },
-    'category_5_i': {
+    'ALHk': {
         'kernel': 'poly',
         'C': 0.001,
         'degree': 2,
@@ -96,7 +96,7 @@ svm_params = {
 }
 
 linearsvm_configs = {
-    'category_3': {
+    'H': {
         'penalty': 'l1',
         'loss': 'squared_hinge',
         'dual': False,
@@ -105,7 +105,7 @@ linearsvm_configs = {
         'fit_intercept': True,
         'class_weight': {0: 0.05, 1: 0.95}
     },
-    'category_4_i': {
+    'Hkx': {
         'penalty': 'l2',
         'loss': 'squared_hinge',
         'dual': False,
@@ -114,7 +114,7 @@ linearsvm_configs = {
         'fit_intercept': True,
         'class_weight': {0: 0.09, 1: 0.91}
     },
-    'category_5_i': {
+    'ALHk': {
         'penalty': 'l1',
         'loss': 'squared_hinge',
         'dual': False,
@@ -131,14 +131,14 @@ linearsvm_params = {
 }
 
 dt_configs = {
-    'category_3': {
+    'H': {
         'criterion': 'gini',
         'splitter': 'best',
         'max_depth': 7,
         'min_samples_split': 2,
         'min_samples_leaf': 2
     },
-    'category_4_i': {
+    'Hkx': {
         'criterion': 'gini',
         'splitter': 'random',
         'max_depth': 11,
@@ -146,14 +146,14 @@ dt_configs = {
         'min_samples_leaf': 1,
         'class_weight': {0: 0.3, 1: 0.7}
     },
-    'category_4_ii': {
+    'kx': {
         'criterion': 'gini',
         'splitter': 'best',
         'max_depth': 3,
         'min_samples_split': 4,
         'min_samples_leaf': 1
     },
-    'category_5_i': {
+    'ALHk': {
         'criterion': 'gini',
         'splitter': 'random',
         'max_depth': 11,
@@ -161,7 +161,7 @@ dt_configs = {
         'min_samples_leaf': 3,
         'class_weight': {0: 0.1, 1: 0.9}
     },
-    'category_5_ii': {
+    'ALk': {
         'criterion': 'gini',
         'splitter': 'best',
         'max_depth': 4,
@@ -177,27 +177,27 @@ decisiontree_params = {
 }
 
 rf_configs = {
-    'category_3': {
-            'n_estimators': 1000,
-            'criterion': 'gini',
-            'max_depth': 8,
-            'max_features': None,
-            'bootstrap': True,
-            'min_samples_leaf': 1,
-            'min_samples_split': 2,
-            'ccp_alpha': 0.0
+    'H': {
+        'n_estimators': 1000,
+        'criterion': 'gini',
+        'max_depth': 8,
+        'max_features': None,
+        'bootstrap': True,
+        'min_samples_leaf': 1,
+        'min_samples_split': 2,
+        'ccp_alpha': 0.0
     },
-    'category_4_i': {
-            'n_estimators': 200,
-            'criterion': 'gini',
-            'max_depth': 8,
-            'max_features': None,
-            'bootstrap': True,
-            'min_samples_leaf': 2,
-            'min_samples_split': 5,
-            'ccp_alpha': 0.0
+    'Hkx': {
+        'n_estimators': 200,
+        'criterion': 'gini',
+        'max_depth': 8,
+        'max_features': None,
+        'bootstrap': True,
+        'min_samples_leaf': 2,
+        'min_samples_split': 5,
+        'ccp_alpha': 0.0
     },
-    'category_4_ii': {
+    'kx': {
         'n_estimators': 200,
         'criterion': 'gini',
         'max_depth': 7,
@@ -207,7 +207,7 @@ rf_configs = {
         'min_samples_split': 10,
         'ccp_alpha': 0.0
     },
-    'category_5_i': {
+    'ALHk': {
         'n_estimators': 100,
         'criterion': 'gini',
         'max_depth': 8,
@@ -217,7 +217,7 @@ rf_configs = {
         'min_samples_split': 5,
         'ccp_alpha': 0.0
     },
-    'category_5_ii': {
+    'ALk': {
         'n_estimators': 200,
         'criterion': 'gini',
         'max_depth': 7,
@@ -235,7 +235,7 @@ randomforest_params = {
 }
 
 lr_configs = {
-    'category_3': {
+    'H': {
         'penalty': 'l2',
         'dual': False,
         'tol': 1e-4,
@@ -243,7 +243,7 @@ lr_configs = {
         'solver': 'lbfgs',
         'max_iter': 4000
     },
-    'category_4_i': {
+    'Hkx': {
         'penalty': 'l2',
         'dual': False,
         'tol': 1e-4,
@@ -251,7 +251,7 @@ lr_configs = {
         'solver': 'lbfgs',
         'max_iter': 4000
     },
-    'category_4_ii': {
+    'kx': {
         'penalty': 'l2',
         'dual': False,
         'tol': 1e-4,
@@ -259,7 +259,7 @@ lr_configs = {
         'solver': 'lbfgs',
         'max_iter': 4000
     },
-    'category_5_i': {
+    'ALHk': {
         'penalty': 'l2',
         'dual': False,
         'tol': 1e-4,
@@ -267,7 +267,7 @@ lr_configs = {
         'solver': 'lbfgs',
         'max_iter': 4000
     },
-    'category_5_ii': {
+    'ALk': {
         'penalty': 'l2',
         'dual': False,
         'tol': 1e-4,
@@ -283,19 +283,19 @@ logisticregression_params = {
 }
 
 gb_configs = {
-    'category_3': {
+    'H': {
 
     },
-    'category_4_i': {
+    'Hkx': {
 
     },
-    'category_4_ii': {
+    'kx': {
 
     },
-    'category_5_i': {
+    'ALHk': {
 
     },
-    'category_5_ii': {
+    'ALk': {
 
     },
 }

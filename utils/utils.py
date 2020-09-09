@@ -77,26 +77,31 @@ def load_chem_dataset(k_shot, cross_validation=True, meta_batch_size=32,
         amine_left_out_batches:         A dictionary of batches with structure:
                                         key is amine left out,
                                         value has following hierarchy
-                                        batches -> x_t, y_t, x_v, y_v -> meta_batch_size number of amines ->
-                                        k_shot number of reactions -> each reaction has some number of features
+                                        batches -> x_t, y_t, x_v, y_v -> 
+                                        meta_batch_size number of amines ->
+                                        k_shot number of reactions -> each 
+                                        reaction has some number of features
         amine_cross_validate_samples:   A dictionary of batches with structure:
                                         key is amine which the data is for,
                                         value has the following hierarchy
-                                        x_s, y_s, x_q, y_q -> k_shot number of reactions ->
-                                        each reaction has some number of features
-        amine_test_samples:             A dictionary that has the same structure as
-                                        amine_cross_validate_samples
+                                        x_s, y_s, x_q, y_q -> k_shot number of 
+                                        reactions -> each reaction has some 
+                                        number of features amine_test_samples:
+                                        A dictionary that has the same 
+                                        structure as amine_cross_validate_samples
         counts:                         A dictionary to record the number of
                                         successful and failed reactions in the format of
                                         {"total": [# of failed reactions, # of successful reactions]}
     """
     if test:
         print('Getting Test dataset')
-        return import_test_dataset(k_shot, meta_batch_size, num_batches, verbose=verbose,
+        return import_test_dataset(k_shot, meta_batch_size,
+                                   num_batches, verbose=verbose,
                                    cross_validation=cross_validation)
     else:
         print('Getting FULL dataset')
-        return import_full_dataset(k_shot, meta_batch_size, num_batches, verbose=verbose,
+        return import_full_dataset(k_shot, meta_batch_size,
+                                   num_batches, verbose=verbose,
                                    cross_validation=cross_validation)
 
 
@@ -116,17 +121,7 @@ def find_avg_metrics(stats_dict, models, min_length=None):
 
     # Set up default dictionary to store average metrics for each model
     avg_stat = {}
-
     all_models = models
-    """random_model = all_models[0]
-
-    if not min_length:
-        min_length = len(stats_dict[random_model]['accuracies'][0])
-        for model in all_models:
-            length = len(min(stats_dict[model]['accuracies'], key=len))
-            if min_length > length:
-                min_length = length"""
-
     # Calculate average metrics by model
     for model in all_models:
         # Pre-fill each model's value with standard metrics dictionary
@@ -183,7 +178,7 @@ def find_avg_metrics(stats_dict, models, min_length=None):
     return avg_stat
 
 
-def find_winning_models(avg_stat,all_cat):
+def find_winning_models(avg_stat, all_cat):
     """Find the winning models for each category of models
 
     Args:
@@ -205,7 +200,8 @@ def find_winning_models(avg_stat,all_cat):
         for model in list(avg_stat.keys()):
             if model in cat_models and 'PLATIPUS' not in model:
                 cat_best_bcr[model] = avg_stat[model]['bcrs']
-        cat_best_bcr = max(cat_best_bcr, key=lambda x: np.trapz(cat_best_bcr[x]) / len(cat_best_bcr[x]))
+        cat_best_bcr = max(cat_best_bcr, key=lambda x: np.trapz(
+            cat_best_bcr[x]) / len(cat_best_bcr[x]))
         best_model_bcr[cat_best_bcr] = avg_stat[cat_best_bcr]
     # add the platipus line into the graph to compare with the best performing ones
     for model in list(avg_stat.keys()):
@@ -420,11 +416,13 @@ def find_success_rate():
     percent_volume['Full Name'].str.lower()
     inventory['Chemical Name'].str.lower()
 
-    total = percent_volume.set_index('Full Name').join(inventory.set_index('Chemical Name'))
+    total = percent_volume.set_index('Full Name').join(
+        inventory.set_index('Chemical Name'))
 
     # percent_vol = []
 
-    filtered = percent_volume[percent_volume['Inchi'].isin(amines)].sort_values(['Success'], axis=0, ascending=False)
+    filtered = percent_volume[percent_volume['Inchi'].isin(
+        amines)].sort_values(['Success'], axis=0, ascending=False)
     amines_new = filtered['Inchi'].values
 
     success_rate = filtered['Success'].to_numpy()
@@ -436,7 +434,8 @@ def find_success_rate():
     percent_success = []
     for amine in amines_new:
         results = df[df[amine_header] == amine][score_header].value_counts()
-        name = inventory[inventory['InChI Key (ID)'] == amine]['InChI Key (ID)'].values
+        name = inventory[inventory['InChI Key (ID)']
+                         == amine]['InChI Key (ID)'].values
         names.append(name[0])
         counts0.append(results[0])
         counts1.append(results[1])
@@ -539,11 +538,11 @@ def run_non_meta_model(base_model, common_params, model_params, category, result
     # Set up the settings of each category
     # The entries correspond to: With active learning? With historical data? With amine data?
     settings = {
-        'category_3': [False, True, False],
-        'category_4_i': [False, True, True],
-        'category_4_ii': [False, False, True],
-        'category_5_i': [True, True, True],
-        'category_5_ii': [True, False, True],
+        'H': [False, True, False],
+        'Hkx': [False, True, True],
+        'kx': [False, False, True],
+        'ALHk': [True, True, True],
+        'ALk': [True, False, True],
     }
 
     # Set up the aggregated parameter dictionary
@@ -569,8 +568,10 @@ def run_non_meta_model(base_model, common_params, model_params, category, result
     base_model.run_model(base_model_params, category)
 
 
-def grid_search(clf, ft_params, path, num_draws, train_size, active_learning_iter, active_learning=True, w_hx=True,
-                w_k=True, draw_success=False, random=False, random_size=10, result_dict=None, model_name=''):
+def grid_search(clf, ft_params, path, num_draws, train_size,
+                active_learning_iter, active_learning=True, w_hx=True,
+                w_k=True, draw_success=False, random=False, random_size=10,
+                result_dict=None, model_name=''):
     """Fine tune the model based on average bcr performance to find the best model hyper-parameters.
 
     Similar to GridSearchCV in scikit-learn package, we try out all the combinations and evaluate performance
@@ -661,11 +662,11 @@ def grid_search(clf, ft_params, path, num_draws, train_size, active_learning_ite
             for set_id in draws:
                 # Unload the randomly drawn dataset values
                 x_t, y_t, x_v, y_v, all_data, all_labels = dataset[set_id]['x_t'], \
-                                                           dataset[set_id]['y_t'], \
-                                                           dataset[set_id]['x_v'], \
-                                                           dataset[set_id]['y_v'], \
-                                                           dataset[set_id]['all_data'], \
-                                                           dataset[set_id]['all_labels']
+                    dataset[set_id]['y_t'], \
+                    dataset[set_id]['x_v'], \
+                    dataset[set_id]['y_v'], \
+                    dataset[set_id]['all_data'], \
+                    dataset[set_id]['all_labels']
 
                 # Load the training and validation set into the model
                 ACLF.load_dataset(
@@ -689,9 +690,12 @@ def grid_search(clf, ft_params, path, num_draws, train_size, active_learning_ite
             base_bcrs.append(ACLF.metrics['average']['bcrs'][-1])
 
     # Calculated the average baseline performances
-    ft_log[model_name]['Default']['accuracies'] = sum(base_accuracies) / len(base_accuracies)
-    ft_log[model_name]['Default']['precisions'] = sum(base_precisions) / len(base_precisions)
-    ft_log[model_name]['Default']['recalls'] = sum(base_recalls) / len(base_recalls)
+    ft_log[model_name]['Default']['accuracies'] = sum(
+        base_accuracies) / len(base_accuracies)
+    ft_log[model_name]['Default']['precisions'] = sum(
+        base_precisions) / len(base_precisions)
+    ft_log[model_name]['Default']['recalls'] = sum(
+        base_recalls) / len(base_recalls)
     ft_log[model_name]['Default']['bcrs'] = sum(base_bcrs) / len(base_bcrs)
 
     # Try out each possible combinations of hyper-parameters
@@ -714,11 +718,11 @@ def grid_search(clf, ft_params, path, num_draws, train_size, active_learning_ite
                 for set_id in draws:
                     # Unload the randomly drawn dataset values
                     x_t, y_t, x_v, y_v, all_data, all_labels = dataset[set_id]['x_t'], \
-                                                               dataset[set_id]['y_t'], \
-                                                               dataset[set_id]['x_v'], \
-                                                               dataset[set_id]['y_v'], \
-                                                               dataset[set_id]['all_data'], \
-                                                               dataset[set_id]['all_labels']
+                        dataset[set_id]['y_t'], \
+                        dataset[set_id]['x_v'], \
+                        dataset[set_id]['y_v'], \
+                        dataset[set_id]['all_data'], \
+                        dataset[set_id]['all_labels']
 
                     # Load the training and validation set into the model
                     ACLF.load_dataset(
@@ -741,9 +745,12 @@ def grid_search(clf, ft_params, path, num_draws, train_size, active_learning_ite
                 recalls.append(ACLF.metrics['average']['recalls'][-1])
                 bcrs.append(ACLF.metrics['average']['bcrs'][-1])
 
-        ft_log[model_name][str(option)]['accuracies'] = sum(accuracies) / len(accuracies)
-        ft_log[model_name][str(option)]['precisions'] = sum(precisions) / len(precisions)
-        ft_log[model_name][str(option)]['recalls'] = sum(recalls) / len(recalls)
+        ft_log[model_name][str(option)]['accuracies'] = sum(
+            accuracies) / len(accuracies)
+        ft_log[model_name][str(option)]['precisions'] = sum(
+            precisions) / len(precisions)
+        ft_log[model_name][str(option)]['recalls'] = sum(
+            recalls) / len(recalls)
         ft_log[model_name][str(option)]['bcrs'] = sum(bcrs) / len(bcrs)
 
     # Find the total time used for fine tuning
@@ -754,11 +761,13 @@ def grid_search(clf, ft_params, path, num_draws, train_size, active_learning_ite
     days = int(time_lapsed / 86400)
     hours = int((time_lapsed - (86400 * days)) / 3600)
     minutes = int((time_lapsed - (86400 * days) - (3600 * hours)) / 60)
-    seconds = round(time_lapsed - (86400 * days) - (3600 * hours) - (minutes * 60), 2)
+    seconds = round(time_lapsed - (86400 * days) -
+                    (3600 * hours) - (minutes * 60), 2)
     per_combo = round(time_lapsed / (len(combinations)), 4)
 
     print(f'Fine tuning for {model_name} completed.')
-    print(f'Total time used: {days} days {hours} hours {minutes} minutes {seconds} seconds.')
+    print(
+        f'Total time used: {days} days {hours} hours {minutes} minutes {seconds} seconds.')
     print(f'Or about {per_combo} seconds per combination.')
 
     # Save the fine tuning performances to pkl if not multi-processing

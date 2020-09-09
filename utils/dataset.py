@@ -423,8 +423,10 @@ def write_sel_to_csv(data_dict, num_draw):
                 full.to_csv(f'./data/selected_k/full_dataset_random_{id}.csv')
                 test.to_csv(f'./data/selected_k/test_dataset_random_{id}.csv')
             else:
-                full.to_csv(f'./data/selected_k/full_dataset_w_success_{id}.csv')
-                test.to_csv(f'./data/selected_k/test_dataset_w_success_{id}.csv')
+                full.to_csv(
+                    f'./data/selected_k/full_dataset_w_success_{id}.csv')
+                test.to_csv(
+                    f'./data/selected_k/test_dataset_w_success_{id}.csv')
 
 
 def load_data_dict(data_dict, setting, amine, data, set_id=0):
@@ -497,7 +499,8 @@ def random_draw(data, num_draws=5, k_size=10, x_size=10, success=False, min_succ
             draws[num_draws]['y_v'] = y_remaining
 
             # Pick x-many more experiments for non-active learning models
-            x_qry = np.random.choice(x_remaining.shape[0], size=x_size, replace=False)
+            x_qry = np.random.choice(
+                x_remaining.shape[0], size=x_size, replace=False)
             x_x = x_remaining[x_qry]
             x_y = y_remaining[x_qry]
 
@@ -514,7 +517,8 @@ def random_draw(data, num_draws=5, k_size=10, x_size=10, success=False, min_succ
     return draws
 
 
-def generate_dataset(import_function, dataset_type, data_dict, num_draws=5, train_size=10, active_learning_iter=10,
+def generate_dataset(import_function, dataset_type, data_dict, num_draws=5,
+                     train_size=10, active_learning_iter=10,
                      cross_validation=True, verbose=True):
     """Generate the dataset used for training and validation with numbers of random draws
 
@@ -589,7 +593,8 @@ def generate_dataset(import_function, dataset_type, data_dict, num_draws=5, trai
         # Randomly draw k-many amine specific experiments num_draws many times
         # Regular random draws with no success specifications
         data = (x_amine, y_amine)
-        random_draws = random_draw(data, num_draws, train_size, active_learning_iter, success=False)
+        random_draws = random_draw(data, num_draws, train_size,
+                                   active_learning_iter, success=False)
 
         # Random draws with at least one successful experiment for each amine
         if list(y_amine).count(1) < 2:
@@ -645,22 +650,28 @@ def generate_dataset(import_function, dataset_type, data_dict, num_draws=5, trai
 
             # Load corresponding data into dictionary
             data = (x_agg, y_agg, x_amine, y_amine, x_amine, y_amine)
-            setting = (dataset_type, 'w/o_AL', 'w/_hx', 'w/_k', 'w/_x', 'random')
-            data_dict = load_data_dict(data_dict, setting, amine, data, set_id=i)
+            setting = (dataset_type, 'w/o_AL', 'w/_hx',
+                       'w/_k', 'w/_x', 'random')
+            data_dict = load_data_dict(
+                data_dict, setting, amine, data, set_id=i)
 
             # CATEGORY 4(ii):
             # Full dataset using k + x amine only experiments W/O ACTIVE LEARNING
             # Regular random draw with no success specification
             # Load corresponding data into dictionary
             data = (x_qry, y_qry, x_amine, y_amine, x_amine, y_amine)
-            setting = (dataset_type, 'w/o_AL', 'w/o_hx', 'w/_k', 'w/_x', 'random')
-            data_dict = load_data_dict(data_dict, setting, amine, data, set_id=i)
+            setting = (dataset_type, 'w/o_AL', 'w/o_hx',
+                       'w/_k', 'w/_x', 'random')
+            data_dict = load_data_dict(
+                data_dict, setting, amine, data, set_id=i)
 
             # Regular random draw with at least one success each
             # Load corresponding data into dictionary
             data = (x_qry_s, y_qry_s, x_amine, y_amine, x_amine, y_amine)
-            setting = (dataset_type, 'w/o_AL', 'w/o_hx', 'w/_k', 'w/_x', 'w/_success')
-            data_dict = load_data_dict(data_dict, setting, amine, data, set_id=i)
+            setting = (dataset_type, 'w/o_AL', 'w/o_hx',
+                       'w/_k', 'w/_x', 'w/_success')
+            data_dict = load_data_dict(
+                data_dict, setting, amine, data, set_id=i)
 
             # CATEGORY 5(i):
             # Full dataset using historical + k experiments W/ ACTIVE LEARNING
@@ -670,22 +681,28 @@ def generate_dataset(import_function, dataset_type, data_dict, num_draws=5, trai
 
             # Load corresponding data into dictionary
             data = (x_agg, y_agg, x_v, y_v, x_amine, y_amine)
-            setting = (dataset_type, 'w/_AL', 'w/_hx', 'w/_k', 'w/o_x', 'random')
-            data_dict = load_data_dict(data_dict, setting, amine, data, set_id=i)
+            setting = (dataset_type, 'w/_AL', 'w/_hx',
+                       'w/_k', 'w/o_x', 'random')
+            data_dict = load_data_dict(
+                data_dict, setting, amine, data, set_id=i)
 
             # Category 5(b):
             # Full dataset using k amine only experiments W/ ACTIVE LEARNING
             # Regular random draw with no success specification
             # Load corresponding data into dictionary
             data = (k_x, k_y, x_v, y_v, x_amine, y_amine)
-            setting = (dataset_type, 'w/_AL', 'w/o_hx', 'w/_k', 'w/o_x', 'random')
-            data_dict = load_data_dict(data_dict, setting, amine, data, set_id=i)
+            setting = (dataset_type, 'w/_AL', 'w/o_hx',
+                       'w/_k', 'w/o_x', 'random')
+            data_dict = load_data_dict(
+                data_dict, setting, amine, data, set_id=i)
 
             # Regular random draw with at least one success each
             # Load corresponding data into dictionary
             data = (k_x_s, k_y_s, x_v_s, y_v_s, x_amine, y_amine)
-            setting = (dataset_type, 'w/_AL', 'w/o_hx', 'w/_k', 'w/o_x', 'w/_success')
-            data_dict = load_data_dict(data_dict, setting, amine, data, set_id=i)
+            setting = (dataset_type, 'w/_AL', 'w/o_hx',
+                       'w/_k', 'w/o_x', 'w/_success')
+            data_dict = load_data_dict(
+                data_dict, setting, amine, data, set_id=i)
 
     return data_dict
 
@@ -773,26 +790,31 @@ def process_dataset(num_draw=5, train_size=10, active_learning_iter=10, verbose=
     if not active_learning:
         if w_hx:
             if not w_k:
-                print('Training category 3 models with historical data only and no active learning.')
+                print(
+                    'Training "H" models with historical data only and no active learning.')
                 w_x_setting = 'w/o_x'
             else:
-                print('Training category 4(i) models with historical data, k+x amine data and no active learning.')
+                print(
+                    'Training "Hkx" models with historical data, k+x amine data and no active learning.')
                 w_x_setting = 'w/_x'
         else:
-            print('Training category 4(ii) models with k+x amine data only and no active learning.')
+            print('Training "kx" models with k+x amine data only and no active learning.')
             w_x_setting = 'w/_x'
     else:
         if w_hx:
-            print('Training category 5(i) models with historical data, k amine data, and active learning.')
+            print(
+                'Training "ALHk" models with historical data, k amine data, and active learning.')
             w_x_setting = 'w/o_x'
         else:
-            print('Training category 5(ii) models with k amine data only and active learning.')
+            print('Training "ALk" models with k amine data only and active learning.')
             w_x_setting = 'w/o_x'
 
     if not active_learning and w_hx and not w_k:
-        setting = (dataset_size_setting, active_learning_setting, w_hx_setting, w_k_setting, w_x_setting)
+        setting = (dataset_size_setting, active_learning_setting,
+                   w_hx_setting, w_k_setting, w_x_setting)
     else:
-        setting = (dataset_size_setting, active_learning_setting, w_hx_setting, w_k_setting, w_x_setting, rand_setting)
+        setting = (dataset_size_setting, active_learning_setting,
+                   w_hx_setting, w_k_setting, w_x_setting, rand_setting)
 
     return data_dict[setting]
 

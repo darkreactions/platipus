@@ -39,7 +39,7 @@ if __name__ == "__main__":
     else:
         time.sleep(5)
 
-    categories = ['category_3', 'category_4_i', 'category_5_i']
+    categories = ['H', 'Hkx', 'ALHk']
 
     orig_stdout = sys.stdout
     f = open(f'./results/out_{categories[rank]}.txt', 'w')

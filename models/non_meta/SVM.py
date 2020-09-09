@@ -70,9 +70,11 @@ def run_model(SVM_params, category):
                                 See initialize() for more information.
         category:           A string representing the category the model is classified under.
      """
-    
+
     # Unload common parameters
-    config = SVM_params['configs'][category] if SVM_params['configs'] else None
+    print(SVM_params['configs'].keys())
+
+    config = SVM_params['configs'][category] if category in SVM_params['configs'] else None
     verbose = SVM_params['verbose']
     warning = SVM_params['warning']
     stats_path = SVM_params['stats_path']
@@ -168,11 +170,11 @@ def run_model(SVM_params, category):
                     if cross_validation:
                         # Unload the randomly drawn dataset values
                         x_t, y_t, x_v, y_v, all_data, all_labels = dataset[set_id]['x_t'], \
-                                                                   dataset[set_id]['y_t'], \
-                                                                   dataset[set_id]['x_v'], \
-                                                                   dataset[set_id]['y_v'], \
-                                                                   dataset[set_id]['all_data'], \
-                                                                   dataset[set_id]['all_labels']
+                            dataset[set_id]['y_t'], \
+                            dataset[set_id]['x_v'], \
+                            dataset[set_id]['y_v'], \
+                            dataset[set_id]['all_data'], \
+                            dataset[set_id]['all_labels']
 
                         # Load the training and validation set into the model
                         ASVM.load_dataset(
@@ -190,7 +192,8 @@ def run_model(SVM_params, category):
 
                         # Conduct active learning with all the observations available in the pool
                         if active_learning:
-                            ASVM.active_learning(num_iter=active_learning_iter, warning=warning)
+                            ASVM.active_learning(
+                                num_iter=active_learning_iter, warning=warning)
 
                 if to_file:
                     ASVM.store_metrics_to_file()

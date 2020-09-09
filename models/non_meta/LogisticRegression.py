@@ -48,7 +48,8 @@ class ActiveLogisticRegression(ActiveLearningClassifier):
         if config:
             self.model = LogisticRegression(**config)
         else:
-            self.model = LogisticRegression(penalty='l2', dual=False, tol=1e-4, C=1.0, solver='lbfgs', max_iter=6000)
+            self.model = LogisticRegression(
+                penalty='l2', dual=False, tol=1e-4, C=1.0, solver='lbfgs', max_iter=6000)
 
 
 def run_model(LogisticRegression_params, category):
@@ -86,7 +87,8 @@ def run_model(LogisticRegression_params, category):
     to_file = True
 
     if fine_tuning:
-        class_weights = [{0: i, 1: 1.0 - i} for i in np.linspace(.05, .95, num=50)]
+        class_weights = [{0: i, 1: 1.0 - i}
+                         for i in np.linspace(.05, .95, num=50)]
         class_weights.append('balanced')
         class_weights.append(None)
 
@@ -148,20 +150,22 @@ def run_model(LogisticRegression_params, category):
                 for set_id in draws:
                     # Unload the randomly drawn dataset values
                     x_t, y_t, x_v, y_v, all_data, all_labels = dataset[set_id]['x_t'], \
-                                                               dataset[set_id]['y_t'], \
-                                                               dataset[set_id]['x_v'], \
-                                                               dataset[set_id]['y_v'], \
-                                                               dataset[set_id]['all_data'], \
-                                                               dataset[set_id]['all_labels']
+                        dataset[set_id]['y_t'], \
+                        dataset[set_id]['x_v'], \
+                        dataset[set_id]['y_v'], \
+                        dataset[set_id]['all_data'], \
+                        dataset[set_id]['all_labels']
                     # Load the training and validation set into the model
-                    ALR.load_dataset(set_id, x_t[amine], y_t[amine], x_v[amine], y_v[amine], all_data[amine], all_labels[amine])
+                    ALR.load_dataset(
+                        set_id, x_t[amine], y_t[amine], x_v[amine], y_v[amine], all_data[amine], all_labels[amine])
 
                     # Train the data on the training set
                     ALR.train(warning=warning)
 
                     # Conduct active learning with all the observations available in the pool
                     if active_learning:
-                        ALR.active_learning(num_iter=active_learning_iter, warning=warning)
+                        ALR.active_learning(
+                            num_iter=active_learning_iter, warning=warning)
 
                 if to_file:
                     ALR.store_metrics_to_file()

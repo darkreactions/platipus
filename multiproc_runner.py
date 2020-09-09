@@ -49,7 +49,8 @@ def main():
     print(results_folder)
 
     # Listing the categories of experiments we are running
-    categories = ['category_3', 'category_4_i', 'category_4_ii', 'category_5_i', 'category_5_ii']
+    categories = ['H', 'Hkx',
+                  'kx', 'ALHk', 'ALk']
     models_and_params = [
         ('KNN', 'knn_params'),
         ('SVM', 'svm_params'),
@@ -61,7 +62,7 @@ def main():
 
 
 if __name__ == '__main__':
-  
+
     # List of arguments to run desired models
     configs = [
         (result_data, model_and_params[0], model_and_params[1], category)

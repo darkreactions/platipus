@@ -31,7 +31,8 @@ class ActiveKNN(ActiveLearningClassifier):
         learner:            An ActiveLearner to conduct active learning with. See modAL documentation for more details.
     """
 
-    def __init__(self, amine=None, config=None, verbose=True, stats_path=Path('./results/stats.pkl'), result_dict=None,
+    def __init__(self, amine=None, config=None, verbose=True,
+                 stats_path=Path('./results/stats.pkl'), result_dict=None,
                  classifier_name='KNN', model_name='KNN'):
         """Initialize the ActiveKNN object."""
         super().__init__(
@@ -138,11 +139,11 @@ def run_model(KNN_params, category):
             for set_id in draws:
                 # Unload the randomly drawn dataset values
                 x_t, y_t, x_v, y_v, all_data, all_labels = dataset[set_id]['x_t'], \
-                                                           dataset[set_id]['y_t'], \
-                                                           dataset[set_id]['x_v'], \
-                                                           dataset[set_id]['y_v'], \
-                                                           dataset[set_id]['all_data'], \
-                                                           dataset[set_id]['all_labels']
+                    dataset[set_id]['y_t'], \
+                    dataset[set_id]['x_v'], \
+                    dataset[set_id]['y_v'], \
+                    dataset[set_id]['all_data'], \
+                    dataset[set_id]['all_labels']
 
                 # Load the training and validation set into the model
                 KNN.load_dataset(set_id, x_t[amine], y_t[amine], x_v[amine], y_v[amine], all_data[amine],
@@ -153,7 +154,8 @@ def run_model(KNN_params, category):
 
                 # Conduct active learning with all the observations available in the pool
                 if active_learning:
-                    KNN.active_learning(num_iter=active_learning_iter, warning=warning)
+                    KNN.active_learning(
+                        num_iter=active_learning_iter, warning=warning)
 
             if to_file:
                 KNN.store_metrics_to_file()

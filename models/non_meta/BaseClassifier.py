@@ -4,7 +4,8 @@ import pickle
 
 from modAL.models import ActiveLearner
 import numpy as np
-from sklearn.metrics import confusion_matrix
+from sklearn.metrics import (confusion_matrix, recall_score, accuracy_score,
+                             precision_score, balanced_accuracy_score)
 
 
 class ActiveLearningClassifier:
@@ -74,7 +75,8 @@ class ActiveLearningClassifier:
     def train(self, warning=True):
         """Train the KNN model by setting up the ActiveLearner."""
 
-        self.learner = ActiveLearner(estimator=self.model, X_training=self.x_t, y_training=self.y_t)
+        self.learner = ActiveLearner(
+            estimator=self.model, X_training=self.x_t, y_training=self.y_t)
         # Evaluate zero-point performance
         self.evaluate(warning=warning)
 
@@ -98,13 +100,15 @@ class ActiveLearningClassifier:
             query_index, query_instance = self.learner.query(self.x_v)
 
             # Teach our ActiveLearner model the record it has requested.
-            uncertain_data, uncertain_label = self.x_v[query_index].reshape(1, -1), self.y_v[query_index].reshape(1, )
+            uncertain_data, uncertain_label = self.x_v[query_index].reshape(
+                1, -1), self.y_v[query_index].reshape(1, )
             self.learner.teach(X=uncertain_data, y=uncertain_label)
 
             self.evaluate(warning=warning)
 
             # Remove the queried instance from the unlabeled pool.
-            self.x_t = np.append(self.x_t, uncertain_data).reshape(-1, self.all_data.shape[1])
+            self.x_t = np.append(
+                self.x_t, uncertain_data).reshape(-1, self.all_data.shape[1])
             self.y_t = np.append(self.y_t, uncertain_label)
             self.x_v = np.delete(self.x_v, query_index, axis=0)
             self.y_v = np.delete(self.y_v, query_index)
@@ -127,16 +131,23 @@ class ActiveLearningClassifier:
         cm = confusion_matrix(self.all_labels, self.y_preds)
 
         # To prevent nan value for precision, we set it to 1 and send out a warning message
+        """
         if cm[1][1] + cm[0][1] != 0:
             precision = cm[1][1] / (cm[1][1] + cm[0][1])
         else:
             precision = 1.0
             if warning:
                 print('WARNING: zero division during precision calculation')
+        """
+        precision = precision_score(
+            self.all_labels, self.y_preds, zero_division=1)
 
-        recall = cm[1][1] / (cm[1][1] + cm[1][0])
-        true_negative = cm[0][0] / (cm[0][0] + cm[0][1])
-        bcr = 0.5 * (recall + true_negative)
+        #recall = cm[1][1] / (cm[1][1] + cm[1][0])
+        #true_negative = cm[0][0] / (cm[0][0] + cm[0][1])
+        #bcr = 0.5 * (recall + true_negative)
+        recall = recall_score(self.all_labels, self.y_preds, zero_division=1)
+        bcr = balanced_accuracy_score(
+            self.all_labels, self.y_preds)
 
         if store:
             self.store_metrics_to_model(cm, accuracy, precision, recall, bcr)
@@ -182,11 +193,13 @@ class ActiveLearningClassifier:
             lst_of_metrics = []
             for set_id in rand_draws:
                 lst_of_metrics.append(self.metrics[set_id][metric])
-            self.metrics['average'][metric] = list(np.average(lst_of_metrics, axis=0))
+            self.metrics['average'][metric] = list(
+                np.average(lst_of_metrics, axis=0))
 
         lst_of_confusion_matrices = []
         for set_id in rand_draws:
-            lst_of_confusion_matrices.append(self.metrics[set_id]['confusion_matrices'])
+            lst_of_confusion_matrices.append(
+                self.metrics[set_id]['confusion_matrices'])
         self.metrics['average']['confusion_matrices'] = lst_of_confusion_matrices
 
     def store_metrics_to_file(self):
@@ -216,10 +229,12 @@ class ActiveLearningClassifier:
             stats_dict[model] = defaultdict(list)
 
         stats_dict[model]['amine'].append(self.amine)
-        stats_dict[model]['accuracies'].append(self.metrics['average']['accuracies'])
+        stats_dict[model]['accuracies'].append(
+            self.metrics['average']['accuracies'])
         stats_dict[model]['confusion_matrices'].append(
             self.metrics['average']['confusion_matrices'])
-        stats_dict[model]['precisions'].append(self.metrics['average']['precisions'])
+        stats_dict[model]['precisions'].append(
+            self.metrics['average']['precisions'])
         stats_dict[model]['recalls'].append(self.metrics['average']['recalls'])
         stats_dict[model]['bcrs'].append(self.metrics['average']['bcrs'])
 
@@ -235,7 +250,8 @@ class ActiveLearningClassifier:
         dst_root = './data/{}/{}'.format(self.classifier_name, self.model_name)
         if not os.path.exists(dst_root):
             os.makedirs(dst_root)
-            print(f'No folder for {self.classifier_name} model {self.model_name} storage found')
+            print(
+                f'No folder for {self.classifier_name} model {self.model_name} storage found')
             print(f'Make folder to store model at')
 
         # Dump the model into the designated folder

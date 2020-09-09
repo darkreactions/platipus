@@ -24,7 +24,7 @@
    * [Future Work](#to-be-continued)
 
 ## Introduction
-This is the machine learning model repository of [Dark Reactions Project](https://darkreactions.haverford.edu/) to learn about the experimental data collected from the chemists and provide insights on the direction of future experiments. On top of the traditional machine learning models, this repository is using meta-learning models such as MAML and PLATIPUS to predict the experimental outcomes more accurately. The use of this repository extends to the interpretability project and the recommendation system as well. 
+This is the machine learning model repository related to the [Dark Reactions Project](https://darkreactions.haverford.edu/) to learn about the experimental data collected from the chemists and provide insights on the direction of future experiments. On top of the traditional machine learning models, this repository is using meta-learning models such as MAML and PLATIPUS to predict the experimental outcomes more accurately. The use of this repository extends to the interpretability project and the recommendation system as well. 
 
 ### Experimental Plan
 Currently, we are using "0057.perovskitedata_DRPFeatures_2020-07-02.csv" as the raw historical dataset. Within the dataset, **all the experiments of 16 amines with uniform distribution and at least one successful experiment are selected as historical data**. 
@@ -33,7 +33,7 @@ Excluding the distribution header (column name: <span>_raw_modelname</span>), th
 
 As of August 1, the experimental procedure is as follows:  
    1.  First, establish the definitions of the following categories before generating the corresponding training set variants for the dataset:
-      <ul>
+   <ul>
       <li> **Category 3**: Models trained on **historical data only with no active learning involved**. In other words, each task/amine-specific is trained on all the experiments of the other 15 amines prior to validation.  
          Models include: kNN, SVM, Decision Tree, Random Forest, Logistic Regression, Gradient Boosting Tree.  
          (May include NN in the future)
@@ -56,7 +56,7 @@ As of August 1, the experimental procedure is as follows:
          Models include: kNN, SVM, Decision Tree, Random Forest, Logistic Regression, Gradient Boosting Tree.  
          **NOTE**: SVM, Logistic Regression and Gradient Boosting Tree are using a slightly different set of data under this category. For more details, see portion on creating the dataset.
       </li>  
-      </ul>
+   </ul>
       **As of now, k is set to 10 and x is set to 10.**
       
    2. Create the dataset for each amine in the following steps:  
@@ -238,21 +238,21 @@ Follow step 2 to 7 above, with a slightly different step 4: either use venv and 
 │   │   ├── PLATIPUS.png
 │   │   ├── Random_Forest.png
 │   │   └── SVM.png
-│   ├── category_3: the 4-plot graphs of models of category 3.
-│   │   ├── average_metrics_category_3.png
+│   ├── H: the 4-plot graphs of models of category 3.
+│   │   ├── average_metrics_H.png
 │   │   ├── amine-specific model graphs
-│   ├── category_4: the 4-plot graphs of models of category 4.1 and 4.2.
+│   ├── nonAL: the 4-plot graphs of models of category 4.1 and 4.2.
 │   │   ├── average_metrics_category_4.png
 │   │   ├── amine-specific model graphs
-│   ├── category_5: the 4-plot graphs of models of category 5.1 and 5.2.
-│   │   ├── average_metrics_category_5.png
+│   ├── AL: the 4-plot graphs of models of category 5.1 and 5.2.
+│   │   ├── average_metrics_AL.png
 │   │   ├── amine-specific model graphs
 │   ├── success_rate: the 2-plot graphs of all models and of models under each category. 
 │   │   │             The two plots are: BCR vs. Success Volume and BCR vs. Success Percentage. 
 │   │   ├── bcr_against_all.png
-│   │   ├── bcr_against_success_category_3.png
+│   │   ├── bcr_against_success_H.png
 │   │   ├── bcr_against_success_category_4.png
-│   │   └── bcr_against_success_category_5.png
+│   │   └── bcr_against_success_AL.png
 │   ├── cv_statistics.pkl: the pkl file that contains all the model performance statistics.
 │   └── winning_models.png: the 4-plot graph of models with the highest AUC of BCR in each sub-category. 
 │                            PLATIPUS is alwasy included.

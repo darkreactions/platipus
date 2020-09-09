@@ -1,12 +1,14 @@
 import os
 
-from models.non_meta import RandomForest, KNN, SVM, DecisionTree, LogisticRegression, GradientBoosting
+from models.non_meta import (RandomForest, KNN, SVM, DecisionTree,
+                             LogisticRegression, GradientBoosting)
 from utils.plot import plot_all_graphs
 from utils import read_pickle, run_non_meta_model
-from model_params import common_params, knn_params, svm_params, randomforest_params, \
-    logisticregression_params, decisiontree_params, gradientboosting_params, meta_train, meta_test
+from model_params import (common_params, knn_params, svm_params,
+                          randomforest_params, logisticregression_params,
+                          decisiontree_params, gradientboosting_params)
 
-if __name__ == '__main__':
+if True:
     # Set up the results directory
     results_folder = './results'
 
@@ -26,7 +28,8 @@ if __name__ == '__main__':
         os.remove(cv_stats_dst)
 
     # Listing the categories of experiments we are running
-    categories = ['category_3', 'category_4_i', 'category_4_ii', 'category_5_i', 'category_5_ii']
+    categories = ['H', 'Hkx',
+                  'kx', 'ALHk', 'ALk']
 
     # Meta-models
     # PLATIPUS
@@ -51,6 +54,7 @@ if __name__ == '__main__':
         )
 
     # SVM
+    """
     base_model = SVM
     model_params = svm_params
     for category in categories:
@@ -63,16 +67,17 @@ if __name__ == '__main__':
                 model_params,
                 category
             )
-        else:
-            # Use random drawn datasets with at least one success for
-            # categories that few sufficient successful experiments for training
-            run_non_meta_model(
-                base_model,
-                common_params,
-                model_params,
-                category,
-                success=True
-            )
+    """
+    # else:
+    # Use random drawn datasets with at least one success for
+    # categories that few sufficient successful experiments for training
+    #    run_non_meta_model(
+    #        base_model,
+    #        common_params,
+    #        model_params,
+    #        category,
+    #        success=True
+    #    )
 
     # DecisionTree
     base_model = DecisionTree
@@ -144,7 +149,7 @@ if __name__ == '__main__':
                 success=True
             )
 
+if __name__ == '__main__':
     # Use cv_stats.pkl to plot all graphs
     cv_stats = read_pickle(common_params['stats_path'])
     plot_all_graphs(cv_stats)
-
