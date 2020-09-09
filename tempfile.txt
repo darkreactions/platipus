@@ -1,0 +1,94 @@
+H random svc : break_ties must be False when decision_function_shape is 'ovo'
+H random svc : break_ties must be False when decision_function_shape is 'ovo'
+H success svc : break_ties must be False when decision_function_shape is 'ovo'
+H random svc : break_ties must be False when decision_function_shape is 'ovo'
+H random svc : break_ties must be False when decision_function_shape is 'ovo'
+H random svc : break_ties must be False when decision_function_shape is 'ovo'
+H success svc : break_ties must be False when decision_function_shape is 'ovo'
+H success svc : break_ties must be False when decision_function_shape is 'ovo'
+H success svc : break_ties must be False when decision_function_shape is 'ovo'
+H success svc : break_ties must be False when decision_function_shape is 'ovo'
+H success svc : break_ties must be False when decision_function_shape is 'ovo'
+H random svc : break_ties must be False when decision_function_shape is 'ovo'
+
+Hkx random svc : break_ties must be False when decision_function_shape is 'ovo'
+Hkx random svc : break_ties must be False when decision_function_shape is 'ovo'
+
+kx success svc : break_ties must be False when decision_function_shape is 'ovo'
+kx random lr : This solver needs samples of at least 2 classes in the data, but the data contains only one class: 0
+kx success lr : penalty='none' is not supported for the liblinear solver
+kx random dt : Class label 1 not present.
+kx random dt : Class label 1 not present.
+kx random gbc : y contains 1 class after sample_weight trimmed classes with zero weights, while a minimum of 2 classes are required.
+kx random gbc : y contains 1 class after sample_weight trimmed classes with zero weights, while a minimum of 2 classes are required.
+kx random gbc : y contains 1 class after sample_weight trimmed classes with zero weights, while a minimum of 2 classes are required.
+kx random lr : penalty='none' is not supported for the liblinear solver
+kx random lr : This solver needs samples of at least 2 classes in the data, but the data contains only one class: 0
+kx random lr : This solver needs samples of at least 2 classes in the data, but the data contains only one class: 0
+kx random rf : Class label 1 not present.
+kx random rf : Class label 1 not present.
+kx random svc : break_ties must be False when decision_function_shape is 'ovo'
+kx random svc : break_ties must be False when decision_function_shape is 'ovo'
+kx random svc : Class label 1 not present.
+kx success lr : penalty='none' is not supported for the liblinear solver
+kx success svc : break_ties must be False when decision_function_shape is 'ovo'
+kx success svc : break_ties must be False when decision_function_shape is 'ovo'
+kx success svc : break_ties must be False when decision_function_shape is 'ovo'
+kx random dt : Class label 1 not present.
+kx success svc : break_ties must be False when decision_function_shape is 'ovo'
+kx random lr : This solver needs samples of at least 2 classes in the data, but the data contains only one class: 0
+
+
+Launcher: Job 19 completed in 5 seconds.
+Launcher: Job 20 completed in 5 seconds.
+Launcher: Job 21 completed in 5 seconds.
+Launcher: Job 22 completed in 5 seconds.
+Launcher: Job 23 completed in 5 seconds.
+Launcher: Job 24 completed in 5 seconds.
+Launcher: Setup complete.
+Launcher: Starting parallel tasks...
+Launcher: Task 0 running job 18 on c476-041.stampede2.tacc.utexas.edu (python3 -m fine_tuning.all_fine_tune Hkx random dt)
+Launcher: Task 10 done. Exiting.
+Launcher: Task 10 running job 7 on c476-041.stampede2.tacc.utexas.edu (python3 -m fine_tuning.all_fine_tune H success knn)
+Launcher: Task 11 done. Exiting.
+Launcher: Task 11 running job 25 on c476-041.stampede2.tacc.utexas.edu (python3 -m fine_tuning.all_fine_tune kx random knn)
+Launcher: Task 12 running job 10 on c476-041.stampede2.tacc.utexas.edu (python3 -m fine_tuning.all_fine_tune H success lr)
+Launcher: Task 13 done. Exiting.
+Launcher: Task 13 running job 13 on c476-041.stampede2.tacc.utexas.edu (python3 -m fine_tuning.all_fine_tune Hkx random knn)
+Launcher: Task 14 running job 8 on c476-041.stampede2.tacc.utexas.edu (python3 -m fine_tuning.all_fine_tune H success svc)
+Launcher: Task 15 running job 4 on c476-041.stampede2.tacc.utexas.edu (python3 -m fine_tuning.all_fine_tune H random lr)
+Launcher: Task 16 running job 35 on c476-041.stampede2.tacc.utexas.edu (python3 -m fine_tuning.all_fine_tune kx success gbc)
+Launcher: Task 17 running job 3 on c476-041.stampede2.tacc.utexas.edu (python3 -m fine_tuning.all_fine_tune H random rf)
+Launcher: Task 18 running job 20 on c476-041.stampede2.tacc.utexas.edu (python3 -m fine_tuning.all_fine_tune Hkx success svc)
+Launcher: Task 18 running job 29 on c476-041.stampede2.tacc.utexas.edu (python3 -m fine_tuning.all_fine_tune kx random gbc)
+Launcher: Task 1 running job 16 on c476-041.stampede2.tacc.utexas.edu (python3 -m fine_tuning.all_fine_tune Hkx random lr)
+Launcher: Task 21 running job 22 on c476-041.stampede2.tacc.utexas.edu (python3 -m fine_tuning.all_fine_tune Hkx success lr)
+Launcher: Task 21 running job 28 on c476-041.stampede2.tacc.utexas.edu (python3 -m fine_tuning.all_fine_tune kx random lr)
+Launcher: Task 22 done. Exiting.
+Launcher: Task 22 running job 1 on c476-041.stampede2.tacc.utexas.edu (python3 -m fine_tuning.all_fine_tune H random knn)
+Launcher: Task 23 running job 24 on c476-041.stampede2.tacc.utexas.edu (python3 -m fine_tuning.all_fine_tune Hkx success dt)
+Launcher: Task 23 running job 32 on c476-041.stampede2.tacc.utexas.edu (python3 -m fine_tuning.all_fine_tune kx success svc)
+Launcher: Task 24 running job 23 on c476-041.stampede2.tacc.utexas.edu (python3 -m fine_tuning.all_fine_tune Hkx success gbc)
+Launcher: Task 24 running job 30 on c476-041.stampede2.tacc.utexas.edu (python3 -m fine_tuning.all_fine_tune kx random dt)
+Launcher: Task 28 done. Exiting.
+Launcher: Task 28 running job 21 on c476-041.stampede2.tacc.utexas.edu (python3 -m fine_tuning.all_fine_tune Hkx success rf)
+Launcher: Task 28 running job 31 on c476-041.stampede2.tacc.utexas.edu (python3 -m fine_tuning.all_fine_tune kx success knn)
+Launcher: Task 29 running job 11 on c476-041.stampede2.tacc.utexas.edu (python3 -m fine_tuning.all_fine_tune H success gbc)
+Launcher: Task 2 running job 33 on c476-041.stampede2.tacc.utexas.edu (python3 -m fine_tuning.all_fine_tune kx success rf)
+Launcher: Task 30 running job 15 on c476-041.stampede2.tacc.utexas.edu (python3 -m fine_tuning.all_fine_tune Hkx random rf)
+Launcher: Task 31 running job 6 on c476-041.stampede2.tacc.utexas.edu (python3 -m fine_tuning.all_fine_tune H random dt)
+Launcher: Task 32 running job 26 on c476-041.stampede2.tacc.utexas.edu (python3 -m fine_tuning.all_fine_tune kx random svc)
+Launcher: Task 34 running job 2 on c476-041.stampede2.tacc.utexas.edu (python3 -m fine_tuning.all_fine_tune H random svc)
+Launcher: Task 35 running job 12 on c476-041.stampede2.tacc.utexas.edu (python3 -m fine_tuning.all_fine_tune H success dt)
+Launcher: Task 3 running job 19 on c476-041.stampede2.tacc.utexas.edu (python3 -m fine_tuning.all_fine_tune Hkx success knn)
+Launcher: Task 3 running job 27 on c476-041.stampede2.tacc.utexas.edu (python3 -m fine_tuning.all_fine_tune kx random rf)
+Launcher: Task 4 running job 17 on c476-041.stampede2.tacc.utexas.edu (python3 -m fine_tuning.all_fine_tune Hkx random gbc)
+Launcher: Task 5 running job 5 on c476-041.stampede2.tacc.utexas.edu (python3 -m fine_tuning.all_fine_tune H random gbc)
+Launcher: Task 6 running job 14 on c476-041.stampede2.tacc.utexas.edu (python3 -m fine_tuning.all_fine_tune Hkx random svc)
+Launcher: Task 7 running job 9 on c476-041.stampede2.tacc.utexas.edu (python3 -m fine_tuning.all_fine_tune H success rf)
+Launcher: Task 8 running job 34 on c476-041.stampede2.tacc.utexas.edu (python3 -m fine_tuning.all_fine_tune kx success lr)
+Launcher: Job 31 completed in 1845 seconds.
+Launcher: Job 7 completed in 6663 seconds.
+Launcher: Job 13 completed in 2747 seconds.
+Launcher: Job 1 completed in 6348 seconds.
+Launcher: Job 25 completed in 1855 seconds.

@@ -9,3 +9,5 @@ MAML_*/
 .vscode/
 *.ipynb
 results/
+platipus.e*
+platipus.o*

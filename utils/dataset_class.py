@@ -659,7 +659,7 @@ class DataSet:
             if setting in self.data_dict:
                 return self.data_dict[setting]
             else:
-                print("Setting not found")
+                print(f"Setting not found: {setting}")
         else:
             return None
 
