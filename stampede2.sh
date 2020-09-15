@@ -2,10 +2,10 @@
 #SBATCH -J platipus           # Job name
 #SBATCH -o platipus.o%j       # Name of stdout output file
 #SBATCH -e platipus.e%j       # Name of stderr error file
-#SBATCH -p skx-normal 	          # Queue (partition) name
+#SBATCH -p normal 	          # Queue (partition) name
 #SBATCH -N 1               # Total # of nodes 
-#SBATCH -n 6              # Total # of mpi tasks
-#SBATCH -t 8:00:00        # Run time (hh:mm:ss)
+#SBATCH -n 36              # Total # of mpi tasks
+#SBATCH -t 24:00:00        # Run time (hh:mm:ss)
 #SBATCH --mail-user=vshekar@haverford.edu
 #SBATCH --mail-type=all    # Send email at begin and end of job
 

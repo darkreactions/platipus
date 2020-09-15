@@ -146,6 +146,7 @@ if __name__ == '__main__':
     # al_categories = ['ALHk', 'ALk']
     # selection = ['random', 'success']
     sk_model, combinations = model_decoder(model_name)
+    all_results = []
 
     for combo in combinations:
         result = Results(al=False, category=cat, total_sets=dataset.num_draws,
@@ -154,8 +155,6 @@ if __name__ == '__main__':
         for set_id in range(dataset.num_draws):
             data = dataset.get_dataset(cat, set_id, selection)
             model = sk_model(**combo)
-
-            
 
             amines = list(data.keys())
             for a in range(len(amines)):
