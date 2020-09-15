@@ -603,7 +603,7 @@ class DataSet:
                 # 5(i) for meta models
                 # data = (x_h_meta, y_h_meta, x_v, y_v, x_amine_meta, y_amine_meta,
                 #        k_x, k_y)
-                data_splits = ['x_t', 'y_t', 'x_vk', 'y_vk', 'x_vx', 'y_vx'
+                data_splits = ['x_t', 'y_t', 'x_vk', 'y_vk', 'x_vx', 'y_vx',
                                'x_vrem', 'y_vrem', 'x_v', 'y_v']
                 data = (x_h_meta, y_h_meta, x_vk, y_vk, x_vx, y_vx,
                         x_vrem, y_vrem, x_v, y_v)

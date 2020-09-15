@@ -4,9 +4,14 @@ from pathlib import Path
 from utils import create_stats_dict, load_chem_dataset, save_model, write_pickle
 
 from models.meta.main import initialzie_theta_platipus, set_optim_platipus
+from utils.dataset_class import DataSet, Setting
+import pickle
 
 
 def init_params(args):
+    with open('./data/full_frozen_dataset.pkl', 'rb') as f:
+        dataset = pickle.load(f)
+
     params = {**args}
     gpu_id = params.get('gpu_id', 0)
     # Set up training using either GPU or CPU
@@ -75,7 +80,9 @@ def init_params(args):
     params['training_batches'] = training_batches
     params['testing_batches'] = testing_batches
     params['counts'] = counts
+
     # Save for reproducibility
+
     write_pickle(params['dst_folder'] /
                  Path("train_dump.pkl"), training_batches)
     write_pickle(params['dst_folder'] /

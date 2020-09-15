@@ -5,9 +5,11 @@ __pycache__/
 .ipynb_checkpoints/
 running_logs*/
 PLATIPUS_*/
+Platipus_*/
 MAML_*/
 .vscode/
 *.ipynb
 results/
 platipus.e*
 platipus.o*
+*.log
