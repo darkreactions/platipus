@@ -15,6 +15,7 @@ import numpy as np
 
 from utils.dataset_class import DataSet, Setting
 from utils.result_class import Results
+from sklearn.preprocessing import StandardScaler
 
 
 def knn_params():
@@ -132,7 +133,9 @@ def model_decoder(model_name):
         'rf': (RandomForestClassifier, get_combos(rf_params())),
         'lr': (LogisticRegression, get_combos(lr_params())),
         'gbc': (GradientBoostingClassifier, get_combos(gbc_params())),
-        'dt': (DecisionTreeClassifier, get_combos(dt_params()))
+        'dt': (DecisionTreeClassifier, get_combos(dt_params())),
+        'knn_single': (KNeighborsClassifier, [{'n_neighbors': 1, 'leaf_size': 1, 'p': 1}]),
+        'gbc_single': (GradientBoostingClassifier, [{'loss': 'deviance', 'learning_rate': 0.1, 'n_estimators': 100, 'criterion': 'mae', 'max_depth': 4, 'max_features': 'log2', 'min_samples_leaf': 2, 'min_samples_split': 5, 'ccp_alpha': 0.0}])
     }
     return sk_models[model_name]
 
@@ -167,7 +170,10 @@ if __name__ == '__main__':
                 try:
                     learner = ActiveLearner(
                         estimator=model, X_training=d['x_t'], y_training=d['y_t'])
-                    X_pool = np.array(d['x_vrem'], copy=True)
+                    scaler = StandardScaler()
+                    scaler.fit(d['x_t'])
+
+                    X_pool = np.array(scaler.transform(d['x_vrem']), copy=True)
                     y_pool = np.array(d['y_vrem'], copy=True)
                     for x in range(10):
                         query_index, query_instance = learner.query(X_pool)
@@ -176,7 +182,7 @@ if __name__ == '__main__':
                         learner.teach(X=X, y=y)
                         X_pool, y_pool = np.delete(
                             X_pool, query_index, axis=0), np.delete(y_pool, query_index)
-                        y_pred = learner.predict(d['x_v'])
+                        y_pred = learner.predict(scaler.transform(d['x_v']))
                         result.add_result(d['y_v'], y_pred, set_id, amine)
 
                 except Exception as e:
