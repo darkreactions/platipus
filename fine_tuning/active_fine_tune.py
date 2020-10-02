@@ -151,7 +151,7 @@ if __name__ == '__main__':
     # selection = ['random', 'success']
     sk_model, combinations = model_decoder(model_name)
 
-    for combo in combinations:
+    for i, combo in enumerate(combinations):
         result = Results(al=True, category=cat, total_sets=dataset.num_draws,
                          model_name=model_name, model_setting=combo,
                          selection=selection)
@@ -191,5 +191,9 @@ if __name__ == '__main__':
 
             all_results.append(result)
 
-        pickle.dump(all_results, open(
-            f'./results/{cat}_{selection}_{model_name}_results.pkl', 'wb'))
+        if i % 100 == 0:
+            with open(f'./results/{cat}_{selection}_{model_name}_results.pkl', 'wb') as f:
+                pickle.dump(all_results, f)
+
+    with open(f'./results/{cat}_{selection}_{model_name}_results.pkl', 'wb') as f:
+                pickle.dump(all_results, f)
