@@ -563,10 +563,10 @@ class Platipus:
         dataset = pickle.load(open("./data/full_frozen_dataset.pkl", "rb"))
         data = dataset.get_dataset("metaALHk", set_id, "random")[self.amine]
 
-        scaler = StandardScaler()
-        scaler.fit(data["x_vk"])
+        # scaler = StandardScaler()
+        # scaler.fit(data["x_vk"])
 
-        data["x_vk"] = scaler.transform(data["x_vk"])
+        # data["x_vk"] = scaler.transform(data["x_vk"])
 
         x_t_test = torch.from_numpy(data["x_vk"]).float().to(self.device)
         y_t_test = torch.from_numpy(data["y_vk"]).long().to(self.device)
@@ -575,10 +575,10 @@ class Platipus:
         # Frozen dataset is a little messed up because of a missing comma
         # ['x_t', 'y_t', 'x_vk', 'y_vk', 'x_vx', 'y_vxx_vrem', 'y_vrem', 'x_v', 'y_v']
         # x_h_meta, y_h_meta, x_vk, y_vk, x_vx, y_vx, x_vrem, y_vrem, x_v, y_v
-        data = dataset.get_dataset("ALHk", set_id, "random")[self.amine]
+        # data = dataset.get_dataset("metaALHk", set_id, "random")[self.amine]
 
-        data["x_vrem"] = scaler.transform(data["x_vrem"])
-        data["x_v"] = scaler.transform(data["x_v"])
+        # data["x_vrem"] = scaler.transform(data["x_vrem"])
+        # data["x_v"] = scaler.transform(data["x_v"])
 
         x_v_test = torch.from_numpy(data["x_vrem"]).float().to(self.device)
         y_v_test = torch.from_numpy(data["y_vrem"]).long().to(self.device)
