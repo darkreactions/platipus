@@ -139,9 +139,16 @@ def model_decoder(model_name):
     }
     return sk_models[model_name]
 
+def dump_results(all_results):
+    with open(f'./results/{cat}_{selection}_{model_name}_results.pkl', 'rb') as f:
+        all_results_pkl = pickle.load(f)
+        all_results_pkl.extend(all_results)
+
+    with open(f'./results/{cat}_{selection}_{model_name}_results.pkl', 'wb') as f:
+        pickle.dump(all_results_pkl, f)
+    del all_results_pkl
 
 if __name__ == '__main__':
-    all_results = []
     cat, selection, model_name = sys.argv[1:]
 
     dataset = pickle.load(open('./data/full_frozen_dataset.pkl', 'rb'))
@@ -150,6 +157,11 @@ if __name__ == '__main__':
     # al_categories = ['ALHk', 'ALk']
     # selection = ['random', 'success']
     sk_model, combinations = model_decoder(model_name)
+
+    all_results = []
+    
+    with open(f'./results/{cat}_{selection}_{model_name}_results.pkl', 'wb') as f:
+        pickle.dump(all_results, f)
 
     for i, combo in enumerate(combinations):
         result = Results(al=True, category=cat, total_sets=dataset.num_draws,
@@ -188,12 +200,10 @@ if __name__ == '__main__':
                 except Exception as e:
                     print(f'{cat} {selection} {model_name} : {e}')
                     continue
-
-            all_results.append(result)
+            
+        all_results.append(result)
 
         if i % 100 == 0:
-            with open(f'./results/{cat}_{selection}_{model_name}_results.pkl', 'wb') as f:
-                pickle.dump(all_results, f)
-
-    with open(f'./results/{cat}_{selection}_{model_name}_results.pkl', 'wb') as f:
-                pickle.dump(all_results, f)
+            dump_results(all_results)
+            all_results = []
+    dump_results(all_results)

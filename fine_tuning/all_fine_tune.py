@@ -135,6 +135,15 @@ def model_decoder(model_name):
     }
     return sk_models[model_name]
 
+def dump_results(all_results):
+    with open(f'./results/{cat}_{selection}_{model_name}_results.pkl', 'rb') as f:
+        all_results_pkl = pickle.load(f)
+        all_results_pkl.extend(all_results)
+
+    with open(f'./results/{cat}_{selection}_{model_name}_results.pkl', 'wb') as f:
+        pickle.dump(all_results_pkl, f)
+    del all_results_pkl
+
 
 if __name__ == '__main__':
 
@@ -147,7 +156,10 @@ if __name__ == '__main__':
     # selection = ['random', 'success']
     sk_model, combinations = model_decoder(model_name)
     all_results = []
-    # print(f'Model {model_name} has {len(combinations)} combinations. Saving to file for every {int(len(combinations)*0.1)}')
+    
+    with open(f'./results/{cat}_{selection}_{model_name}_results.pkl', 'wb') as f:
+        pickle.dump(all_results, f)
+    
     for i, combo in enumerate(combinations):
         result = Results(al=False, category=cat, total_sets=dataset.num_draws,
                          model_name=model_name, model_setting=combo,
@@ -168,11 +180,10 @@ if __name__ == '__main__':
                     print(f'{cat} {selection} {model_name} : {e}')
                     continue
 
-            all_results.append(result)
+        all_results.append(result)
 
         if i % 100 == 0:
-            with open(f'./results/{cat}_{selection}_{model_name}_results.pkl', 'wb') as f:
-                pickle.dump(all_results, f)
-
-    with open(f'./results/{cat}_{selection}_{model_name}_results.pkl', 'wb') as f:
-                pickle.dump(all_results, f)
+            dump_results(all_results)
+            all_results = []
+    
+    dump_results(all_results)
