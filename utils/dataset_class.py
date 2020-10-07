@@ -256,277 +256,8 @@ class BaseDataSet(ABC):
 
         return draws
 
-    def print_config(self):
-        print(f'Dataset: {self.dataset_type}'
-              f'\nCross Validation: {self.cross_validation}'
-              f'\n Number of draws: {self.num_draws}'
-              f'\nPretrain samples(k): {self.k}'
-              f'\nActive learning steps(x): {self.x}')
-        dataset_options = {'Dataset code': ['H', 'Hkx', 'kx', 'ALHk',
-                                            'ALk', 'metaALHk'],
-                           'Description': ['Only historical data',
-                                           'Historical data and randomly \
-                                               selected k and x',
-                                           'k and x randomly selected \
-                                               experiments',
-                                           'Active learning with historical \
-                                               data and k pretraining samples',
-                                           'Active learning with only k \
-                                               pretraining samples',
-                                           'Active learning with historical \
-                                               data and k pretraining samples \
-                                                   for meta learning']}
-        dataset_description = pd.DataFrame.from_dict(dataset_options)
-        print(dataset_description)
-
-    def get_dataset(self, code, set_id, selection):
-        code_set = {'H': Setting(dataset_type=self.dataset_type,
-                                 AL=False, H=True, k=False, x=False,
-                                 set_id=None, selection=None, meta=False),
-                    'Hkx': Setting(dataset_type=self.dataset_type, meta=False,
-                                   AL=False, H=True, k=True, x=True,
-                                   set_id=set_id, selection=selection),
-                    'kx': Setting(dataset_type=self.dataset_type, meta=False,
-                                  AL=False, H=False, k=True, x=True,
-                                  set_id=set_id, selection=selection),
-                    'ALHk': Setting(dataset_type=self.dataset_type, meta=False,
-                                    AL=True, H=True, k=True, x=False,
-                                    set_id=set_id, selection=selection),
-                    'ALk': Setting(dataset_type=self.dataset_type, meta=False,
-                                   AL=True, H=False, k=True, x=False,
-                                   set_id=set_id, selection=selection),
-                    'metaALHk': Setting(dataset_type=self.dataset_type,
-                                        meta=True, AL=True, H=True, k=True,
-                                        x=False, set_id=set_id,
-                                        selection=selection),
-                    }
-        if code in code_set:
-            setting = code_set[code]
-            # print(setting)
-            if setting in self.data_dict:
-                return self.data_dict[setting]
-            else:
-                print(f"Setting not found: {setting}")
-        else:
-            return None
-
-    @abstractmethod
-    def generate_dataset(self):
-        pass
-
-
-class Phase2DataSet(BaseDataSet):
-    def _hold_out_data(self, meta=True, num_batches=250,
-                       meta_batch_size=10, k_shot=10):
-
-        training_amines = [a for a in self.viable_amines if a not in
-                           self.hold_out_amines]
-        self.df, self.amines = self._import_chemdata(training_amines)
-
-        counts = {}
-        all_train = self.df[self.df[self.amine_header].isin(self.amines)]
-        print('Number of reactions in training set', all_train.shape[0])
-        all_train_success = all_train[all_train[self.score_header] == 1]
-        print('Number of successful reactions in the training set',
-              all_train_success.shape[0])
-
-        # [Number of failed reactions, number of successful reactions]
-        counts['total'] = [all_train.shape[0] - all_train_success.shape[0],
-                           all_train_success.shape[0]]
-        amine_test_samples = {}
-        amine_training_batches = {}
-
-        if meta:
-            print('Holding out', self.phase2_amines)
-
-            available_amines = [
-                a for a in self.viable_amines if a not in self.hold_out_amines]
-            df, amines = self._import_chemdata(available_amines)
-            # Used to set up our weighted loss function
-            counts = {}
-            all_train = df[df[self.amine_header].isin(available_amines)]
-            print('Number of reactions in training set', all_train.shape[0])
-            all_train_success = all_train[all_train[self.score_header] == 1]
-            print('Number of successful reactions in the training set',
-                  all_train_success.shape[0])
-
-            counts['total'] = [all_train.shape[0] - all_train_success.shape[0],
-                               all_train_success.shape[0]]
-
-            batches = []
-            print('Generating training batches')
-            for _ in range(num_batches):
-                # t for train, v for validate (but validate is outer loop,
-                # trying to be consistent with the PLATIPUS code)
-                batch = self._generate_batch(meta_batch_size,
-                                             available_amines, self.to_exclude,
-                                             k_shot)
-                batches.append(batch)
-            for amine in self.phase2_amines:
-                amine_training_batches[amine] = batches
-        else:
-            batches = {}
-
-            counts = []
-            X = self.df
-            y = X[self.score_header].values
-
-            # Drop these columns from the dataset
-            X = X.drop(self.to_exclude, axis=1).values
-
-            # Standardize features since they are not yet standardized
-            # in the dataset
-            scaler = StandardScaler()
-            scaler.fit(X)
-            X = scaler.transform(X)
-
-            df, p2_amines = self._import_chemdata(self.phase2_amines)
-            for amine in self.phase2_amines:
-                amine_training_batches[amine] = (X, y)
-
-                X = df[df[self.amine_header] == amine]
-                y = X[self.score_header].values
-                X = X.drop(self.to_exclude, axis=1).values
-                scaler = StandardScaler()
-                scaler.fit(X)
-                X = scaler.transform(X)
-                amine_test_samples[amine] = (X, y)
-
-        return (amine_training_batches, amine_test_samples,
-                counts)
-
-    def _load_test_samples(self, hold_out_amines, df, to_exclude, k_shot,
-                           amine_header, score_header):
-        """This is a function used for loading testing samples specifically
-
-        Args:
-            hold_out_amines:    The list of all holdout amines that are used
-                                for testing.
-                                DO NOT TOUCH!
-            df:                 The data frame of the amines data
-            to_exclude:         A list. The columns in the dataset that we
-                                need to drop
-            k_shot:             An integer. The number of unseen classes in
-                                the dataset
-            amine_header:       The header of the amine list in the data frame.
-            score_header:       The header of the score header in the
-                                data frame.
-
-        return: A dictionary that contains the test sample amines' batches
-        """
-        amine_test_samples = {}
-        for a in hold_out_amines:
-            # grab task
-            X = df[df[amine_header] == a]
-
-            y = X[score_header].values
-            X = X.drop(to_exclude, axis=1).values
-            test_sample = self._generate_valid_test_batch(X, y, k_shot)
-
-            amine_test_samples[a] = test_sample
-        return amine_test_samples
-
-
-class DataSet(BaseDataSet):
-    """
-    Class to handle dataset 
-    """
-
-    def _cross_validation(self, meta=True, num_batches=250,
-                          meta_batch_size=25, k_shot=10):
-        """
-            Generates dataset for cross validation for meta and non-meta models
-            Args:
-                meta:           Bool to indicate whether model is meta or not
-                num_batches:    Number of training batches for meta learning
-                meta_batch_size:Batch size for meta learning
-                k_shot:         Number of training samples from new amine
-            Returns:
-                training_batches:   Training data based on model
-                validation_batches: Validation data for the left out amine
-                counts:             Count success in training data
-
-        """
-        amines = [a for a in self.viable_amines if a not in
-                  self.hold_out_amines]
-        self.df, self.amines = self._import_chemdata(amines)
-
-        all_train = self.df[self.df[self.amine_header].isin(self.amines)]
-        print(f'Number of reactions in training set {all_train.shape[0]}')
-        all_train_success = all_train[all_train[self.score_header] == 1]
-        print('Number of successful reactions in the training set',
-              all_train_success.shape[0])
-
-        training_data = {}
-        validation_data = {}
-        scalers = {}
-
-        for amine in self.amines:
-            # Since we are doing cross validation,
-            # create a training set without each amine
-            print(f"Generating batches for amine: {amine}")
-            available_amines = [a for a in self.amines if a != amine]
-
-            all_train = self.df[self.df[self.amine_header].isin(
-                available_amines)]
-            y = all_train[self.score_header].values
-            all_train = all_train.drop(self.to_exclude, axis=1).values
-            
-            scaler = StandardScaler()
-            scaler.fit(all_train)
-            all_train = scaler.transform(all_train)
-            training_data[amine] = (all_train, y)
-            scalers[amine] = scaler
-            
-            if meta:
-                batches = []
-                for _ in range(num_batches):
-                    # t for train, v for validate (but validate is outer loop,
-                    # trying to be consistent with the PLATIPUS code)
-                    batch = self._generate_batch(meta_batch_size,
-                                                 available_amines,
-                                                 self.to_exclude, k_shot)
-                    batches.append(batch)
-
-                training_data[amine] = batches
-            
-
-            # Now set up the cross validation data
-            val_data = self.df[self.df[self.amine_header] == amine]
-            y = val_data[self.score_header].values
-            val_data = val_data.drop(self.to_exclude, axis=1).values
-            val_data = scaler.transform(val_data)
-            cross_valid = (val_data, y)
-
-            if meta:
-                cross_valid = self._generate_valid_test_batch(val_data,
-                                                              y, k_shot, scaler)
-            validation_data[amine] = cross_valid
-
-        return (training_data, validation_data, scalers)
-
-    def generate_dataset(self, dataset_type='full', num_draws=5,
-                         k=10, x=10):
-        # Variables to query the current dataset
-        self.dataset_type = dataset_type
-        self.num_draws = num_draws
-        self.k = k
-        self.x = x
-        self.cross_validation = True
-
-        if dataset_type == 'test':
-            self.viable_amines = ['ZEVRFFCPALTVDN-UHFFFAOYSA-N',
-                                  'KFQARYBEAKAXIC-UHFFFAOYSA-N',
-                                  'NLJDBTZLVTWXRG-UHFFFAOYSA-N']
-            self.hold_out_amines = []
-
-        meta_training, m_v, counts = self._cross_validation(k_shot=x,
-                                                            meta=True)
-        training, validation, counts = self._cross_validation(k_shot=x,
-                                                              meta=False)
-
-        amines = list(training.keys())
-
+    def _categorize_data(self, amines, training, meta_training, validation,
+                         dataset_type, num_draws, k, x_size):
         data_dict = defaultdict(dict)
 
         for amine in amines:
@@ -557,7 +288,7 @@ class DataSet(BaseDataSet):
             # num_draws many times. Regular random draws with no
             # success specifications
             data = (x_v, y_v)
-            random_draws = self._random_draw(data, num_draws, k, x,
+            random_draws = self._random_draw(data, num_draws, k, x_size,
                                              success=False)
             # Random draws with at least one successful experiment for
             # each amine
@@ -566,7 +297,7 @@ class DataSet(BaseDataSet):
                     data,
                     num_draws,
                     k,
-                    x,
+                    x_size,
                     success=True,
                     min_success=1
                 )
@@ -575,7 +306,7 @@ class DataSet(BaseDataSet):
                     data,
                     num_draws,
                     k,
-                    x,
+                    x_size,
                     success=True
                 )
 
@@ -729,10 +460,280 @@ class DataSet(BaseDataSet):
         self.data_dict = data_dict
         return data_dict
 
+    def print_config(self):
+        print(f'Dataset: {self.dataset_type}'
+              f'\nCross Validation: {self.cross_validation}'
+              f'\n Number of draws: {self.num_draws}'
+              f'\nPretrain samples(k): {self.k}'
+              f'\nActive learning steps(x): {self.x}')
+        dataset_options = {'Dataset code': ['H', 'Hkx', 'kx', 'ALHk',
+                                            'ALk', 'metaALHk'],
+                           'Description': ['Only historical data',
+                                           'Historical data and randomly \
+                                               selected k and x',
+                                           'k and x randomly selected \
+                                               experiments',
+                                           'Active learning with historical \
+                                               data and k pretraining samples',
+                                           'Active learning with only k \
+                                               pretraining samples',
+                                           'Active learning with historical \
+                                               data and k pretraining samples \
+                                                   for meta learning']}
+        dataset_description = pd.DataFrame.from_dict(dataset_options)
+        print(dataset_description)
+
+    def get_dataset(self, code, set_id, selection):
+        code_set = {'H': Setting(dataset_type=self.dataset_type,
+                                 AL=False, H=True, k=False, x=False,
+                                 set_id=None, selection=None, meta=False),
+                    'Hkx': Setting(dataset_type=self.dataset_type, meta=False,
+                                   AL=False, H=True, k=True, x=True,
+                                   set_id=set_id, selection=selection),
+                    'kx': Setting(dataset_type=self.dataset_type, meta=False,
+                                  AL=False, H=False, k=True, x=True,
+                                  set_id=set_id, selection=selection),
+                    'ALHk': Setting(dataset_type=self.dataset_type, meta=False,
+                                    AL=True, H=True, k=True, x=False,
+                                    set_id=set_id, selection=selection),
+                    'ALk': Setting(dataset_type=self.dataset_type, meta=False,
+                                   AL=True, H=False, k=True, x=False,
+                                   set_id=set_id, selection=selection),
+                    'metaALHk': Setting(dataset_type=self.dataset_type,
+                                        meta=True, AL=True, H=True, k=True,
+                                        x=False, set_id=set_id,
+                                        selection=selection),
+                    }
+        if code in code_set:
+            setting = code_set[code]
+            # print(setting)
+            if setting in self.data_dict:
+                return self.data_dict[setting]
+            else:
+                print(f"Setting not found: {setting}")
+        else:
+            return None
+
+    @abstractmethod
+    def generate_dataset(self):
+        pass
+
+
+class Phase2DataSet(BaseDataSet):
+    def _hold_out_data(self, meta=True, num_batches=250,
+                       meta_batch_size=10, k_shot=10):
+
+        training_amines = [a for a in self.viable_amines if a not in
+                           self.hold_out_amines]
+        self.df, self.amines = self._import_chemdata(training_amines)
+        
+        amine_test_samples = {}
+        amine_training_batches = {}
+
+        x_train = self.df
+        y_train = x_train[self.score_header].values
+
+        # Drop these columns from the dataset
+        x_train = x_train.drop(self.to_exclude, axis=1).values
+
+        # Standardize features since they are not yet standardized
+        # in the dataset
+        scaler = StandardScaler()
+        scaler.fit(x_train)
+        x_train = scaler.transform(x_train)
+
+        batches = []
+
+        if meta:
+            print('Holding out', self.phase2_amines)
+            # Used to set up our weighted loss function
+            print('Generating training batches')
+            for _ in range(num_batches):
+                # t for train, v for validate (but validate is outer loop,
+                # trying to be consistent with the PLATIPUS code)
+                batch = self._generate_batch(meta_batch_size,
+                                             training_amines, self.to_exclude,
+                                             k_shot)
+                batches.append(batch)
+            for amine in self.phase2_amines:
+                amine_training_batches[amine] = batches
+        
+            
+        df, p2_amines = self._import_chemdata(self.phase2_amines)
+        for amine in self.phase2_amines:
+            if meta:
+                amine_training_batches[amine] = batches
+            else:
+                amine_training_batches[amine] = (x_train, y_train)
+
+            x_test = df[df[self.amine_header] == amine]
+            y_test = x_test[self.score_header].values
+            x_test = x_test.drop(self.to_exclude, axis=1).values
+            x_test = scaler.transform(x_test)
+            amine_test_samples[amine] = (x_test, y_test)
+
+        return (amine_training_batches, amine_test_samples,
+                scaler)
+
+    def _load_test_samples(self, hold_out_amines, df, to_exclude, k_shot,
+                           amine_header, score_header):
+        """This is a function used for loading testing samples specifically
+
+        Args:
+            hold_out_amines:    The list of all holdout amines that are used
+                                for testing.
+                                DO NOT TOUCH!
+            df:                 The data frame of the amines data
+            to_exclude:         A list. The columns in the dataset that we
+                                need to drop
+            k_shot:             An integer. The number of unseen classes in
+                                the dataset
+            amine_header:       The header of the amine list in the data frame.
+            score_header:       The header of the score header in the
+                                data frame.
+
+        return: A dictionary that contains the test sample amines' batches
+        """
+        amine_test_samples = {}
+        for a in hold_out_amines:
+            # grab task
+            X = df[df[amine_header] == a]
+
+            y = X[score_header].values
+            X = X.drop(to_exclude, axis=1).values
+            test_sample = self._generate_valid_test_batch(X, y, k_shot)
+
+            amine_test_samples[a] = test_sample
+        return amine_test_samples
+
+    def generate_dataset(self, dataset_type='full', num_draws=5,
+                         k=10, x=10):
+        self.dataset_type = dataset_type
+        self.num_draws = num_draws
+        self.k = k
+        self.x = x
+
+        meta_training, m_v, scalers = self._hold_out_data(k_shot=x,
+                                                          meta=True)
+        training, validation, scalers = self._hold_out_data(k_shot=x,
+                                                            meta=False)
+
+        amines = self.phase2_amines
+        self.scaler = scalers
+        
+        self._categorize_data(amines, training, meta_training, validation,
+                              dataset_type, num_draws, k, x)
+
+
+class DataSet(BaseDataSet):
+    """
+    Class to handle dataset
+    """
+
+    def _cross_validation(self, meta=True, num_batches=250,
+                          meta_batch_size=25, k_shot=10):
+        """
+            Generates dataset for cross validation for meta and non-meta models
+            Args:
+                meta:           Bool to indicate whether model is meta or not
+                num_batches:    Number of training batches for meta learning
+                meta_batch_size:Batch size for meta learning
+                k_shot:         Number of training samples from new amine
+            Returns:
+                training_batches:   Training data based on model
+                validation_batches: Validation data for the left out amine
+                counts:             Count success in training data
+
+        """
+        amines = [a for a in self.viable_amines if a not in
+                  self.hold_out_amines]
+        self.df, self.amines = self._import_chemdata(amines)
+
+        all_train = self.df[self.df[self.amine_header].isin(self.amines)]
+        print(f'Number of reactions in training set {all_train.shape[0]}')
+        all_train_success = all_train[all_train[self.score_header] == 1]
+        print('Number of successful reactions in the training set',
+              all_train_success.shape[0])
+
+        training_data = {}
+        validation_data = {}
+        scalers = {}
+
+        for amine in self.amines:
+            # Since we are doing cross validation,
+            # create a training set without each amine
+            print(f"Generating batches for amine: {amine}")
+            available_amines = [a for a in self.amines if a != amine]
+
+            all_train = self.df[self.df[self.amine_header].isin(
+                available_amines)]
+            y = all_train[self.score_header].values
+            all_train = all_train.drop(self.to_exclude, axis=1).values
+            
+            scaler = StandardScaler()
+            scaler.fit(all_train)
+            all_train = scaler.transform(all_train)
+            training_data[amine] = (all_train, y)
+            scalers[amine] = scaler
+            
+            if meta:
+                batches = []
+                for _ in range(num_batches):
+                    # t for train, v for validate (but validate is outer loop,
+                    # trying to be consistent with the PLATIPUS code)
+                    batch = self._generate_batch(meta_batch_size,
+                                                 available_amines,
+                                                 self.to_exclude, k_shot)
+                    batches.append(batch)
+
+                training_data[amine] = batches
+            
+
+            # Now set up the cross validation data
+            val_data = self.df[self.df[self.amine_header] == amine]
+            y = val_data[self.score_header].values
+            val_data = val_data.drop(self.to_exclude, axis=1).values
+            val_data = scaler.transform(val_data)
+            cross_valid = (val_data, y)
+
+            if meta:
+                cross_valid = self._generate_valid_test_batch(val_data,
+                                                              y, k_shot, 
+                                                              scaler)
+            validation_data[amine] = cross_valid
+
+        return (training_data, validation_data, scalers)
+
+    def generate_dataset(self, dataset_type='full', num_draws=5,
+                         k=10, x=10):
+        # Variables to query the current dataset
+        self.dataset_type = dataset_type
+        self.num_draws = num_draws
+        self.k = k
+        self.x = x
+        self.cross_validation = True
+
+        if dataset_type == 'test':
+            self.viable_amines = ['ZEVRFFCPALTVDN-UHFFFAOYSA-N',
+                                  'KFQARYBEAKAXIC-UHFFFAOYSA-N',
+                                  'NLJDBTZLVTWXRG-UHFFFAOYSA-N']
+            self.hold_out_amines = []
+
+        meta_training, m_v, scalers = self._cross_validation(k_shot=x,
+                                                             meta=True)
+        training, validation, scalers = self._cross_validation(k_shot=x,
+                                                               meta=False)
+        self.scaler = scalers
+        amines = list(training.keys())
+        self._categorize_data(amines, training, meta_training, validation,
+                              dataset_type, num_draws, k, x)
+
+        
+
 
 if __name__ == '__main__':
-    dataset = DataSet(
+    dataset = Phase2DataSet(
         dataset_path='./data/0057.perovskitedata_DRPFeatures_2020-07-02.csv')
     data_dict = dataset.generate_dataset(dataset_type='full')
-    with open('./data/full_frozen_dataset.pkl', 'wb') as f:
+    with open('./data/phase2_dataset.pkl', 'wb') as f:
         pickle.dump(dataset, f)
