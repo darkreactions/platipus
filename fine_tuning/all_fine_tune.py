@@ -2,6 +2,7 @@ import sys
 from collections import defaultdict
 import pickle
 import itertools
+from pathlib import Path
 
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.neighbors import KNeighborsClassifier
@@ -135,15 +136,10 @@ def model_decoder(model_name):
     }
     return sk_models[model_name]
 
-def dump_results(all_results):
-    with open(f'./results/{cat}_{selection}_{model_name}_results.pkl', 'rb') as f:
-        all_results_pkl = pickle.load(f)
-        all_results_pkl.extend(all_results)
-
-    with open(f'./results/{cat}_{selection}_{model_name}_results.pkl', 'wb') as f:
-        pickle.dump(all_results_pkl, f)
-    del all_results_pkl
-
+def dump_results(all_results, result_folder, result_set):
+    res_file_path = result_folder / Path(f'set_{result_set}')
+    with res_file_path.open(mode='wb') as f:
+        pickle.dump(all_results, f)
 
 if __name__ == '__main__':
 
@@ -151,14 +147,16 @@ if __name__ == '__main__':
 
     dataset = pickle.load(open('./data/full_frozen_dataset.pkl', 'rb'))
 
+    result_folder = Path(f'./results/{cat}_{selection}_{model_name}')
+    result_folder.mkdir(parents=True, exist_ok=True)
+
     # categories = ['H', 'Hkx', 'kx']
     # al_categories = ['ALHk', 'ALk']
     # selection = ['random', 'success']
     sk_model, combinations = model_decoder(model_name)
     all_results = []
-    
-    with open(f'./results/{cat}_{selection}_{model_name}_results.pkl', 'wb') as f:
-        pickle.dump(all_results, f)
+    result_set = 0
+       
     
     for i, combo in enumerate(combinations):
         result = Results(al=False, category=cat, total_sets=dataset.num_draws,
@@ -182,8 +180,8 @@ if __name__ == '__main__':
 
         all_results.append(result)
 
-        if i % 100 == 0:
-            dump_results(all_results)
+        if i % 1000 == 0:
+            dump_results(all_results, result_folder, result_set)
             all_results = []
-    
-    dump_results(all_results)
+            result_set += 1
+    dump_results(all_results, result_folder, result_set)
