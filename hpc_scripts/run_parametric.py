@@ -48,10 +48,10 @@ def run_platipus(params):
 
         # COMMENT OUT!
         # train_params['num_epochs_save'] = 100
-        
+        """ Following block is for cross validation
+
         for amine in train_params['training_batches']:
             # Checking if amine folder exists, and is incomplete
-            print(amine)
             amine_path = base_folder / Path(amine)
 
             if not amine_complete(amine_path):
@@ -64,6 +64,22 @@ def run_platipus(params):
                 platipus.meta_train()
                 logging.info(
                     f'Completed active learning with amine: {amine}')
+
+        """
+        # Following block is for Phase 2
+        amine = ['CALQKRVFTWDYDG-UHFFFAOYSA-N',
+                       'KOAGKPNEVYEZDU-UHFFFAOYSA-N',
+                       'FCTHQYIDLRRROX-UHFFFAOYSA-N',]
+        logging.info(f'Starting process with amine: {amine}')
+        platipus = Platipus(train_params, amine=amine,
+                            model_name=train_params['model_name'],
+                            epoch_al=True)
+
+        logging.info(f'Begin training with amine: {amine}')
+        platipus.meta_train()
+        logging.info(
+            f'Completed active learning with amine: {amine}')
+
 
 
 if __name__ == "__main__":
