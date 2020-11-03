@@ -48,9 +48,10 @@ def run_platipus(params):
 
         # COMMENT OUT!
         # train_params['num_epochs_save'] = 100
-
+        
         for amine in train_params['training_batches']:
             # Checking if amine folder exists, and is incomplete
+            print(amine)
             amine_path = base_folder / Path(amine)
 
             if not amine_complete(amine_path):
@@ -67,7 +68,7 @@ def run_platipus(params):
 
 if __name__ == "__main__":
     exp_num = int(sys.argv[1])
-    all_params = get_all_params()
+    all_params = get_all_params(cross_validate=False)
     params = all_params[exp_num]
     params['gpu_id'] = 0
     try:

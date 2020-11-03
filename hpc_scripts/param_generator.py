@@ -12,13 +12,13 @@ hidden_layers = [(200, 100, 100), (400, 300, 200),
 # dropout_regs = [0.1, 0.4, 0.7]
 
 
-def get_all_params():
+def get_all_params(cross_validate=True):
     all_params = []
     settings = product(epochs, optim_algos, lrs, activation_fns, hidden_layers)
     for i, (epoch, optim, lr, activation, hidden_layer) in enumerate(settings):
         params = {
             'datasource': 'drp_chem',
-            'cross_validate': True,
+            'cross_validate': cross_validate,
             'verbose': False,
             'train_flag': True,
             'gpu_id': 1,
