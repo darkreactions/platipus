@@ -11,7 +11,7 @@ Setting = namedtuple('Setting', ['dataset_type', 'meta', 'AL', 'H', 'k', 'x',
 
 class BaseDataSet(ABC):
     def __init__(self,
-                 dataset_path='./data/0057.perovskitedata_DRPFeatures_2020-07-02.csv'):
+                 dataset_path='./data/raw/0057.perovskitedata_DRPFeatures_2020-07-02.csv'):
         self.dataset_path = dataset_path
         self.distribution_header = '_raw_modelname'
         self.amine_header = '_rxn_organic-inchikey'
@@ -540,7 +540,7 @@ class Phase2DataSet(BaseDataSet):
         y_train = x_train[self.score_header].values
 
         # Drop these columns from the dataset
-        x_train = x_train.drop(self.to_exclude, axis=1).values
+        x_train = x_train.drop(self.to_exclude+self.bool_cols, axis=1).values
 
         # Standardize features since they are not yet standardized
         # in the dataset
@@ -548,6 +548,8 @@ class Phase2DataSet(BaseDataSet):
         scaler.fit(x_train)
         x_train = scaler.transform(x_train)
 
+        x_train = np.concatenate([x_train, self.df[self.bool_cols].values], axis=1)
+        
         batches = []
 
         if meta:
@@ -573,8 +575,13 @@ class Phase2DataSet(BaseDataSet):
 
             x_test = df[df[self.amine_header] == amine]
             y_test = x_test[self.score_header].values
-            x_test = x_test.drop(self.to_exclude, axis=1).values
+            x_test = x_test.drop(self.to_exclude+self.bool_cols, axis=1).values
             x_test = scaler.transform(x_test)
+            x_test_bool = df[df[self.amine_header] == amine]
+            x_test_bool = x_test_bool[self.bool_cols].values
+
+            x_test = np.concatenate([x_test, x_test_bool], axis=1)
+
             amine_test_samples[amine] = (x_test, y_test)
 
         return (amine_training_batches, amine_test_samples,
@@ -671,11 +678,24 @@ class DataSet(BaseDataSet):
             available_amines = [a for a in self.amines if a != amine]
 
             all_train = self.df[self.df[self.amine_header].isin(
-                available_amines)]
+                    available_amines)]
             y = all_train[self.score_header].values
-            all_train = all_train.drop(self.to_exclude, axis=1).values
+            all_train = all_train.drop(self.to_exclude+self.bool_cols, axis=1).values
             
+            
+
+            # Standardize features since they are not yet standardized
+            # in the dataset
             scaler = StandardScaler()
+            scaler.fit(all_train)
+            all_train = scaler.transform(all_train)
+            self.bool_data = self.df[self.df[self.amine_header].isin(
+                    available_amines)]
+            self.bool_data = self.bool_data[self.bool_cols].values
+
+            all_train = np.concatenate([all_train, self.bool_data], axis=1)
+
+
             scaler.fit(all_train)
             all_train = scaler.transform(all_train)
             training_data[amine] = (all_train, y)
@@ -739,7 +759,7 @@ class DataSet(BaseDataSet):
 
 if __name__ == '__main__':
     dataset = Phase2DataSet(
-        dataset_path='./data/0057.perovskitedata_DRPFeatures_2020-07-02.csv')
+        dataset_path='./data/raw/0057.perovskitedata_DRPFeatures_2020-07-02.csv')
     data_dict = dataset.generate_dataset(dataset_type='full')
     with open('./data/phase2_dataset.pkl', 'wb') as f:
         pickle.dump(dataset, f)
