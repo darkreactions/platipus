@@ -18,7 +18,13 @@ class BaseDataSet(ABC):
         self.score_header = '_out_crystalscore'
         self.name_header = 'name'
         self.to_exclude = [self.score_header, self.amine_header,
-                           self.name_header, self.distribution_header]
+                           self.name_header, self.distribution_header, '_raw_RelativeHumidity']
+        self.bool_cols = ['_solv_GBL',
+                          '_solv_DMSO',
+                          '_solv_DMF',
+                          '_feat_primaryAmine',
+                          '_feat_secondaryAmine',
+                          '_rxn_plateEdgeQ']
         self.SUCCESS = 4
         self.viable_amines = ['ZEVRFFCPALTVDN-UHFFFAOYSA-N',
                               'KFQARYBEAKAXIC-UHFFFAOYSA-N',
@@ -558,7 +564,6 @@ class Phase2DataSet(BaseDataSet):
             for amine in self.phase2_amines:
                 amine_training_batches[amine] = batches
         
-            
         df, p2_amines = self._import_chemdata(self.phase2_amines)
         for amine in self.phase2_amines:
             if meta:
@@ -705,7 +710,7 @@ class DataSet(BaseDataSet):
         return (training_data, validation_data, scalers)
 
     def generate_dataset(self, dataset_type='full', num_draws=5,
-                         k=10, x=10):
+                         k=10, x=10, save_csv=False):
         # Variables to query the current dataset
         self.dataset_type = dataset_type
         self.num_draws = num_draws
@@ -727,7 +732,8 @@ class DataSet(BaseDataSet):
         amines = list(training.keys())
         self._categorize_data(amines, training, meta_training, validation,
                               dataset_type, num_draws, k, x)
-
+        if save_csv:
+            pass
         
 
 

@@ -181,10 +181,7 @@ if __name__ == '__main__':
                 try:
                     learner = ActiveLearner(
                         estimator=model, X_training=d['x_t'], y_training=d['y_t'])
-                    scaler = StandardScaler()
-                    scaler.fit(d['x_t'])
-
-                    X_pool = np.array(scaler.transform(d['x_vrem']), copy=True)
+                    X_pool = np.array(d['x_vrem'], copy=True)
                     y_pool = np.array(d['y_vrem'], copy=True)
                     for x in range(10):
                         query_index, query_instance = learner.query(X_pool)
@@ -193,7 +190,7 @@ if __name__ == '__main__':
                         learner.teach(X=X, y=y)
                         X_pool, y_pool = np.delete(
                             X_pool, query_index, axis=0), np.delete(y_pool, query_index)
-                        y_pred = learner.predict(scaler.transform(d['x_v']))
+                        y_pred = learner.predict(d['x_v'])
                         result.add_result(d['y_v'], y_pred, set_id, amine)
 
                 except Exception as e:

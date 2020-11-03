@@ -12,7 +12,13 @@ distribution_header = '_raw_modelname'
 amine_header = '_rxn_organic-inchikey'
 score_header = '_out_crystalscore'
 name_header = 'name'
-to_exclude = [score_header, amine_header, name_header, distribution_header]
+bool_headers = ['_solv_GBL',
+                '_solv_DMSO',
+                '_solv_DMF',
+                '_feat_primaryAmine',
+                '_feat_secondaryAmine',
+                '_rxn_plateEdgeQ']
+to_exclude = [score_header, amine_header, name_header, distribution_header, '_raw_RelativeHumidity']
 path = './data/0057.perovskitedata_DRPFeatures_2020-07-02.csv'
 
 # Successful reaction is defined as having a crystal score of...
@@ -157,24 +163,32 @@ def cross_validation_data(df, amines, hold_out_amines, k_shot,
 
             amine_left_out_batches[amine] = batches
         else:
-            X = df[df[amine_header] != amine]
-            y = X[score_header].values
+            X_sel = df[df[amine_header] != amine]
+            y = X_sel[score_header].values
 
             # Drop these columns from the dataset
-            X = X.drop(to_exclude, axis=1).values
+            # X = X.drop(to_exclude, axis=1).values
+            X = X_sel.drop(to_exclude+bool_headers, axis=1).values
 
             # Standardize features since they are not yet standardized in the dataset
             scaler = StandardScaler()
             scaler.fit(X)
             X = scaler.transform(X)
+            X = np.concatenate([X, X_sel[bool_headers].values], axis=1)
+
             amine_left_out_batches[amine] = (X, y)
 
         # print("hey this is {}".format(batches))
 
         # Now set up the cross validation data
-        X = df[df[amine_header] == amine]
-        y = X[score_header].values
-        X = X.drop(to_exclude, axis=1).values
+        X_sel = df[df[amine_header] == amine]
+        y = X_sel[score_header].values
+        X = X_sel.drop(to_exclude+bool_headers, axis=1).values
+
+        scaler = StandardScaler()
+        scaler.fit(X)
+        X = scaler.transform(X)
+        X = np.concatenate([X, X_sel[bool_headers].values], axis=1)
 
         if meta:
             cross_valid = generate_valid_test_batch(X, y, k_shot)
@@ -256,17 +270,18 @@ def generate_batch(df, meta_batch_size, available_amines, to_exclude,
 
     for _ in range(meta_batch_size):
         # Grab the tasks
-        X = df[df[amine_header] == np.random.choice(available_amines)]
+        X_sel = df[df[amine_header] == np.random.choice(available_amines)]
 
-        y = X[score_header].values
+        y = X_sel[score_header].values
 
         # Drop these columns from the dataset
-        X = X.drop(to_exclude, axis=1).values
-
+        X = X_sel.drop(to_exclude+bool_headers, axis=1).values
+        
         # Standardize features since they are not yet standardized in the dataset
         scaler = StandardScaler()
         scaler.fit(X)
         X = scaler.transform(X)
+        X = np.concatenate([X, X_sel[bool_headers].values], axis=1)        
 
         spt = np.random.choice(X.shape[0], size=k_shot, replace=False)
         qry = np.random.choice(X.shape[0], size=k_shot, replace=False)
@@ -299,12 +314,13 @@ def generate_valid_test_batch(X, y, k_shot):
     x_q = X[qry]
     y_q = y[qry]
 
+    """
     scaler = StandardScaler()
     scaler.fit(x_s)
 
     x_s = scaler.transform(x_s)
     x_q = scaler.transform(x_q)
-
+    """
     return [x_s, y_s, x_q, y_q]
 
 
@@ -325,10 +341,16 @@ def load_test_samples(hold_out_amines, df, to_exclude, k_shot, amine_header, sco
     amine_test_samples = {}
     for a in hold_out_amines:
         # grab task
-        X = df[df[amine_header] == a]
+        X_sel = df[df[amine_header] == a]
 
-        y = X[score_header].values
-        X = X.drop(to_exclude, axis=1).values
+        y = X_sel[score_header].values
+        X = X_sel.drop(to_exclude+bool_headers, axis=1).values
+        
+        scaler = StandardScaler()
+        scaler.fit(X)
+        X = scaler.transform(X)
+        X = np.concatenate([X, X_sel[bool_headers].values], axis=1)        
+
         test_sample = generate_valid_test_batch(X, y, k_shot)
 
         amine_test_samples[a] = test_sample
