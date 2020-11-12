@@ -9,7 +9,8 @@ from hpc_scripts.param_generator import get_all_params, get_all_test_params
 from utils import save_model
 import logging
 
-from utils.dataset_class import DataSet, Setting
+from utils.dataset_class import DataSet, Setting, Phase2DataSet
+
 
 
 def exp_complete(folder):
@@ -40,11 +41,10 @@ def run_platipus(params):
     # if not base_folder.exists() and params['num_epochs'] == 5000:
     if not exp_complete(base_folder) and params['num_epochs'] == 5000:
         print(f"Found folder running {params['model_name']}")
-
-        logging.basicConfig(filename=Path(save_model(params['model_name'],
-                                                     params))/Path('logfile.log'),
-                            level=logging.DEBUG)
         train_params = init_params(params)
+        logging.basicConfig(filename=Path(f'./results/{params["model_name"]}_10_shot/testing')/Path('logfile.log'),
+                            level=logging.DEBUG)
+        
 
         # COMMENT OUT!
         # train_params['num_epochs_save'] = 100

@@ -225,13 +225,15 @@ def save_model(model, params, amine=None):
     """
     # Make sure we are creating directory for all models
     dst_folder_root = './results'
-    dst_folder = ""
+    
     k_shot = params['k_shot']
-    if amine and (amine in params['training_batches'] or amine in params['validation_batches']):
-        dst_folder = Path(f'{dst_folder_root}/{model}_{k_shot}_shot/{amine}')
+    dst_folder = Path(f'{dst_folder_root}/{model}_{k_shot}_shot/testing')
+    if not isinstance(amine, list):
+        if (amine in params['training_batches'] or amine in params['validation_batches']):
+            dst_folder = Path(f'{dst_folder_root}/{model}_{k_shot}_shot/{amine}')
         # return dst_folder
-    else:
-        dst_folder = Path(f'{dst_folder_root}/{model}_{k_shot}_shot/testing')
+    
+        
 
     dst_folder.mkdir(parents=True, exist_ok=True)
     return dst_folder

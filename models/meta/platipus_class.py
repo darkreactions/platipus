@@ -1,3 +1,4 @@
+from numpy.lib.arraysetops import isin
 import torch
 import numpy as np
 import logging
@@ -24,7 +25,7 @@ from hpc_scripts.hpc_params import common_params, local_meta_params, local_meta_
 from models.meta.init_params import init_params
 from models.meta.FC_net import FCNet
 
-from utils.dataset_class import DataSet, Setting
+from utils.dataset_class import *
 import pickle
 
 
@@ -39,6 +40,15 @@ class Platipus:
         epoch_al=False,
         set_id=0,
     ):
+        
+        for handler in logging.root.handlers[:]:
+            logging.root.removeHandler(handler)
+        logging.basicConfig(filename=Path(f'./results/{params["model_name"]}_10_shot/testing')/Path('logfile.log'),
+                            level=logging.DEBUG)
+        
+        # Number of features/inputs to NN
+        self.ip_dim = 50
+        
         self.set_id = set_id
         self.epoch_al = epoch_al
         # For SHAP
@@ -68,13 +78,17 @@ class Platipus:
                 f"Cached: {round(torch.cuda.memory_cached(0) / 1024 ** 3, 1)} GB"
             )
 
-        if amine and training:
+        if isinstance(amine, str) and training:
             self.training_batches = params["training_batches"][amine]
+            self.dst_folder = save_model(self.model_name, params, amine)
+            self.initialize_loss_function()
+        elif isinstance(amine, list) and training:
+            self.training_batches = params["training_batches"]
             self.dst_folder = save_model(self.model_name, params, amine)
             self.initialize_loss_function()
 
         self.net = FCNet(
-            dim_input=51,
+            dim_input=self.ip_dim,
             dim_output=self.n_way,
             num_hidden_units=self.num_hidden_units,
             device=self.device,
@@ -91,6 +105,7 @@ class Platipus:
     # Initialization functions <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
     def initialize_loss_function(self):
+        """
         success = self.counts[self.amine][1]
         failures = self.counts[self.amine][0]
 
@@ -98,6 +113,7 @@ class Platipus:
             self.weights = [failures / failures, failures / success]
         else:
             self.weights = [success / failures, success / success]
+        """
         self.weights = [1.0, 8.0]
         logging.debug(f"Weights for loss function: {self.weights}")
 
@@ -488,7 +504,7 @@ class Platipus:
         # logging.debug(f'Minimum confidence np : {val} {idx}')
         # Add to the training data
 
-        x_t = torch.cat((x_t, x_v[index].view(1, 51)))
+        x_t = torch.cat((x_t, x_v[index].view(1, self.ip_dim)))
         y_t = torch.cat((y_t, y_v[index].view(1)))
         # x_t = x_v[index].view(1, 51)
         # y_t = y_v[index].view(1)
@@ -513,13 +529,13 @@ class Platipus:
 
         return x_t, y_t, x_v, y_v
 
-    def setup_active_learning(self, set_id):
+    def setup_active_learning(self, set_id, amine):
         class_weights = torch.tensor(self.weights, device=self.device)
         self.loss_fn = torch.nn.CrossEntropyLoss(class_weights)
 
         # Create the stats dictionary to store performance metrics
 
-        self.model_name_temp = f"{self.model_name}_{self.current_epoch}_set{set_id}"
+        self.model_name_temp = f"{self.model_name}_{self.current_epoch}_set{set_id}_{amine}"
 
         self.cv_statistics.update({self.model_name_temp: defaultdict(list)})
 
@@ -560,8 +576,9 @@ class Platipus:
         """
 
         # Adding Dataset class here
-        dataset = pickle.load(open("./data/full_frozen_dataset.pkl", "rb"))
-        data = dataset.get_dataset("metaALHk", set_id, "random")[self.amine]
+        # dataset = pickle.load(open("./data/full_frozen_dataset.pkl", "rb"))
+        dataset = pickle.load(open("./data/phase2_dataset.pkl", "rb"))
+        data = dataset.get_dataset("metaALHk", set_id, "random")[amine]
 
         # scaler = StandardScaler()
         # scaler.fit(data["x_vk"])
@@ -613,29 +630,42 @@ class Platipus:
         # Run forward pass on the validation data
         logging.debug(f"Weights for loss function: {self.weights}")
 
-        for set_id in range(5):
-            (
-                iters,
-                all_data,
-                all_labels,
-                x_t,
-                y_t,
-                x_v,
-                y_v,
-            ) = self.setup_active_learning(set_id)
+        if isinstance(self.amine, list):
+            for amine in self.amine:
+                for set_id in range(5):
+                    (iters, all_data, all_labels, x_t, y_t, x_v, y_v,
+                    ) = self.setup_active_learning(set_id, amine)
 
-            for i in range(iters):
-                logging.debug(
-                    f"Doing active learning with {len(x_t)} example. Iteration: {i}"
-                )
-                # Update available datapoints in the pool and evaluate current
-                # model performance
-                x_t, y_t, x_v, y_v = self.active_learning(
-                    all_data, all_labels, x_t, y_t, x_v, y_v
-                )
+                    for i in range(iters):
+                        logging.debug(
+                            f"Doing active learning for {amine} with {len(x_t)} examples. Iteration: {i}"
+                        )
+                        # Update available datapoints in the pool and evaluate current
+                        # model performance
+                        x_t, y_t, x_v, y_v = self.active_learning(
+                            all_data, all_labels, x_t, y_t, x_v, y_v
+                        )
 
-        # Save this dictionary in case we need it later
-        write_pickle(self.dst_folder / Path("cv_statistics.pkl"), self.cv_statistics)
+                # Save this dictionary in case we need it later
+                write_pickle(self.dst_folder / Path(f"cv_statistics_{amine}.pkl"), self.cv_statistics)
+
+        elif isinstance(self.amine, str):
+            for set_id in range(5):
+                (iters, all_data, all_labels, x_t, y_t, x_v, y_v,
+                ) = self.setup_active_learning(set_id, self.amine)
+
+                for i in range(iters):
+                    logging.debug(
+                        f"Doing active learning with {len(x_t)} example. Iteration: {i}"
+                    )
+                    # Update available datapoints in the pool and evaluate current
+                    # model performance
+                    x_t, y_t, x_v, y_v = self.active_learning(
+                        all_data, all_labels, x_t, y_t, x_v, y_v
+                    )
+
+            # Save this dictionary in case we need it later
+            write_pickle(self.dst_folder / Path("cv_statistics.pkl"), self.cv_statistics)
 
     # Utils <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
     def load_model(self, checkpoint_path):

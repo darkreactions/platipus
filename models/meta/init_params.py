@@ -50,8 +50,7 @@ def init_params(args):
     stats_dict = create_stats_dict([params['model_name']])
     params['cv_statistics'] = stats_dict
 
-    # Set up the path to save models
-    params['dst_folder'] = Path(save_model(params['model_name'], params))
+    
 
     # Set number of training samples and number of total samples per class
     # These two values are hard-coded, corresponding to the values hard-coded in load_chem_dataset below
@@ -77,11 +76,14 @@ def init_params(args):
                               num_batches=250,
                               verbose=args['verbose'],
                               test=params.get('test_data', False))
+        params['validation_batches'] = {}
     params['training_batches'] = training_batches
     params['testing_batches'] = testing_batches
     params['counts'] = counts
 
     # Save for reproducibility
+    # Set up the path to save models
+    params['dst_folder'] = Path(save_model(params['model_name'], params))
 
     write_pickle(params['dst_folder'] /
                  Path("train_dump.pkl"), training_batches)
