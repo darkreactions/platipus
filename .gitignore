@@ -1,5 +1,4 @@
 __pycache__/
-*.pkl
 *.pt
 *.png
 .ipynb_checkpoints/
@@ -7,8 +6,8 @@ running_logs*/
 PLATIPUS_*/
 Platipus_*/
 MAML_*/
+phase2/
 .vscode/
-*.ipynb
 results/
 platipus.e*
 platipus.o*

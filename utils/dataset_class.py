@@ -53,6 +53,7 @@ class BaseDataSet(ABC):
         self.phase2_amines = ['CALQKRVFTWDYDG-UHFFFAOYSA-N',
                               'KOAGKPNEVYEZDU-UHFFFAOYSA-N',
                               'FCTHQYIDLRRROX-UHFFFAOYSA-N', ]
+        self.phase3_amines = ['JMXLWMIFDJCGBV-UHFFFAOYSA-N']
 
     def _import_chemdata(self, viable_amines):
         """
@@ -754,12 +755,95 @@ class DataSet(BaseDataSet):
                               dataset_type, num_draws, k, x)
         if save_csv:
             pass
+
+
+class Phase3DataSet(BaseDataSet):
+    def _hold_out_data(self, meta=True, num_batches=250,
+                       meta_batch_size=10, k_shot=10):
+
+        training_amines = [a for a in self.viable_amines if a not in
+                           self.phase3_amines]
+        self.df, self.amines = self._import_chemdata(training_amines)
         
+        amine_test_samples = {}
+        amine_training_batches = {}
+
+        x_train = self.df
+        y_train = x_train[self.score_header].values
+
+
+        # Drop these columns from the dataset
+        x_train = x_train.drop(self.to_exclude+self.bool_cols, axis=1)
+        print(x_train.columns)
+        x_train = x_train.values
+
+        # Standardize features since they are not yet standardized
+        # in the dataset
+        scaler = StandardScaler()
+        scaler.fit(x_train)
+        x_train = scaler.transform(x_train)
+
+        x_train = np.concatenate([x_train, self.df[self.bool_cols].values], axis=1)
+        
+        batches = []
+
+        if meta:
+            print('Holding out', self.phase3_amines)
+            # Used to set up our weighted loss function
+            print('Generating training batches')
+            for _ in range(num_batches):
+                # t for train, v for validate (but validate is outer loop,
+                # trying to be consistent with the PLATIPUS code)
+                batch = self._generate_batch(meta_batch_size,
+                                             training_amines, self.to_exclude,
+                                             k_shot)
+                batches.append(batch)
+            for amine in self.phase3_amines:
+                amine_training_batches[amine] = batches
+        
+        df, p2_amines = self._import_chemdata(self.phase3_amines)
+        for amine in self.phase3_amines:
+            if meta:
+                amine_training_batches[amine] = batches
+            else:
+                amine_training_batches[amine] = (x_train, y_train)
+
+            x_test = df[df[self.amine_header] == amine]
+            y_test = x_test[self.score_header].values
+            x_test = x_test.drop(self.to_exclude+self.bool_cols, axis=1).values
+            x_test = scaler.transform(x_test)
+            x_test_bool = df[df[self.amine_header] == amine]
+            x_test_bool = x_test_bool[self.bool_cols].values
+
+            x_test = np.concatenate([x_test, x_test_bool], axis=1)
+
+            amine_test_samples[amine] = (x_test, y_test)
+
+        return (amine_training_batches, amine_test_samples,
+                scaler)
+
+    def generate_dataset(self, dataset_type='full', num_draws=5,
+                         k=10, x=10):
+        self.dataset_type = dataset_type
+        self.num_draws = num_draws
+        self.k = k
+        self.x = x
+
+        meta_training, m_v, scalers = self._hold_out_data(k_shot=x,
+                                                          meta=True)
+        training, validation, scalers = self._hold_out_data(k_shot=x,
+                                                            meta=False)
+
+        amines = self.phase3_amines
+        self.scaler = scalers
+        print(training.keys())
+        self._categorize_data(amines, training, meta_training, validation,
+                              dataset_type, num_draws, k, x)
 
 
 if __name__ == '__main__':
-    dataset = Phase2DataSet(
+    dataset = Phase3DataSet(
         dataset_path='./data/raw/0057.perovskitedata_DRPFeatures_2020-07-02.csv')
     data_dict = dataset.generate_dataset(dataset_type='full')
-    with open('./data/phase2_dataset.pkl', 'wb') as f:
+    with open('./data/phase3_dataset.pkl', 'wb') as f:
         pickle.dump(dataset, f)
