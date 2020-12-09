@@ -845,5 +845,5 @@ if __name__ == '__main__':
     dataset = Phase3DataSet(
         dataset_path='./data/raw/0057.perovskitedata_DRPFeatures_2020-07-02.csv')
     data_dict = dataset.generate_dataset(dataset_type='full')
-    with open('./data/phase3_dataset.pkl', 'wb') as f:
-        pickle.dump(dataset, f)
+    #with open('./data/phase3_dataset.pkl', 'wb') as f:
+    #    pickle.dump(dataset, f)

@@ -9,8 +9,8 @@ import pickle
 
 
 def init_params(args):
-    with open('./data/full_frozen_dataset.pkl', 'rb') as f:
-        dataset = pickle.load(f)
+    #with open('./data/full_frozen_dataset.pkl', 'rb') as f:
+    #    dataset = pickle.load(f)
 
     params = {**args}
     gpu_id = params.get('gpu_id', 0)

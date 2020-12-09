@@ -12,3 +12,5 @@ results/
 platipus.e*
 platipus.o*
 *.log
+*.pyc
+credentials.json

@@ -471,6 +471,14 @@ class Platipus:
         del labels_pred
         return prob_pred.detach().cpu().numpy()
 
+    def phase3_active_learning(self, x_t, y_t, x_ss, debug=False):
+        phi = self.setup_weight_dist(x_t, y_t)
+        prob_pred_update, labels_pred_update = self.predict(x_ss, phi=phi, proba=True)
+        value, index = prob_pred_update.min(0)
+        if debug:
+            print(prob_pred_update)
+        return value, index
+
     # Active learning function <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
     def active_learning(self, all_data, all_labels, x_t, y_t, x_v, y_v):
         """
@@ -577,7 +585,7 @@ class Platipus:
 
         # Adding Dataset class here
         # dataset = pickle.load(open("./data/full_frozen_dataset.pkl", "rb"))
-        dataset = pickle.load(open("./data/phase2_dataset.pkl", "rb"))
+        dataset = pickle.load(open("../data/phase3_dataset.pkl", "rb"))
         data = dataset.get_dataset("metaALHk", set_id, "random")[amine]
 
         # scaler = StandardScaler()

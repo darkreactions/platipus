@@ -19,7 +19,7 @@ bool_headers = ['_solv_GBL',
                 '_feat_secondaryAmine',
                 '_rxn_plateEdgeQ']
 to_exclude = [score_header, amine_header, name_header, distribution_header, '_raw_RelativeHumidity']
-path = './data/raw/0057.perovskitedata_DRPFeatures_2020-07-02.csv'
+path = '../data/raw/0057.perovskitedata_DRPFeatures_2020-07-02.csv'
 
 # Successful reaction is defined as having a crystal score of...
 SUCCESS = 4
