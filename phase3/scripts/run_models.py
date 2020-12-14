@@ -164,7 +164,7 @@ def update_dt():
                 int(vol_row['Reagent2 (ul)']), int(vol_row['Reagent3 (ul)']), 
                 int(vol_row['Reagent7 (ul)'])/2,int(vol_row['Reagent7 (ul)'])/2]
         print(row)
-        write_result_sheet(sheet_range[set_id], [row], sheet_name=f'Round {current_round+1}')
+        # write_result_sheet(sheet_range[set_id], [row], sheet_name=f'Round {current_round+1}')
         
 
 
@@ -205,7 +205,7 @@ def update_knn():
                int(vol_row['Reagent2 (ul)']), int(vol_row['Reagent3 (ul)']), 
                int(vol_row['Reagent7 (ul)'])/2,int(vol_row['Reagent7 (ul)'])/2]
         print(row)
-        write_result_sheet(sheet_range[set_id], [row], sheet_name=f'Round {current_round+1}')
+        # write_result_sheet(sheet_range[set_id], [row], sheet_name=f'Round {current_round+1}')
         
 
 def reset_q_index(indices, stateset, model, set_id):
@@ -270,9 +270,9 @@ def reset_knn():
 
 if __name__=='__main__':
     #prepare_stateset('1Lkwf2kLhPQedMoVBTGwaQWXERj5WPkEOgYxVmCrPOMg')
-    #update_knn()
+    update_knn()
     #training_set, model_list, iteration, query_idx, query_inst, x_stateset, ss_reagent_vols = load_data('knn')
     #reset_q_index([0, 1, 2, 3, 4, 5, 6,], x_stateset[1], 'knn', 1)
-    update_dt()
+    # update_dt()
     # reset_knn()
     # reset_dt()

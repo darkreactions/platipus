@@ -7,6 +7,8 @@ import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 
+from utils.dataset_class import Phase3DataSet, Setting
+
 # Set up various strings corresponding to headers
 distribution_header = '_raw_modelname'
 amine_header = '_rxn_organic-inchikey'
@@ -19,7 +21,7 @@ bool_headers = ['_solv_GBL',
                 '_feat_secondaryAmine',
                 '_rxn_plateEdgeQ']
 to_exclude = [score_header, amine_header, name_header, distribution_header, '_raw_RelativeHumidity']
-path = '../data/raw/0057.perovskitedata_DRPFeatures_2020-07-02.csv'
+path = './data/raw/0057.perovskitedata_DRPFeatures_2020-07-02.csv'
 
 # Successful reaction is defined as having a crystal score of...
 SUCCESS = 4
@@ -49,10 +51,14 @@ def import_full_dataset(k_shot, meta_batch_size, num_batches, verbose=False,
                      'BAMDIFIROXTEEM-UHFFFAOYSA-N',
                      'XZUCBFLUEBDNSJ-UHFFFAOYSA-N']
 
+    """
     hold_out_amines = ['CALQKRVFTWDYDG-UHFFFAOYSA-N',
                        'KOAGKPNEVYEZDU-UHFFFAOYSA-N',
                        'FCTHQYIDLRRROX-UHFFFAOYSA-N',
                        'JMXLWMIFDJCGBV-UHFFFAOYSA-N']
+    """
+    #For phase 3
+    hold_out_amines = ['JMXLWMIFDJCGBV-UHFFFAOYSA-N']
     df, amines = import_chemdata(verbose, viable_amines)
 
     if cross_validation:
@@ -229,10 +235,15 @@ def hold_out_data(df, amines, hold_out_amines, k_shot, meta_batch_size, num_batc
 
     batches = []
     print('Generating training batches')
+    # Getting scaler to scale batches
+    dataset_path = Path('./data/phase3_dataset.pkl')
+    phase3dataset = pickle.load(dataset_path.open('rb'))
+    scaler = phase3dataset.scaler
+
     for _ in range(num_batches):
         # t for train, v for validate (but validate is outer loop, trying to be consistent with the PLATIPUS code)
         batch = generate_batch(df, meta_batch_size,
-                               available_amines, to_exclude, k_shot)
+                               available_amines, to_exclude, k_shot, scaler=scaler)
         batches.append(batch)
 
     print('Generating testing batches for testing! DO NOT RUN IF YOU SEE THIS LINE!')
@@ -248,7 +259,7 @@ def hold_out_data(df, amines, hold_out_amines, k_shot, meta_batch_size, num_batc
 
 def generate_batch(df, meta_batch_size, available_amines, to_exclude,
                    k_shot, amine_header='_rxn_organic-inchikey',
-                   score_header='_out_crystalscore'):
+                   score_header='_out_crystalscore', scaler=None):
     """Generate the batch for training amines
 
     Args:
@@ -278,8 +289,10 @@ def generate_batch(df, meta_batch_size, available_amines, to_exclude,
         X = X_sel.drop(to_exclude+bool_headers, axis=1).values
         
         # Standardize features since they are not yet standardized in the dataset
-        scaler = StandardScaler()
-        scaler.fit(X)
+        if scaler == None:
+            print('Scaler not found')
+            scaler = StandardScaler()
+            scaler.fit(X)
         X = scaler.transform(X)
         X = np.concatenate([X, X_sel[bool_headers].values], axis=1)        
 
